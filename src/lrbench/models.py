@@ -25,6 +25,7 @@ MACE_ENV = "mace"
 ORB_ENV = "orb"
 DEEPMD_ENV = "deepmd"
 FAIRCHEM_ENV = "fairchem"
+GRACE_ENV = "grace"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
@@ -64,6 +65,13 @@ ENVS: Dict[str, dict] = {
         "install": ['uv pip install fairchem-core', 'uv pip install -e ".[test]"'],
         "notes": "The weights are gated: accept the licence on huggingface.co/facebook/UMA and log in (hf auth "
                  "login) before the first run. Checkpoints are cached in ~/.cache/fairchem (uma-s is ~2.3 GB).",
+    },
+    GRACE_ENV: {
+        "probe": "tensorpotential.calculator",
+        "python": ">=3.10",
+        "install": ['uv pip install tensorpotential', 'uv pip install -e ".[test]"'],
+        "notes": "TensorFlow; set TF_FORCE_GPU_ALLOW_GROWTH=true so it does not take the whole device. Models are "
+                 "downloaded on first use to ~/.cache/grace (GRACE_CACHE overrides).",
     },
 }
 
@@ -172,6 +180,18 @@ MODELS.update({m.name: m for m in [
                "fairchem-core download (gated on Hugging Face)", "Meta FAIR Chemistry model licence",
                "atoms.info charge + spin (2S+1), as an embedding", "none (local message passing)",
                aliases=["esen", "esen-sm"]),
+]})
+
+# GRACE (graph ACE): a materials model at PBE/PAW with no charge input. It is here for the ACE family and as a
+# floor row; its energies are not comparable with ours and its charge-blindness is recorded, not inferred.
+MODELS.update({m.name: m for m in [
+    NamedModel("grace-2l", "ase:lrbench.adapters:grace?model='GRACE-2L-OMAT'", "GRACE-2L-OMAT (two-layer semi-local)",
+               "PBE/PAW (OMat24)", GRACE_ENV, "grace_models download / tensorpotential auto-download (~/.cache/grace)",
+               "Academic Software License", "none: no total-charge or spin input",
+               "none (local, 6 A cutoff)", aliases=["grace", "ace", "grace-2l-omat"]),
+    NamedModel("grace-1l", "ase:lrbench.adapters:grace?model='GRACE-1L-OMAT'", "GRACE-1L-OMAT (one-layer local)",
+               "PBE/PAW (OMat24)", GRACE_ENV, "tensorpotential auto-download", "Academic Software License",
+               "none: no total-charge or spin input", "none (local, 6 A cutoff)"),
 ]})
 
 # The four models of the external comparison, in table order.

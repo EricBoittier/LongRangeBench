@@ -29,11 +29,13 @@ PBE0MBD = "PBE0+MBD-NL"
 PBE0MBD_V1 = "PBE0+MBD"  # the original SO3LR (registry name 'so3lr') was trained on PBE0+MBD, not MBD-NL
 
 SPICE = "wB97M-D3(BJ)/def2-TZVPPD"
+PBE_OMAT = "PBE/PAW (OMat24)"
 RPBE_D3 = "RPBE-D3 (water, CACE-LES training set)"
 WB97M_D3_TZVPP = "wB97M-D3/def2-TZVPPD"
 LEVELS = {"maceles": SPICE, "cace": RPBE_D3, "so3lr": PBE0MBD, "mace_polar": OMOL, "mace_omol": OMOL, "kernel_lr": OMOL,
           # OrbMol (OMol25; v2 adds OPoly26) and the released DPA4 checkpoints (OMol25 100M split)
           "orbmol": OMOL, "deepmd": OMOL, "aimnet2": WB97M_D3_TZVPP, "fairchem": OMOL,
+          "grace": PBE_OMAT,
           # MACE-MH-1 heads (mace-foundations model card / arXiv 2510.25380). The omol head is listed there as
           # wB97M-VV10, i.e. OMol25's wB97M-V/def2-TZVPD labels (1 % subset).
           "mace_mh:omol": OMOL, "mace_mh:omat_pbe": "PBE/PAW (OMat24)", "mace_mh:spice_wB97M": "wB97M-D3(BJ)/def2-TZVPPD",
@@ -458,3 +460,22 @@ def fairchem(model: str = "uma-s-1p2p1", task: str = "", device: str = "cuda", l
         "long_range": "none (local message passing); the total charge enters only as an embedding"})
     return Adapter(calc, level, meta, info_map={"spin_multiplicity": "spin"},
                    charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))
+
+
+# ------------------------------------------------------------------------------------------- GRACE (ACE family, ICAMS)
+def grace(model: str = "GRACE-2L-OMAT", level: str = PBE_OMAT, **kw):
+    """A pretrained GRACE foundation model (graph ACE, ``tensorpotential``; Academic Software License).
+
+    These are **materials** models: trained on OMat24/Alexandria/MPtrj at PBE(+U)/PAW, periodic, and with no total
+    charge input at all. On the molecular ion-pair sets here they are therefore doubly out of domain -- wrong level
+    *and* charge-blind -- which is why ``charge_spin=False`` is set, so every result records that the model could not
+    be told the charge rather than appearing to have ignored it. Scored for the ACE family's sake and as a floor:
+    read the dimensionless diagnostics, never the energies.
+    """
+    from tensorpotential.calculator import grace_fm
+    calc = grace_fm(model, **kw)
+    meta = _pkg_meta("tensorpotential", f"GRACE ({model})", {
+        "licence": "Academic Software License",
+        "charge_spin": "NONE: no total-charge or spin input (recorded, not silently ignored)",
+        "long_range": "none (local, 6 A cutoff; semi-local message passing)"})
+    return Adapter(calc, level, meta, charge_spin=False)
