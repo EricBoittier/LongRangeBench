@@ -407,10 +407,11 @@ def energy_force(ctx: Ctx):
         E, f, r, nz, d = E[ok], f[ok], r[ok], o["noise"][ok], o["d"][ok]
         dE, dr = np.diff(E), np.diff(r)
         W = -0.5 * (f[1:] + f[:-1]) * dr
-        mis = np.abs(dE - W)
+        work_err = np.abs(dE - W)
         tol = 0.002 + 0.02 * np.abs(dE) + 4 * np.maximum(nz[1:], nz[:-1])
-        for k in np.where(mis > tol)[0]:
-            cand.append((o, d[k], d[k + 1], E[k], E[k + 1], f[k], f[k + 1], r[k], r[k + 1], tol[k], mis[k]))
+        for k in np.where(work_err > tol)[0]:
+            cand.append((o, d[k], d[k + 1], E[k], E[k + 1], f[k], f[k + 1], r[k], r[k + 1], tol[k],
+                         work_err[k]))
         n_res += len(dE)
     # every mismatched step is re-integrated on 20 sub-steps; it fails only if the refined work still misses dE,
     # and is 'unresolved' if the force changes by > 0.05 eV per sub-step (a cliff narrower than the sub-grid)
@@ -441,6 +442,12 @@ def energy_force(ctx: Ctx):
         A = (ee[j], ff[j], rr[j])
         B = (ee[j + 1], ff[j + 1], rr[j + 1])
         closed = False
+        # hoisted: defining this inside the loop left `mis` bound to the work-error *array* on the break path
+        # below, so a backend that failed one bisection probe raised TypeError and the check reported
+        # not_evaluable instead of the discontinuity it had already found
+        def mis(X, Y):
+            return abs((Y[0] - X[0]) + 0.5 * (X[1] + Y[1]) * (Y[2] - X[2]))
+
         for _ in range(11):
             dm = 0.5 * (da + db)
             sm = t.ab(dm, "bis")
@@ -448,7 +455,6 @@ def energy_force(ctx: Ctx):
             if pm.get("energy") is None or pm.get("forces") is None:
                 break
             M = (pm["energy"], float(np.asarray(pm["forces"])[t.ib].sum(0) @ u), r_com(sm, t.ia, t.ib))
-            mis = lambda X, Y: abs((Y[0] - X[0]) + 0.5 * (X[1] + Y[1]) * (Y[2] - X[2]))
             if mis(A, M) <= tl and mis(M, B) <= tl:
                 closed = True
                 break
@@ -891,6 +897,8 @@ def locality(ctx: Ctx):
     rc = ctx.cutoff or 8.0
     C = canon(ctx)
     fails, rows = [], []
+    n_eval = 0  # every point actually compared: without this, a far point that fails to evaluate makes every
+    #             difference NaN, rows stays empty, and "no violations" is indistinguishable from "no evidence"
     for o in scans(ctx):
         t = o["t"]
         neutral = t.qa == 0 and t.qb == 0
@@ -899,6 +907,7 @@ def locality(ctx: Ctx):
             Ei = o["Eint"][k] - o["Eint"][kf]  # dependence on the partner's position, not the separated offset
             if not np.isfinite(Ei):
                 continue
+            n_eval += 1
             fl = 1e-3 + 4 * o["noise"][k]
             if neutral:
                 j = np.where((C["scan"] == t.scan_id) & (C["d"] <= o["d"][k] + 1e-6))[0]
@@ -913,9 +922,14 @@ def locality(ctx: Ctx):
     nscan = len({r["scan"] for r in rows})
     if rows:
         fails.append(f"{len(rows)} beyond-cutoff points in {nscan} scans exceed the bound")
-    return outcome(FAIL if fails else PASS, "; ".join(fails) if fails else f"no spurious interaction beyond r_c = {rc:g} A",
+    if not n_eval:
+        return outcome(NE, f"no beyond-cutoff point could be compared (r_c = {rc:g} A): the far reference of "
+                            "every scan failed to evaluate", cutoff_A=rc, n_evaluated=0)
+    return outcome(FAIL if fails else PASS,
+                   "; ".join(fails) if fails else
+                   f"no spurious interaction beyond r_c = {rc:g} A in {n_eval} points",
                    cutoff_A=rc, cutoff_source=ctx.opts.get("cutoff_source"), declared_local=ctx.declared_local,
-                   violations=rows[:60])
+                   n_evaluated=n_eval, violations=rows[:60])
 
 
 @check("charge_conditioning", "model", "the model reacts to total charge and spin, and its answer does not depend on "

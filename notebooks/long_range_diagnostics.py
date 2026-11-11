@@ -1,17 +1,30 @@
-"""Long-range diagnostics across every scored model — a small linked site.
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "marimo",
+#     "numpy",
+#     "pandas",
+#     "matplotlib",
+# ]
+# ///
+"""Long-range diagnostics: a scrollable report — model ranking, the physics behind each test, and chemiscope.
 
-    marimo edit notebooks/long_range_diagnostics.py                   # work on it, live data
-    marimo run  notebooks/long_range_diagnostics.py                   # read-only app
-    python tools/build_diagnostics_site.py                            # freeze data + export the linked site
+    marimo edit notebooks/long_range_diagnostics.py                  # live, reads $LRBENCH_RUNS
+    python tools/build_diagnostics_site.py RUNS --also-static        # freeze the data and export the site
 
-Pages are `mo.routes`, so the export is a set of linked HTML pages rather than one long scroll. Data comes from
-``$LRBENCH_RUNS`` (default ``runs``) when a filesystem is there; the build script freezes the same numbers into
-EMBEDDED below so the exported page works with no server and no Python install.
+The dependency block above is PEP 723, which is what lets this notebook run unchanged in WebAssembly and on molab:
+numpy, pandas and matplotlib are in Pyodide, and nothing else is imported at the top level. `lrbench` is imported
+by name, and only when there is a filesystem with results to read.
 
-Design: Tufte. The ink is the deviation from the known-correct value, not a decorative bar. Range frames, no
-gridlines, direct labels, sparkline small multiples, 95 % intervals shown where the harness computes them. Two hues
-only (Okabe-Ito blue/vermillion, OKLab dE 21.9 protan), carrying one fact — whether the model has an explicit
-long-range term — and never the sole encoding of anything.
+There are no dropdowns. Comparisons that would need one are shown as small multiples or as a model × class matrix,
+and anything genuinely exploratory is handed to chemiscope, whose own axis, colour, size and atom-colour controls
+do that job better than a menu would. The sliders are not navigation: they drive a toy model, so each definition
+can be watched being built.
+
+Design: Tufte. Ink encodes the deviation from a known-correct value. Range frames, no gridlines, direct labels,
+95 % intervals where the harness computed them. Two categorical hues (Okabe-Ito blue/vermillion, OKLab dE 21.9
+protan) carrying one fact — whether the model declares an explicit long-range term — never as the sole encoding;
+magnitudes use a single-hue sequential ramp.
 """
 
 import marimo
@@ -38,46 +51,63 @@ def _(EMBEDDED):
     import numpy as np
     import pandas as pd
 
-    # One distillation, two homes: the package when a filesystem is here, the frozen literal when this is running
-    # as WebAssembly in a browser. `tools/build_diagnostics_site.py` writes EMBEDDED from the same function.
+    # Three cases, in order. The import is attempted *only* when a run directory is actually on disk: a bare
+    # `import lrbench` that fails makes marimo try to install it from PyPI, which is wrong everywhere (the
+    # distribution is `longrangebench`, it is not published, and it needs scipy and ase). In WebAssembly and on
+    # molab there is no run directory, so this notebook must carry its data or say plainly that it has none.
+    _runs = os.environ.get("LRBENCH_RUNS", "runs")
+    R, P, CHEM, VIEWS, SCORES = {}, {}, {}, [], {}
     if EMBEDDED:
         _d = json.loads(EMBEDDED)
         R, P, SOURCE = _d["results"], _d["priors"], _d.get("source", "frozen at build time")
-    else:
-        # imported by name so the WebAssembly build does not try to install lrbench: when EMBEDDED is set this
-        # branch never runs, and a static `import lrbench` would make the exporter fetch a package it cannot get
-        import importlib
+        CHEM, VIEWS = _d.get("chemiscope", {}), _d.get("views", [])
+        SCORES = _d.get("scores", {})
+    elif os.path.isdir(_runs):
+        try:
+            import importlib
 
-        _d = importlib.import_module("lrbench.diagnostics").collect(os.environ.get("LRBENCH_RUNS", "runs"))
-        R, P, SOURCE = _d["results"], _d["priors"], _d["source"]
-    return P, R, SOURCE, io, mo, np, pd
+            _d = importlib.import_module("lrbench.diagnostics").collect(_runs)
+            R, P, SOURCE = _d["results"], _d["priors"], _d["source"]
+        except Exception as _e:
+            SOURCE = f"lrbench is not importable here ({type(_e).__name__}), so no results were loaded"
+    else:
+        SOURCE = ("no data in this notebook — this is the generator. Build the frozen copy with "
+                  "`python tools/build_diagnostics_site.py RUNS`, and open **that** on molab.")
+
+    KE = 14.399645            # e^2/(4 pi eps0), eV Å — so k q_A q_B / r is in eV for r in Å
+    SET = "dimers"
+    CLS = "ion_pair"          # the headline class: two formally charged fragments, the clearest long-range test
+    DDE_SET = "families_fixedq"   # the quartets live in their own set, not in dimers
+    return CHEM, CLS, DDE_SET, KE, P, R, SCORES, SET, SOURCE, VIEWS, io, mo, np, pd
 
 
 @app.cell
 def _(io, mo):
-    # ----------------------------------------------------------------------------------- typography and palette
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    SERIF = ["Crimson", "Garamond Libre", "CMU Serif", "Charter", "Bitstream Charter", "Liberation Serif",
-             "DejaVu Serif"]
-    INK, GREY, FAINT = "#1a1a1a", "#767676", "#e2e2e2"
-    BLUE, VERM = "#0072B2", "#D55E00"      # Okabe-Ito: explicit long-range term / local only
+    SERIF = ["Crimson", "Crimson Pro", "Garamond Libre", "CMU Serif", "Charter", "Liberation Serif", "DejaVu Serif"]
+    # The same system as the explorer page (lrbench.palette), with the values inlined because this notebook also
+    # runs as WebAssembly, where the package is not importable. Structure is achromatic, data is chromatic:
+    # Tableau 10 for model identity, Crameri batlow for magnitude, Crameri vik for signed quantities.
+    INK, GREY, FAINT = "#15171a", "#6e7073", "#e3e2df"
+    BLUE, VERM = "#4E79A7", "#E15759"            # has a long-range term / local only
+    RAMP = ["#011959", "#144D62", "#3C6D56", "#828231", "#D29343", "#FDAC9E", "#FACCFA"]   # batlow
+    DIVER = ["#001261", "#034481", "#307DA6", "#94BED2", "#ECE5E0", "#DBAA8D", "#C27041", "#912D06",
+             "#590008"]                                                                     # vik
     matplotlib.rcParams.update({
         "font.family": "serif", "font.serif": SERIF, "font.size": 11,
         "axes.labelsize": 10.5, "axes.titlesize": 12, "xtick.labelsize": 10, "ytick.labelsize": 10,
-        "axes.labelcolor": INK, "text.color": INK, "axes.edgecolor": GREY,
-        "axes.linewidth": 0.7, "xtick.color": GREY, "ytick.color": GREY,
-        "axes.spines.top": False, "axes.spines.right": False, "axes.grid": False,
-        "figure.facecolor": "white", "axes.facecolor": "white", "savefig.facecolor": "white",
-        "svg.fonttype": "none",            # keep text as text: the browser sets the face, and it stays selectable
-        "figure.dpi": 110,
+        "axes.labelcolor": INK, "text.color": INK, "axes.edgecolor": GREY, "axes.linewidth": 0.7,
+        "xtick.color": GREY, "ytick.color": GREY, "axes.spines.top": False, "axes.spines.right": False,
+        "axes.grid": False, "figure.facecolor": "white", "axes.facecolor": "white",
+        "savefig.facecolor": "white", "svg.fonttype": "none", "figure.dpi": 110, "legend.frameon": False,
     })
 
     def svg(fig):
-        """Render as SVG, so the type is crisp at any zoom and the labels are selectable."""
+        """SVG with the text left as text: crisp at any zoom, selectable, set in the page's own face."""
         buf = io.StringIO()
         fig.savefig(buf, format="svg", bbox_inches="tight", pad_inches=0.05)
         plt.close(fig)
@@ -94,39 +124,33 @@ def _(io, mo):
         ax.tick_params(direction="out", length=3.5, width=0.7, labelcolor=INK, pad=3)
         return ax
 
-    def heading(fig, ax, title, subtitle=None):
-        ax.set_title(title, loc="left", pad=14 if subtitle else 8, color=INK, fontsize=12.5)
+    def heading(ax, title, subtitle=None):
+        ax.set_title(title, loc="left", pad=15 if subtitle else 8, color=INK, fontsize=12.5)
         if subtitle:
             ax.annotate(subtitle, xy=(0, 1), xycoords="axes fraction", xytext=(0, 6),
                         textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=GREY)
-        return fig
-    return BLUE, FAINT, GREY, INK, VERM, frame, heading, plt, svg
+    return BLUE, DIVER, FAINT, GREY, INK, RAMP, VERM, frame, heading, plt, svg
 
 
 @app.cell
-def _(BLUE, FAINT, GREY, INK, VERM, frame, heading, np, plt, svg):
-    # ------------------------------------------------------------------------------------------------- figures
+def _(BLUE, FAINT, GREY, INK, KE, RAMP, VERM, frame, heading, np, plt, svg):
     def dotplot(rows, good, floor, xlabel, title, subtitle=None, good_label="correct",
                 floor_label="no long-range term", fmt="{:.3f}"):
-        """Ranked dot plot. The ink is the gap between the known-correct value and the model, so the eye measures
-        error rather than magnitude. Whiskers are the harness's 95 % interval where it computed one."""
+        """The ink is the gap between the known-correct value and the model, so the eye measures error, not size."""
         rows = [r for r in rows if r[1] is not None]
         if not rows:
             return None
         rows = sorted(rows, key=lambda r: r[1])
-        names = [r[0] for r in rows]
         est = np.array([r[1] for r in rows], float)
         lo = np.array([r[2] if r[2] is not None else r[1] for r in rows], float)
         hi = np.array([r[3] if r[3] is not None else r[1] for r in rows], float)
-        lr = [r[4] for r in rows]
         y = np.arange(len(rows))
-
         lo_x, hi_x = min(lo.min(), good, floor), max(hi.max(), good, floor)
         pad = 0.06 * (hi_x - lo_x or 1)
         fig, ax = plt.subplots(figsize=(7.4, 0.42 * len(rows) + 1.9))
-        ax.hlines(y, good, est, color=FAINT, lw=3.2, zorder=1)                      # the deviation, as ink
-        ax.hlines(y, lo, hi, color=GREY, lw=0.9, zorder=2)                          # 95 % interval
-        for yi, (v, is_lr) in enumerate(zip(est, lr)):
+        ax.hlines(y, good, est, color=FAINT, lw=3.2, zorder=1)
+        ax.hlines(y, lo, hi, color=GREY, lw=0.9, zorder=2)
+        for yi, (v, is_lr) in enumerate(zip(est, [r[4] for r in rows])):
             ax.plot([v], [yi], "o", ms=6.5, color=BLUE if is_lr else VERM, zorder=3,
                     markeredgecolor="white", markeredgewidth=0.8)
         ax.axvline(good, color=INK, lw=0.9, zorder=4)
@@ -135,32 +159,61 @@ def _(BLUE, FAINT, GREY, INK, VERM, frame, heading, np, plt, svg):
         top = len(rows) - 0.4
         ax.annotate(good_label, xy=(good, top), xytext=(3, 0), textcoords="offset points",
                     fontsize=9.5, color=INK, va="center", style="italic")
-        if floor != good:
+        if floor != good and floor_label:
             ax.annotate(floor_label, xy=(floor, top), xytext=(3, 0), textcoords="offset points",
                         fontsize=9.5, color=GREY, va="center", style="italic")
-        xr = hi_x + pad
         for yi, v in enumerate(est):
-            ax.annotate(fmt.format(v), xy=(xr, yi), xytext=(6, 0), textcoords="offset points",
+            ax.annotate(fmt.format(v), xy=(hi_x + pad, yi), xytext=(6, 0), textcoords="offset points",
                         fontsize=9.5, color=INK, va="center", ha="left")
-        ax.set_yticks(y, names, fontsize=10)
+        ax.set_yticks(y, [r[0] for r in rows], fontsize=10)
         ax.set_ylim(-0.7, len(rows) - 0.25)
-        ax.set_xlim(lo_x - pad, xr)
+        ax.set_xlim(lo_x - pad, hi_x + pad)
         ax.set_xlabel(xlabel)
         ax.spines["left"].set_visible(False)
         ax.tick_params(axis="y", length=0)
         frame(ax, xbounds=(lo_x - pad * 0.2, hi_x))
-        heading(fig, ax, title, subtitle)
-        hl = [plt.Line2D([], [], marker="o", ls="", ms=6.5, color=BLUE, label="explicit long-range term"),
-              plt.Line2D([], [], marker="o", ls="", ms=6.5, color=VERM, label="local only")]
-        ax.legend(handles=hl, loc="lower right", frameon=False, fontsize=9.5, handletextpad=0.4,
-                  borderaxespad=0.1)
+        heading(ax, title, subtitle)
+        ax.legend(handles=[plt.Line2D([], [], marker="o", ls="", ms=6.5, color=BLUE,
+                                      label="explicit long-range term"),
+                           plt.Line2D([], [], marker="o", ls="", ms=6.5, color=VERM, label="local only")],
+                  loc="lower right", fontsize=9.5, handletextpad=0.4, borderaxespad=0.1)
+        fig.tight_layout()
+        return svg(fig)
+
+    def matrix(models, classes, values, good, floor, title, subtitle=None, fmt="{:.2f}"):
+        """Model × class, every cell printed as a number as well as shaded — what a class dropdown would have shown
+        one slice at a time. Shading is |distance from correct|, a magnitude, so it is one hue."""
+        if not models or not classes:
+            return None
+        from matplotlib.colors import LinearSegmentedColormap
+        M = np.full((len(models), len(classes)), np.nan)
+        for i, m in enumerate(models):
+            for j, c in enumerate(classes):
+                v = values.get((m, c))
+                if v is not None:
+                    M[i, j] = v
+        shade = np.clip(np.abs(M - good) / max(abs(good - floor), 1e-9), 0, 1)
+        fig, ax = plt.subplots(figsize=(1.45 * len(classes) + 3.2, 0.44 * len(models) + 2.0))
+        ax.imshow(shade, cmap=LinearSegmentedColormap.from_list("ramp", RAMP), vmin=0, vmax=1, aspect="auto")
+        for i in range(len(models)):
+            for j in range(len(classes)):
+                if np.isnan(M[i, j]):
+                    ax.text(j, i, "·", ha="center", va="center", color=GREY, fontsize=11)
+                else:
+                    ax.text(j, i, fmt.format(M[i, j]), ha="center", va="center", fontsize=9.5,
+                            color="white" if shade[i, j] > 0.62 else INK)
+        ax.set_xticks(range(len(classes)), [c.replace("_", "\n") for c in classes], fontsize=9)
+        ax.set_yticks(range(len(models)), models, fontsize=9.5)
+        ax.tick_params(length=0)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        heading(ax, title, subtitle)
         fig.tight_layout()
         return svg(fig)
 
     def sparklines(series, title, subtitle=None):
-        """One panel per model, shared axes, sparkline discipline: a thin line, its ends marked, the two reference
-        levels drawn once, no boxes. Shape is the message — a tail that decays too fast looks different from a tail
-        that was never there."""
+        """One panel per model, shared axes: the shape of ε(r) separates a tail that decays too fast from one that
+        was never there."""
         series = [s for s in series if len(s[1]) > 1]
         if not series:
             return None
@@ -175,8 +228,8 @@ def _(BLUE, FAINT, GREY, INK, VERM, frame, heading, np, plt, svg):
             ax.axhline(-1.0, color=GREY, lw=0.7, ls=(0, (1, 2.5)))
             ax.plot(x, v, "-", color=BLUE if is_lr else VERM, lw=1.5, solid_capstyle="round")
             ax.plot(x[[0, -1]], v[[0, -1]], "o", ms=3.4, color=BLUE if is_lr else VERM)
-            ax.annotate(name, xy=(0, 1), xycoords="axes fraction", xytext=(1, -2),
-                        textcoords="offset points", ha="left", va="top", fontsize=9.5, color=INK)
+            ax.annotate(name, xy=(0, 1), xycoords="axes fraction", xytext=(1, -2), textcoords="offset points",
+                        ha="left", va="top", fontsize=9.5, color=INK)
             ax.set_ylim(-1.35, 0.55)
             for s in ("top", "right", "left"):
                 ax.spines[s].set_visible(False)
@@ -195,257 +248,502 @@ def _(BLUE, FAINT, GREY, INK, VERM, frame, heading, np, plt, svg):
         return svg(fig)
 
     def slopegraph(pairs, title, subtitle=None, labels=("without", "with"), fmt="{:.3f}"):
-        """Tufte's slopegraph: two columns, one line per quantity. For a controlled pair of models it shows the
-        effect of the one thing that changed, with no axis to mislead."""
+        """Two columns, one line per quantity: the effect of the single thing that changed, no axis to mislead."""
         pairs = [p for p in pairs if p[1] is not None and p[2] is not None]
         if not pairs:
             return None
-        fig, ax = plt.subplots(figsize=(4.6, 0.46 * len(pairs) + 2.0))
+        fig, ax = plt.subplots(figsize=(5.0, 0.5 * len(pairs) + 2.2))
         for name, a, b in pairs:
             better = abs(b) < abs(a)
-            ax.plot([0, 1], [a, b], "-", color=BLUE if better else VERM, lw=1.4, zorder=2)
-            ax.plot([0, 1], [a, b], "o", ms=5, color=BLUE if better else VERM, zorder=3,
+            ax.plot([0, 1], [a, b], "-", color=BLUE if better else VERM, lw=1.5, zorder=2)
+            ax.plot([0, 1], [a, b], "o", ms=5.5, color=BLUE if better else VERM, zorder=3,
                     markeredgecolor="white", markeredgewidth=0.7)
-            ax.annotate(f"{name}  {fmt.format(a)}", xy=(0, a), xytext=(-7, 0), textcoords="offset points",
+            ax.annotate(f"{name}  {fmt.format(a)}", xy=(0, a), xytext=(-8, 0), textcoords="offset points",
                         ha="right", va="center", fontsize=9.5, color=INK)
-            ax.annotate(fmt.format(b), xy=(1, b), xytext=(7, 0), textcoords="offset points",
+            ax.annotate(fmt.format(b), xy=(1, b), xytext=(8, 0), textcoords="offset points",
                         ha="left", va="center", fontsize=9.5, color=INK)
-        ax.set_xlim(-0.08, 1.08)
+        ax.set_xlim(-0.1, 1.1)
         ax.set_xticks([0, 1], list(labels), fontsize=10.5)
-        for s in ("left", "right", "top"):
-            ax.spines[s].set_visible(False)
-        ax.spines["bottom"].set_visible(False)
+        for s in ax.spines.values():
+            s.set_visible(False)
         ax.tick_params(axis="both", length=0)
         ax.set_yticks([])
-        heading(fig, ax, title, subtitle)
+        heading(ax, title, subtitle)
         fig.tight_layout()
         return svg(fig)
-    return dotplot, slopegraph, sparklines
+
+    # ---------------------------------------------------------------- the slider demos: physics, not data
+    def _toy(r, g, rcut, width):
+        return g * 0.5 * (1.0 - np.tanh((r - rcut) / max(width, 1e-6))) * (KE / r)
+
+    def demo_tail(g, rcut, width):
+        r = np.array([8.0, 9.0, 10.0, 12.0, 14.0, 18.0, 25.0])
+        e_ref, e_mod = KE / r, _toy(r, g, rcut, width)
+        d_ref, d_mod = (e_ref - e_ref[-1]) * 1e3, (e_mod - e_mod[-1]) * 1e3
+        slope = float(np.dot(d_ref, d_mod) / np.dot(d_ref, d_ref))
+        eps = float(np.median((d_mod - d_ref) / d_ref))
+        fig, axes = plt.subplots(1, 2, figsize=(7.8, 3.4))
+        ax = axes[0]
+        rr = np.linspace(5, 26, 400)
+        ax.plot(rr, 1e3 * KE / rr, "-", color=INK, lw=2.2, label="reference $k q_Aq_B/r$")
+        ax.plot(rr, 1e3 * _toy(rr, g, rcut, width), "-", color=BLUE, lw=1.8, label="model")
+        ax.axvline(8, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        ax.annotate("scored from 8 Å", xy=(8, 1e3 * KE / 8), xytext=(6, 8), textcoords="offset points",
+                    fontsize=9, color=GREY)
+        ax.set_xlabel("r (Å)")
+        ax.set_ylabel("E (meV)")
+        ax.legend(fontsize=9, loc="upper right")
+        frame(ax)
+        heading(ax, "the tail itself")
+        ax = axes[1]
+        ax.plot([d_ref.min(), d_ref.max()], [d_ref.min(), d_ref.max()], "-", color=INK, lw=0.9)
+        ax.plot(d_ref, d_mod, "o", ms=6, color=BLUE, markeredgecolor="white", markeredgewidth=0.7)
+        xs = np.array([d_ref.min(), d_ref.max()])
+        ax.plot(xs, slope * xs, "-", color=VERM, lw=1.5)
+        ax.annotate(f"slope = {slope:.3f}", xy=(xs[-1], slope * xs[-1]), xytext=(-6, 10),
+                    textcoords="offset points", fontsize=10, color=VERM, ha="right")
+        ax.set_xlabel("reference ΔE (meV)")
+        ax.set_ylabel("model ΔE (meV)")
+        frame(ax)
+        heading(ax, "the fit the harness does")
+        fig.tight_layout()
+        return svg(fig), slope, eps
+
+    def demo_ddE(rcut, width, far_max=30.0):
+        rr = np.linspace(4.0, far_max, 240)
+        ex = KE * (1.0 / (rr - 0.6) - 1.0 / rr)
+        mod = ex * 0.5 * (1.0 - np.tanh((rr - rcut) / max(width, 1e-6)))
+        k = rr >= 8
+        slope = float(np.dot(ex[k], mod[k]) / np.dot(ex[k], ex[k]))
+        fig, ax = plt.subplots(figsize=(7.4, 3.2))
+        ax.plot(rr, 1e3 * np.abs(ex), "-", color=INK, lw=2.2, label="reference")
+        ax.plot(rr, 1e3 * np.abs(mod), "-", color=BLUE, lw=1.8, label="model")
+        ax.set_yscale("log")
+        ax.set_xlabel("distance of the fixed charge, R (Å)")
+        ax.set_ylabel("|ΔΔE| (meV)")
+        ax.axvline(8, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        ax.legend(fontsize=9.5, loc="upper right")
+        frame(ax)
+        heading(ax, f"fixed-charge response — fitted slope {slope:.3f}",
+                "the quartet cancels composition and total charge, so only this response survives")
+        fig.tight_layout()
+        return svg(fig), slope
+    return demo_ddE, demo_tail, dotplot, matrix, slopegraph, sparklines
+
+
+@app.cell
+def _(mo):
+    g_slider = mo.ui.slider(0.0, 1.2, 0.05, value=1.0, label="fraction of the tail the model keeps, $g$",
+                            show_value=True)
+    rc_slider = mo.ui.slider(4.0, 26.0, 0.5, value=20.0, label="where it switches off, $r_c$ (Å)", show_value=True)
+    w_slider = mo.ui.slider(0.2, 6.0, 0.2, value=1.0, label="switching width (Å)", show_value=True)
+    rc2_slider = mo.ui.slider(4.0, 30.0, 0.5, value=24.0, label="model cutoff $r_c$ (Å)", show_value=True)
+    return g_slider, rc2_slider, rc_slider, w_slider
+
+
+@app.cell
+def _(P, R, SOURCE, mo):
+    mo.sidebar([
+        mo.md("## Long-range<br>diagnostics"),
+        mo.md(
+            """
+            - [Ranking](#ranking)
+            - [Decay by class](#byclass)
+            - [The priors](#tests)
+            - [Structure by structure](#explore)
+            - [Charges](#atoms)
+            - [Physical priors](#priors)
+            - [Caveats](#caveats)
+            """
+        ),
+        mo.md("---"),
+        mo.md(
+            f"""
+            **{len(R)}** models · **{len(P)}** prior suites
+
+            References are ωB97M-V/def2-TZVPD. A model trained at another level is marked ⚠: its **energies are
+            not comparable**, its dimensionless diagnostics are.
+
+            Pathology-flagged records are reported but never scored, and a metric that could not be computed says
+            why instead of going missing.
+
+            <small style="color:#767676">{SOURCE}</small>
+            """
+        ),
+    ])
+    return
+
+
+@app.cell
+def _(R, SOURCE, mo):
+    _empty = mo.callout(
+        mo.md(f"**This copy carries no results.** {SOURCE}\n\nEvery section below will be empty. The build "
+              "script writes a frozen notebook with the data (and the chemiscope datasets) inside it; that is the "
+              "one to open on molab or export to WebAssembly."),
+        kind="warn") if not R else mo.md("")
+
+    mo.vstack([_empty, mo.md(
+        r"""
+        # Does this model have any long-range physics?
+
+        Near equilibrium a potential can reach an excellent force MAE and still be blind past its cutoff: no
+        Coulomb tail, no response to a charge 12 Å away, no idea that two anions repel. An RMSE on a
+        near-equilibrium test set cannot see that. These three can, and each has a **known correct answer**, so one
+        number is interpretable on its own.
+
+        | | a correct model | no long-range term |
+        |---|---|---|
+        | tail fraction | **1** | **0** |
+        | normalised error $\varepsilon$ | **0** | **−1** |
+        | fixed-charge $\Delta\Delta E$ slope | **1** | **0** |
+
+        The *oracle* row is the ceiling the physics allows — the fragments' own DFT multipoles, nothing learned.
+        """
+    )])
+    return
+
+
+@app.cell
+def _(CLS, DDE_SET, R, SCORES, SET, mo, pd):
+    # Scores come precomputed when this notebook carries its data, and from the package when it is reading a run
+    # directory. The import is by name and guarded, so a copy that has its own data never reaches for a package.
+    def _score(name, r):
+        if name in SCORES:
+            return SCORES[name]
+        try:
+            import importlib
+
+            return importlib.import_module("lrbench" ".diagnostics").score_components(r)
+        except Exception:
+            return {}
+
+    def _v(t, n=3):
+        return None if not t or t[0] is None else round(t[0], n)
+
+    _rows = []
+    for _name, _r in R.items():
+        _S = _r["sets"].get(SET)
+        if not _S:
+            continue
+        _c = _S["classes"].get(CLS, {})
+        _oracle = "oracle" in _name
+        _e = _v(_c.get("eps"))
+        _sc = _score(_name, _r)
+        _rd = lambda k: None if _sc.get(k) is None else round(_sc[k], 2)  # noqa: E731
+        _rows.append({
+            "model": _r["label"][:38],
+            "LRS": _sc.get("lrs"), "decay": _rd("decay"), "scale": _rd("scale"),
+            "response": _rd("response"), "accuracy": _rd("accuracy"),
+            "long range": "ceiling" if _oracle else ("yes" if _r["has_lr"] else "no"),
+            "tail fraction": _v(_c.get("tail")), "ε": _e,
+            "ΔΔE slope": _v((_r["sets"].get(DDE_SET) or {}).get("ddE"), 4),
+            "8 Å MAE (meV)": _v(_c.get("off8"), 1), "≥12 Å MAE (meV)": _v(_c.get("far12"), 1),
+            "F MAE (meV/Å)": _v(_S.get("F_mae"), 1),
+            "level": _r["level"][:22] + ("  ⚠" if _r["mismatch"] else ""),
+            "scans": _c.get("n_scans"),
+            "_k": (0 if _oracle else 1, -(_sc.get("lrs") if _sc.get("lrs") is not None else -1)),
+        })
+    _df = (pd.DataFrame(_rows).sort_values("_k").drop(columns="_k").reset_index(drop=True)
+           if _rows else pd.DataFrame())
+    mo.vstack([
+        mo.md(r"""<a id="ranking"></a>
+## The long-range score
+
+$$\mathrm{LRS} = 100\left(\prod_j s_j\right)^{1/n}, \qquad s_j \in [0,1],\; 1 = \text{correct}$$
+
+Four quantities that each have a value right by construction, mapped so **1** is correct and **0** is the
+no-long-range floor: the fraction of the $r$-dependence reproduced, how much of the physical magnitude is
+captured, the reply to a distant charge, and the offset-free error against what a flat model would score. The
+*geometric* mean is the point — a model scoring zero on any one of them has no long-range physics, and credit
+elsewhere should not disguise it."""),
+        mo.ui.table(_df, selection=None, page_size=25) if not _df.empty else mo.md("_no results yet_"),
+        mo.md("<small style='color:#767676'>⚠ trained at a different level of theory from the reference data: read "
+              "the dimensionless columns, not the energies.</small>"),
+    ])
+    return
+
+
+@app.cell
+def _(R, SET, matrix, mo):
+    _models = [r["label"][:26] for r in R.values() if SET in r["sets"]]
+    _classes = sorted({c for r in R.values() for c in (r["sets"].get(SET) or {}).get("classes", {})})
+    _tail, _eps = {}, {}
+    for _r in R.values():
+        for _c, _d in (_r["sets"].get(SET) or {}).get("classes", {}).items():
+            _tail[(_r["label"][:26], _c)] = _d["tail"][0]
+            _eps[(_r["label"][:26], _c)] = _d["eps"][0]
+    mo.vstack([
+        mo.md(r"""<a id="byclass"></a>
+## The decay exponent is not one number
+
+$$E_{\rm int}(r) \sim r^{-1}\ \text{(ion–ion)},\quad r^{-2}\ \text{(ion–dipole)},\quad
+r^{-3}\ \text{(dipole–dipole)}$$
+
+Each class has its own asymptotic law, so a model can reproduce one and miss another: a perfect ion-pair tail
+says nothing about neutral polar pairs. Shading is distance from the correct value, and the number is in every
+cell, so nothing rests on reading a colour."""),
+        matrix(_models, _classes, _tail, good=1.0, floor=0.0, title="Tail fraction by class",
+               subtitle="1 = follows the reference, 0 = flat") or mo.md("_no data_"),
+        matrix(_models, _classes, _eps, good=0.0, floor=-1.0, title="Normalised error ε by class",
+               subtitle="0 = exact, −1 = the whole tail is missing") or mo.md(""),
+    ])
+    return
+
+
+@app.cell
+def _(CLS, DDE_SET, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slider, rc_slider, slopegraph,
+      sparklines, w_slider):
+    def _rows(metric):
+        out = []
+        for r in R.values():
+            c = (r["sets"].get(SET) or {}).get("classes", {}).get(CLS)
+            if c and metric in c:
+                out.append((r["label"][:34], *c[metric], r["has_lr"]))
+        return out
+
+    _ddE_rows = [(r["label"][:34], *r["sets"][DDE_SET]["ddE"], r["has_lr"]) for r in R.values()
+                 if DDE_SET in r["sets"] and r["sets"][DDE_SET]["ddE"][0] is not None]
+    _tail_fig, _slope, _eps = demo_tail(g_slider.value, rc_slider.value, w_slider.value)
+    _ddE_fig, _ddE_slope = demo_ddE(rc2_slider.value, w_slider.value)
+
+    _series = []
+    for _r in sorted(R.values(), key=lambda r: (not r["has_lr"], r["label"])):
+        _pts = sorted(((p["r"], p["eps"]) for p in (_r["sets"].get(SET) or {}).get("eps_r", [])
+                       if p["cls"] == CLS and p["eps"] is not None), key=lambda t: t[0])
+        if _pts:
+            _series.append((_r["label"][:26], _pts, _r["has_lr"]))
+
+    _pair = []
+    _v1 = next((r for r in R.values() if r["model"] == "orbmol-v1"), None)
+    _v2 = next((r for r in R.values() if r["model"] == "orbmol"), None)
+    if _v1 and _v2:
+        for _m, _lab in (("tail", "tail fraction"), ("eps", "ε"), ("off8", "8 Å error (meV)")):
+            _a = (_v1["sets"].get(SET) or {}).get("classes", {}).get(CLS, {}).get(_m, (None,))[0]
+            _b = (_v2["sets"].get(SET) or {}).get("classes", {}).get(CLS, {}).get(_m, (None,))[0]
+            _pair.append((_lab, _a, _b))
+
+    tail_panel = mo.vstack([
+        mo.md(
+            r"""
+            Take a dimer scan and remove the constant: $\Delta E(r) = E_{\rm int}(r) - E_{\rm int}(r_{\rm max})$
+            for $r \ge 8$ Å. Then fit, through the origin, the model's $\Delta E$ on the reference's:
+
+            $$\text{tail fraction} = \frac{\sum_r \Delta E^{\rm model}(r)\,\Delta E^{\rm DFT}(r)}
+            {\sum_r \big[\Delta E^{\rm DFT}(r)\big]^2}$$
+
+            Subtracting the longest point is what makes this immune to any constant — element references,
+            charge-state offsets, a baseline — so only the **shape of the decay** survives.
+            """
+        ),
+        mo.hstack([g_slider, rc_slider, w_slider], justify="start", gap=1.2, wrap=True),
+        _tail_fig,
+        mo.md(f"**This toy scores tail fraction {_slope:.3f}, ε {_eps:+.3f}.** With a smooth gate and no cutoff, ε "
+              r"is exactly $g-1$ — the identity the harness documents for a gated Coulomb head — and the tail "
+              r"fraction is $g$. Pull $r_c$ below 8 Å and both collapse to the floor."),
+        dotplot(_rows("tail"), good=1.0, floor=0.0, xlabel="tail fraction", title="The real models",
+                subtitle=f"{SET} · {CLS}") or mo.md("_no data_"),
+    ])
+
+    eps_panel = mo.vstack([
+        mo.md(
+            r"""
+            A meV error means nothing without a scale, and the natural scale is the physics the tail *should* have:
+
+            $$\varepsilon(r) = \frac{\Delta E^{\rm model}(r) - \Delta E^{\rm DFT}(r)}{\Delta E^{\rm phys}(r)},
+            \qquad \Delta E^{\rm phys} = \Delta\!\left(E_{\rm es}^{\rm exact} + E_{\rm mp}^{\rm ind}\right)
+            \ \text{else}\ \Delta E_{\rm mp}$$
+
+            The scale is **signed**: dividing by $|\Delta E^{\rm phys}|$ would flip $\varepsilon$ for attractive
+            tails. So $\varepsilon = 0$ is exact and $\varepsilon = -1$ means the error is as large as the physics
+            itself. For a gated Coulomb head this reduces to $\varepsilon = g\langle\lambda_A\lambda_B\rangle - 1$.
+            """
+        ),
+        dotplot(_rows("eps"), good=0.0, floor=-1.0, xlabel="ε (median)",
+                title="How much of the physical tail is missing?", subtitle=f"{SET} · {CLS}")
+        or mo.md("_run with `--normalise`_"),
+        sparklines(_series, "ε against distance", f"{SET} · {CLS} · 0 = exact, −1 = tail missing") or mo.md(""),
+        mo.md("Intervals are a hierarchical bootstrap over scans, not points: points along one scan are not "
+              "independent, and treating them as such would shrink every interval by roughly √n."),
+    ] + ([mo.md("### The one controlled comparison\n\nOrbMol v1 and v2 are the same architecture; v2 adds a "
+                "latent-charge head constrained to the total charge and a Coulomb module. Nothing else differs, "
+                "so the slope is that term's effect."),
+          slopegraph(_pair, "OrbMol: adding an explicit Coulomb term",
+                     labels=("v1 (local)", "v2 (+Coulomb)"))] if _pair else []))
+
+    ddE_panel = mo.vstack([
+        mo.md(
+            r"""
+            The question a Coulomb tail alone cannot answer: does a charge that is *far away* change a *local*
+            energy difference? Four structures — two positions of a local site, each with the distant charge near
+            and far — differenced twice:
+
+            $$\Delta\Delta E = \big[E(s_1,\text{near}) - E(s_0,\text{near})\big]
+            - \big[E(s_1,\text{far}) - E(s_0,\text{far})\big]$$
+
+            Every term has the same composition and the same total charge, so per-element offsets, charge-state
+            offsets and any constant cancel **exactly**. What survives decays as $1/R^2$; a model that cannot see
+            $R$ returns zero.
+            """
+        ),
+        mo.hstack([rc2_slider, w_slider], justify="start", gap=1.2),
+        _ddE_fig,
+        mo.md(f"**Toy slope {_ddE_slope:.3f}.** Note how little the cutoff has to bite: the response is already "
+              "small at 8 Å, so a cutoff well outside the scored range still flattens it."),
+        dotplot(_ddE_rows, good=1.0, floor=0.0, xlabel="ΔΔE slope", fmt="{:.4f}", title="The real models",
+                subtitle=f"{DDE_SET} · fixed-charge quartets") or mo.md("_no ΔΔE groups_"),
+    ])
+
+    mo.vstack([
+        mo.md('<a id="tests"></a>\n## The priors, one at a time\n\nEach opens into the physical statement it '
+              "tests and a toy model you drive, so the number in the table has a mechanism behind it."),
+        mo.accordion({
+            r"### Asymptotic decay — does $E_{\rm int}$ keep falling as $r^{-1}$?": tail_panel,
+            r"### The physical scale — what fraction of $\Delta E^{\rm phys}$ is missing?": eps_panel,
+            r"### Fixed-charge response — $\Delta\Delta E \propto R^{-2}$": ddE_panel,
+        }, multiple=True),
+    ])
+    return
+
+
+@app.cell
+def _(CHEM, mo):
+    import json as _json
+
+    _CS = """<!doctype html><html><head><meta charset="utf-8">
+<script src="https://cdn.jsdelivr.net/npm/chemiscope@1.1.0/dist/chemiscope.min.js"></script>
+<style>body{margin:0;font-family:Georgia,serif;font-size:13px}
+.panes{display:flex;flex-wrap:wrap;gap:8px}.l{flex:1 1 58%;min-width:320px}.r{flex:1 1 38%;min-width:280px}
+#m{height:430px}#s{height:340px}.err{color:#D55E00;font-family:sans-serif}</style></head>
+<body><div class="panes"><div class="l"><div id="meta"></div><div id="m"></div></div>
+<div class="r"><div id="s"></div><div id="i"></div></div></div>
+<script>
+const B = "__BLOB__", S = __SETTINGS__;
+(async () => {
+  try {
+    const bin = Uint8Array.from(atob(B), c => c.charCodeAt(0));
+    const st = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const ds = JSON.parse(await new Response(st).text());
+    for (const p of Object.values(ds.properties))
+      if (p.values.every(v => v === null || typeof v === "number"))
+        p.values = p.values.map(v => v === null ? NaN : v);
+    if (S && Object.keys(S).length) ds.settings = S;
+    await Chemiscope.DefaultVisualizer.load({map:"m", info:"i", meta:"meta", structure:"s"}, ds);
+  } catch (e) { document.body.innerHTML = '<p class="err">chemiscope could not load: ' + e + '</p>'; }
+})();
+</script></body></html>"""
+
+    def chemiscope_view(v, height="680px"):
+        """chemiscope in an iframe: `mo.Html` deliberately does not execute scripts, `mo.iframe` does — and the
+        iframe also keeps chemiscope's CSS out of the notebook's."""
+        blob = CHEM.get(v["key"])
+        if not blob:
+            return mo.md(f"_dataset `{v['key']}` is not embedded in this build_")
+        return mo.iframe(_CS.replace("__BLOB__", blob).replace("__SETTINGS__",
+                                                               _json.dumps(v.get("settings") or {})), height=height)
+    return (chemiscope_view,)
+
+
+@app.cell
+def _(VIEWS, chemiscope_view, mo):
+    _global = [v for v in VIEWS if not v["key"].endswith("-atoms")]
+    mo.vstack(
+        [mo.md('<a id="explore"></a>\n## Structure by structure\n\nEvery scored structure, its reference value '
+               "and each model's answer on it. A class is an identity, so it is carried by marker shape; a signed "
+               "error by a diverging palette centred on zero; a magnitude by a sequential ramp. Each view starts "
+               "pointed at a question and is then yours.")]
+        + [x for v in _global for x in (mo.md(f"**{v['title']}** — {v['prose']}"), chemiscope_view(v))]
+        if _global else
+        [mo.md('<a id="explore"></a>\n## Where the error lives\n\n_no chemiscope datasets in this build — run '
+               "`tools/build_diagnostics_site.py`_")]
+    )
+    return
+
+
+@app.cell
+def _(VIEWS, chemiscope_view, mo):
+    _atomic = [v for v in VIEWS if v["key"].endswith("-atoms")]
+    mo.vstack(
+        [mo.md(r"""<a id="atoms"></a>
+## Charge conservation and the Löwdin reference
+
+$$\sum_{i \in f} q_i = Q_f, \qquad \mu = \sum_i q_i \mathbf{r}_i$$
+
+One point per atomic environment, so selecting one highlights that atom. Formal charges are integers by
+construction; the real charges spread around them, and that spread is the polarisation and charge transfer a
+model has to reproduce.""")]
+        + [x for v in _atomic for x in (mo.md(f"**{v['title']}** — {v['prose']}"), chemiscope_view(v))]
+        if _atomic else [mo.md('<a id="atoms"></a>\n## Atoms and charges\n\n_no atomic dataset in this build_')]
+    )
+    return
+
+
+@app.cell
+def _(P, mo, pd):
+    _mark = {"pass": "✓ pass", "fail": "✗ FAIL", "warn": "! warn", "not_applicable": "– n/a",
+             "not_evaluable": "· n/e", "n/a": "– n/a", "n/e": "· n/e"}
+    if P:
+        _checks = sorted({k for p in P.values() for k in p["checks"]})
+        _pdf = pd.DataFrame([dict({"model": p["label"][:30]},
+                                  **{k: _mark.get(p["checks"].get(k, {}).get("status", ""), "") for k in _checks})
+                             for p in P.values()])
+        _fails = [mo.md(f"**{p['label']}**\n" + "\n".join(
+            f"- **{k}** — {v['summary'][:400]}" for k, v in sorted(p["checks"].items()) if v["status"] == "fail"))
+            for p in P.values() if any(v["status"] == "fail" for v in p["checks"].values())]
+        _body = [mo.ui.table(_pdf, selection=None, page_size=20)]
+        if _fails:
+            _body.append(mo.accordion({"### Every failure, in its own words": mo.vstack(_fails)}))
+    else:
+        _body = [mo.md("_no prior suites in this run directory yet_")]
+    mo.vstack([
+        mo.md('<a id="priors"></a>\n## Physical priors\n\nPass/fail questions no error metric asks. Does the model '
+              "react to a total charge **at all**? Is it separable at 100 Å — "
+              r"$E(A{\cdots}B) = E(A) + E(B) + k q_Aq_B/r$? Does $E_{\rm int}$ decay with the right exponent, "
+              r"$r^{-1}$ ion–ion, $r^{-2}$ ion–dipole, $r^{-3}$ dipole–dipole? Is it invariant, conservative, "
+              "deterministic? A model can have a respectable MAE and fail several of these."),
+        *_body,
+    ])
+    return
 
 
 @app.cell
 def _(R, mo):
-    sets_present = sorted({s for r in R.values() for s in r["sets"]}) or ["dimers"]
-    _default = "dimers" if "dimers" in sets_present else sets_present[0]
-    set_pick = mo.ui.dropdown(options=sets_present, value=_default, label="set")
-    classes = sorted({c for r in R.values() for s in r["sets"].values() for c in s["classes"]})
-    _cdef = "ion_pair" if "ion_pair" in classes else (classes[0] if classes else None)
-    cls_pick = mo.ui.dropdown(options=classes or ["ion_pair"], value=_cdef, label="class")
-    controls = mo.hstack([set_pick, cls_pick], justify="start", gap=1.5)
-    return cls_pick, controls, set_pick
+    _notes = []
+    for _r in R.values():
+        _lines = []
+        for _s, _S in _r["sets"].items():
+            if _S.get("n_failed"):
+                _lines.append(f"- `{_s}`: {_S['n_failed']} predictions failed (unsupported element, rejected "
+                              "charge…)")
+            if _S.get("charges_skipped"):
+                _lines.append(f"- `{_s}`: charge block skipped — {_S['charges_skipped']}")
+        if _r["mismatch"]:
+            _lines.append(f"- trained at {_r['level']}, scored against ωB97M-V/def2-TZVPD labels: **energies are "
+                          "not comparable**; the dimensionless diagnostics are")
+        if not _r["has_lr"]:
+            _lines.append("- declares no explicit long-range term, so the floor values are the expected result")
+        if _lines:
+            _notes.append(mo.md(f"**{_r['label']}**\n" + "\n".join(_lines)))
+    mo.vstack([
+        mo.md('<a id="caveats"></a>\n## Caveats\n\nRead from the result files, not curated by hand.'),
+        mo.accordion({"### Per-model caveats": mo.vstack(_notes or [mo.md("_nothing to report_")])}),
+        mo.md(
+            """
+            **Levels of theory are never pooled.** A group whose terms span levels is excluded from scoring, and an
+            eval whose model level differs from the set's is refused unless explicitly allowed — in which case the
+            mismatch is recorded and flagged everywhere.
 
+            **DFT pathologies are excluded, not hidden.** Flagged records, and every group touching one, are
+            reported with the model's values and never scored.
 
-@app.cell
-def _(P, R, SOURCE, cls_pick, controls, dotplot, mo, pd, set_pick, slopegraph, sparklines):
-    # ------------------------------------------------------------------------------------------------- the pages
-    def _rows(metric, setname, cls):
-        out = []
-        for name, r in R.items():
-            c = (r["sets"].get(setname) or {}).get("classes", {}).get(cls)
-            if not c:
-                continue
-            e, lo, hi = c[metric] if metric in c else (None, None, None)
-            out.append((r["label"][:34], e, lo, hi, r["has_lr"]))
-        return out
+            **The oracle is a ceiling, not a competitor.** It is the dataset's own multipole + induction prior
+            presented as a model. Where it departs from 1 or 0, the prior does not apply there and ε should not be
+            read.
 
-    def _ddE_rows(setname):
-        return [(r["label"][:34], *r["sets"][setname]["ddE"], r["has_lr"])
-                for r in R.values() if setname in r["sets"] and r["sets"][setname]["ddE"][0] is not None]
-
-    def page_overview():
-        s, c = set_pick.value, cls_pick.value
-        fig = dotplot(_rows("tail", s, c), good=1.0, floor=0.0,
-                      xlabel="tail fraction", title="Does the interaction keep falling off past the cutoff?",
-                      subtitle=f"{s} · {c} · slope through zero of the model's ΔE on the reference ΔE, d ≥ 8 Å")
-        return mo.vstack([
-            mo.md(
-                """
-                # Long-range diagnostics
-
-                Standard benchmarks score energies and forces near equilibrium, where a model can look excellent and
-                still be blind beyond its cutoff. These three numbers have a **known correct answer**, so each one
-                reads on its own:
-
-                | | correct model | no long-range term |
-                |---|---|---|
-                | tail fraction | 1 | 0 |
-                | normalised error ε | 0 | −1 |
-                | fixed-charge ΔΔE slope | 1 | 0 |
-
-                The oracle row is the ceiling the physics allows; a model at 0 is in the company of a flat line,
-                whatever its force MAE says.
-                """
-            ),
-            controls,
-            fig or mo.md("_no results yet_"),
-            mo.md(f"<small style='color:#767676'>{len(R)} results · {len(P)} prior suites · {SOURCE}</small>"),
-        ])
-
-    def page_tails():
-        s, c = set_pick.value, cls_pick.value
-        return mo.vstack([
-            mo.md("## The three diagnostics"),
-            controls,
-            dotplot(_rows("eps", s, c), good=0.0, floor=-1.0,
-                    xlabel="ε  (median)", title="How much of the physical tail is missing?",
-                    subtitle=f"{s} · {c} · error divided by the fragments' own multipole + induction prior, signed")
-            or mo.md("_run with `--normalise` for ε_"),
-            dotplot(_ddE_rows(s), good=1.0, floor=0.0, xlabel="ΔΔE slope",
-                    title="Does a charge far away change the local energy?",
-                    subtitle=f"{s} · composition and total charge identical in all four terms, so only the "
-                             "long-range response survives", fmt="{:.4f}")
-            or mo.md("_no ΔΔE groups in this set_"),
-            dotplot(_rows("off8", s, c), good=0.0, floor=0.0, xlabel="offset-free error at 8 Å (meV)",
-                    title="And how large is that in energy?", good_label="exact", floor_label="",
-                    subtitle=f"{s} · {c} · lower is better; compare against the flat-model value in the table",
-                    fmt="{:.1f}")
-            or mo.md(""),
-        ])
-
-    def page_distance():
-        c = cls_pick.value
-        s = set_pick.value
-        series = []
-        for name, r in sorted(R.items(), key=lambda kv: (not kv[1]["has_lr"], kv[0])):
-            pts = sorted(((p["r"], p["eps"]) for p in (r["sets"].get(s) or {}).get("eps_r", [])
-                          if p["cls"] == c and p["eps"] is not None), key=lambda t: t[0])
-            if pts:
-                series.append((r["label"][:26], pts, r["has_lr"]))
-        pair = []
-        v1 = next((r for r in R.values() if r["model"] == "orbmol-v1"), None)
-        v2 = next((r for r in R.values() if r["model"] == "orbmol"), None)
-        if v1 and v2:
-            for metric, lab in (("tail", "tail fraction"), ("eps", "ε"), ("off8", "8 Å error (meV)")):
-                a = (v1["sets"].get(s) or {}).get("classes", {}).get(c, {}).get(metric, (None,))[0]
-                b = (v2["sets"].get(s) or {}).get("classes", {}).get(c, {}).get(metric, (None,))[0]
-                pair.append((lab, a, b))
-        out = [mo.md("## Where the error lives"), controls,
-               sparklines(series, "ε against distance",
-                          f"{s} · {c} · 0 = exact, −1 = the whole tail is missing")
-               or mo.md("_no ε(r) data yet_")]
-        if pair:
-            out += [mo.md("### The one controlled comparison\n\nOrbMol v1 and v2 are the same architecture; v2 adds "
-                          "a latent-charge head constrained to the total charge and a Coulomb module. Nothing else "
-                          "differs, so the slope is the long-range term's effect."),
-                    slopegraph(pair, "OrbMol: adding an explicit Coulomb term",
-                               labels=("v1 (local)", "v2 (+Coulomb)")) or mo.md("")]
-        return mo.vstack(out)
-
-    def page_table():
-        s, c = set_pick.value, cls_pick.value
-        rows = []
-        for name, r in R.items():
-            S = r["sets"].get(s)
-            if not S:
-                continue
-            cc = S["classes"].get(c, {})
-            f = lambda t, n=3: None if t is None or t[0] is None else round(t[0], n)  # noqa: E731
-            rows.append({
-                "model": r["label"][:40], "level": r["level"],
-                "tail": f(cc.get("tail")), "ε": f(cc.get("eps")), "ΔΔE": f(S.get("ddE"), 4),
-                "8 Å MAE (meV)": f(cc.get("off8"), 1), "flat model (meV)": None if cc.get("flat8") is None
-                else round(cc["flat8"], 1),
-                "≥12 Å MAE (meV)": f(cc.get("far12"), 2),
-                "k_BT": None if cc.get("kBT") is None else round(cc["kBT"], 3),
-                ">1 k_BT": cc.get("frac_gt_1kBT"),
-                "F MAE (meV/Å)": f(S.get("F_mae"), 1),
-                "scans": cc.get("n_scans"), "failed": S.get("n_failed"),
-            })
-        df = pd.DataFrame(rows).sort_values("tail", ascending=False, na_position="last")
-        return mo.vstack([
-            mo.md("## Every number, with its sample size\n\n`flat model` is what the same metric gives a model with "
-                  "no long-range term at all: when the model's value approaches it, the metric has stopped "
-                  "discriminating and the absolute error is the one to read."),
-            controls, mo.ui.table(df, selection=None, page_size=25),
-        ])
-
-    def page_models():
-        df = pd.DataFrame([{
-            "model": r["label"][:40], "level of theory": r["level"], "level mismatch": "yes" if r["mismatch"]
-            else "", "long-range term": r["long_range"][:70], "charge / spin": r["charge_spin"][:60],
-            "licence": r["licence"][:34], "package": r["package"], "wall (s)": r["wall_s"],
-        } for r in R.values()]).sort_values(["level of theory", "model"])
-        return mo.vstack([
-            mo.md("## What is being compared\n\nEvery column is read from the result JSON, not typed in. A level "
-                  "that differs from the sets' own means the **energies are not comparable** — the dimensionless "
-                  "diagnostics still are."),
-            mo.ui.table(df, selection=None, page_size=25),
-        ])
-
-    def page_priors():
-        if not P:
-            return mo.vstack([mo.md("## Physical priors\n\n_no prior suites in this run directory yet_")])
-        checks = sorted({k for p in P.values() for k in p["checks"]})
-        mark = {"pass": "✓ pass", "fail": "✗ FAIL", "warn": "! warn", "not_applicable": "– n/a",
-                "not_evaluable": "· n/e", "n/a": "– n/a", "n/e": "· n/e"}
-        df = pd.DataFrame([dict({"model": p["label"][:34]},
-                                **{k: mark.get(p["checks"].get(k, {}).get("status", ""), "") for k in checks})
-                           for p in P.values()])
-        detail = []
-        for p in P.values():
-            bad = [f"- **{k}** — {v['summary'][:300]}" for k, v in sorted(p["checks"].items())
-                   if v["status"] == "fail"]
-            if bad:
-                detail.append(mo.md(f"**{p['label']}**\n" + "\n".join(bad)))
-        return mo.vstack([
-            mo.md("## Physical priors\n\nPass/fail questions an error metric never asks: does the model react to a "
-                  "total charge at all, is it separable at 100 Å, does E_int fall off with the right exponent, is it "
-                  "invariant, is it deterministic. Status is spelled out as well as marked, so it never rests on a "
-                  "glyph alone."),
-            mo.ui.table(df, selection=None, page_size=25),
-            mo.md("### Every failure, in its own words") if detail else mo.md(""),
-            *detail,
-        ])
-
-    def page_data():
-        notes = []
-        for name, r in R.items():
-            lines = []
-            if r["sets"]:
-                for s, S in r["sets"].items():
-                    if S.get("n_failed"):
-                        lines.append(f"- `{s}`: {S['n_failed']} failed predictions")
-                    if S.get("charges_skipped"):
-                        lines.append(f"- `{s}`: charges skipped — {S['charges_skipped']}")
-            if r["mismatch"]:
-                lines.append("- level mismatch recorded: energies are not comparable with the labels")
-            if lines:
-                notes.append(mo.md(f"**{r['label']}**\n" + "\n".join(lines)))
-        return mo.vstack([
-            mo.md("## Failures and caveats\n\nA metric that could not be computed says why. That is the only thing "
-                  "that keeps an absent number from being read as a good one."),
-            *(notes or [mo.md("_nothing to report_")]),
-        ])
-    return (page_data, page_distance, page_models, page_overview, page_priors, page_table, page_tails)
-
-
-@app.cell
-def _(mo, page_data, page_distance, page_models, page_overview, page_priors, page_table, page_tails):
-    nav = mo.nav_menu({
-        "#/": "Overview",
-        "#/diagnostics": "Diagnostics",
-        "#/distance": "Distance",
-        "#/table": "Table",
-        "#/priors": "Priors",
-        "#/models": "Models",
-        "#/notes": "Caveats",
-    })
-    nav
-    return (nav,)
-
-
-@app.cell
-def _(mo, page_data, page_distance, page_models, page_overview, page_priors, page_table, page_tails):
-    mo.routes({
-        "#/": page_overview,
-        "#/diagnostics": page_tails,
-        "#/distance": page_distance,
-        "#/table": page_table,
-        "#/priors": page_priors,
-        "#/models": page_models,
-        "#/notes": page_data,
-        mo.routes.CATCH_ALL: page_overview,
-    })
+            **Absolute energies depend on fitted per-element offsets.** Balanced differences — E_int, E3,
+            fixed-composition ΔE and ΔΔE — do not, which is why they carry the argument.
+            """
+        ),
+    ])
     return
 
 

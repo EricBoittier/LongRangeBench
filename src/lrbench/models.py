@@ -26,6 +26,7 @@ ORB_ENV = "orb"
 DEEPMD_ENV = "deepmd"
 FAIRCHEM_ENV = "fairchem"
 GRACE_ENV = "grace"
+AIMNET_ENV = "aimnet"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
@@ -67,6 +68,14 @@ ENVS: Dict[str, dict] = {
         "install": ['uv pip install fairchem-core', 'uv pip install -e ".[test]"'],
         "notes": "The weights are gated: accept the licence on huggingface.co/facebook/UMA and log in (hf auth "
                  "login) before the first run. Checkpoints are cached in ~/.cache/fairchem (uma-s is ~2.3 GB).",
+    },
+    AIMNET_ENV: {
+        "probe": "aimnet.calculators",
+        "python": ">=3.11,<3.13",
+        "install": ['uv pip install "aimnet[ase]"', 'uv pip install -e ".[test]"'],
+        "notes": "torch with CUDA matching the node. Checkpoints are fetched on first use. The total charge is "
+                 "set on the calculator rather than read from atoms.info, which the adapter does for every "
+                 "structure; the docs warn that a wrong charge is silently wrong, so that plumbing matters.",
     },
     GRACE_ENV: {
         "probe": "tensorpotential.calculator",
@@ -182,6 +191,21 @@ MODELS.update({m.name: m for m in [
                "fairchem-core download (gated on Hugging Face)", "Meta FAIR Chemistry model licence",
                "atoms.info charge + spin (2S+1), as an embedding", "none (local message passing)",
                aliases=["esen", "esen-sm"]),
+]})
+
+# AIMNet2: charge-aware, with an explicit Coulomb term over predicted charges that sum to the total charge.
+MODELS.update({m.name: m for m in [
+    NamedModel("aimnet2", "ase:lrbench.adapters:aimnet2?lrcoulomb='simple'", "AIMNet2 (Coulomb, no cutoff)",
+               "wB97M-D3/def2-TZVPPD", AIMNET_ENV, "fetched by the aimnet package on first use",
+               "MIT (code); see the model card for the weights",
+               "set_charge / set_mult on the calculator, not atoms.info; charges sum to the total charge",
+               "predicted partial charges + Coulomb over all pairs, no cutoff (vacuum)",
+               aliases=["aimnet", "aimnet-2"]),
+    NamedModel("aimnet2-dsf", "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0",
+               "AIMNet2, DSF Coulomb (15 A cutoff)", "wB97M-D3/def2-TZVPPD", AIMNET_ENV,
+               "as aimnet2", "MIT (code); see the model card for the weights", "as aimnet2",
+               "damped-shifted-force Coulomb, 15 A cutoff: truncates the tails this benchmark measures, and is "
+               "reported as its own row rather than silently substituted"),
 ]})
 
 # GRACE (graph ACE): a materials model at PBE/PAW with no charge input. It is here for the ACE family and as a
