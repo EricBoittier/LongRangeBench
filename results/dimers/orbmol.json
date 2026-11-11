@@ -1,0 +1,136 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "orbmol",
+  "--label",
+  "orbmol",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/orbmol.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "orbmol",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "orb-models",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:orbmol?model='orbmol-v2'",
+   "version": "0.7.0"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "216 pts / 36 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.926 [0.900, 0.946]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "66 pts / 11 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.013 [1.007, 1.020]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "126 pts / 21 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.641 [0.434, 0.830]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.603 [0.457, 0.744]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.813 [0.422, 0.911]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "36",
+   "note": "flat model 979.1 meV",
+   "value": "74.0 [53.5, 99.7]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "144",
+   "note": "DFT mean |E_int| 786.6 meV",
+   "value": "82.5 [54.5, 112.8]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "11",
+   "note": "flat model 964.6 meV",
+   "value": "15.2 [8.2, 23.6]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "44",
+   "note": "DFT mean |E_int| 786.8 meV",
+   "value": "5.3 [3.4, 7.7]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "501 / 36 groups",
+   "note": "zero model MAE 266.2 meV",
+   "value": "0.945 [0.908, 0.975] / 18.9 [10.8, 29.7]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "1254",
+   "note": "absolute; same-level models only",
+   "value": "6.1"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "180",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.84 k_BT (300 K)",
+   "value": "-0.047 [-0.064, -0.034]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "55",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.12 k_BT (300 K)",
+   "value": "0.009 [0.002, 0.012]"
+  }
+ ],
+ "model": "orbmol",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 1254,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

@@ -1,0 +1,63 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-mols-s",
+  "--label",
+  "pet-mols-s",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/pet-mols-s.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "e6db2300fd1d60d00aaaa6753664c641baffc7404819ef48729a7faef8cb1568",
+  "jsonl_sha256": "e7833e1b74ea8c12f5f32af61e3a10b61bed772c693d36c802b1344f6e6e678c",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-mols-s",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-mols-s.pt",
+   "package": "metatomic-torch",
+   "sha256": "064e86cf9fade69863961a27584d23c81cddfcd203012d4e2e67b7ee31f032bf",
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-mols-s.pt'&name='PET-MOLS-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "980 / 574 groups",
+   "note": "zero model MAE 310.1 meV",
+   "value": "1.710 [1.473, 1.880] / 322.0 [265.0, 387.7]"
+  }
+ ],
+ "model": "pet-mols-s",
+ "model_level": "mixed",
+ "n_failed": 0,
+ "n_scored": 1962,
+ "notes": [
+  "ase:lrbench.adapters:metatomic?path='pet-mols-s.pt'&name='PET-MOLS-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "CCSD(T)/CBS (GSCDB137 ref)"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_gscdb_nc"
+}
