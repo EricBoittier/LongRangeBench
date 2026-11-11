@@ -2,6 +2,28 @@
 
 Notable changes to LongRangeBench. Newest first.
 
+## Unreleased
+
+### Added
+
+- `results/`: committed result rows (`results/<set>/<model>.json`, schema `lrbench-row/1`). Each row carries:
+  - the model's registry name;
+  - the weights sha256, or the package version;
+  - the model and reference levels, plus a mismatch flag;
+  - seeds, giving screen or claim;
+  - `n_failed`;
+  - the date, the code commit and the data sha256;
+  - the headline metrics.
+
+  Each row has its directories stripped. `results/sets.json` holds the set cards, with a licence, a public or private
+  flag and every scored data revision. `results/private/` is git-ignored and holds rows for unreleased models and
+  internal-only data. See [docs/results.md](docs/results.md).
+- `lrbench results add | add-set | check | render`, plus `lrbench validate` as an alias of `check`.
+  - `render` regenerates `results/SUMMARY.md` and the generated blocks of `docs/models.md`, including the
+    named-model table, which had fallen behind the registry.
+  - A test fails if any of them is stale.
+- `lrbench eval` records `code_commit`, and hashes the checkpoint an `ase:` adapter spec names (`path=` / `model=`).
+
 ## 0.1.0 — 2026-11-11
 
 First public release of the harness. The metrics, adapters and CLI were developed and used privately before this
