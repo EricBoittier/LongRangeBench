@@ -97,7 +97,19 @@ class DataSet:
         return lv.pop() if len(lv) == 1 else None
 
     def levels(self) -> List[str]:
-        return sorted({record_level(r) for r in self.records if r.get("energy") is not None})
+        """The label levels of this set: every record carrying an energy, and every record a group with a
+        reference value (``ref``) is built from. The second half is what makes a reference-only set (the ``ext_*``
+        converters store CCSD(T) interaction energies on the groups, not per-record energies) carry its level, so
+        that scoring one cross-level is refused or flagged like any other set."""
+        lv = {record_level(r) for r in self.records if r.get("energy") is not None}
+        for g in self.groups:
+            if g.get("ref") is None:
+                continue
+            for t, _ in g["terms"]:
+                r = self.by_id.get(base_id(t))
+                if r is not None:
+                    lv.add(record_level(r))
+        return sorted(lv)
 
     def partner_copy(self, rid: str) -> bool:
         """A copy of a record from another config, kept only so groups are self-contained (not per-record scored)."""

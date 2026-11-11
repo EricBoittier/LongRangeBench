@@ -1452,8 +1452,8 @@ def install_katex(out: pathlib.Path, mode: str = "auto", verbose: bool = True) -
             raise SystemExit("build_chemiscope_views: --katex vendor asked for, but KaTeX could not be fetched or "
                              f"found in {KATEX_CACHE}")
         if verbose:
-            print(f"[katex] not cached and not fetchable; falling back to the CDN. The page will render from disk "
-                  f"but its equations will be dropped by a published artifact's CSP.", file=sys.stderr)
+            print("[katex] not cached and not fetchable; falling back to the CDN. The page will render from disk "
+                  "but its equations will be dropped by a published artifact's CSP.", file=sys.stderr)
         return KATEX_CDN
     dst = out.parent / "katex"
     (dst / "fonts").mkdir(parents=True, exist_ok=True)

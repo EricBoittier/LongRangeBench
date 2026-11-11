@@ -1,1 +1,92 @@
-{}
+{
+ "dimers": {
+  "description": "rigid dimer scans, 41 pairs, d_min 2.5-25 A; wB97M-V/def2-TZVPD (ORCA, OMol25 settings)",
+  "licence": "CC-BY-4.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+    "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+    "n_groups": 1755,
+    "n_records": 1254,
+    "note": "initial"
+   }
+  ]
+ },
+ "ext_biodimers_wb97mv": {
+  "description": "biodimer tier-A curves relabelled at open boundaries, wB97M-V/def2-TZVPD: 976 E_int on 121 curves",
+  "licence": "geometries CC-BY-4.0 (BFDB); labels produced here, CC-BY-4.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "1d0a75c84284093e069184f66805520c3020507af00b64c21dead9647fab1810",
+    "jsonl_sha256": "a810abb301190266e52819689e5daeeb8bc547dd5086e51c0f3e6a587e45a1e7",
+    "n_groups": 976,
+    "n_records": 1218,
+    "note": "initial"
+   }
+  ]
+ },
+ "ext_gscdb_nc": {
+  "description": "GSCDB137 v1.0.0, all 45 noncovalent subsets (github.com/JiashuLiang/GSCDB @0624eda); CCSD(T)/CBS-quality references per subset",
+  "licence": "CC-BY-4.0",
+  "public": true,
+  "reference_level": [
+   "CCSD(T)/CBS (GSCDB137 ref)"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "e6db2300fd1d60d00aaaa6753664c641baffc7404819ef48729a7faef8cb1568",
+    "jsonl_sha256": "e7833e1b74ea8c12f5f32af61e3a10b61bed772c693d36c802b1344f6e6e678c",
+    "n_groups": 2942,
+    "n_records": 5711,
+    "note": "initial"
+   }
+  ]
+ },
+ "families_fixedq": {
+  "description": "fixed-total-charge partners (PF6- at 9 vs 60 A, zwitterion chains): DDE near vs far",
+  "licence": "CC-BY-4.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "62463d247980aa7a2e2a0c650f6137a404eb5e38f209bf60d250d60d41c118d0",
+    "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
+    "n_groups": 120,
+    "n_records": 230,
+    "note": "initial"
+   }
+  ]
+ },
+ "trimers": {
+  "description": "Li+/PF6- around benzene and C60: three-body (non-additive) energies",
+  "licence": "CC-BY-4.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "56b71d6c7a5790f85997ab4a2e913f904de0cd6cedea44a81376834dc264c3f3",
+    "jsonl_sha256": "e2618c45e769dff2aecb1e74398fac67cf6a44227e3c5022a29bbdb6fed97589",
+    "n_groups": 24,
+    "n_records": 41,
+    "note": "initial"
+   }
+  ]
+ }
+}
