@@ -184,6 +184,7 @@ browser with no server, which is what the linked chemiscope views are built on.
 | `lrbench viz` | chemiscope export of a set with model errors as properties |
 | `lrbench predict` | any model on any extxyz → a plain prediction JSON |
 | `lrbench emulation` | DFT-emulation scores: fragment charges vs DFT rather than formal |
+| `lrbench results` | add a validated result row or set card, check them, regenerate the tables ([docs/results.md](docs/results.md)) |
 | `lrbench toy` / `models` / `sets` | write the toy set; list named models; list sets |
 
 `lrbench <command> --help` documents every flag. Result JSON layout: [docs/output-schema.md](docs/output-schema.md).
@@ -196,6 +197,7 @@ browser with no server, which is what the linked chemiscope views are built on.
 - [docs/models.md](docs/models.md) — model specs, backends, levels of theory, element offsets
 - [docs/adding-a-model.md](docs/adding-a-model.md) / [docs/adding-a-dataset.md](docs/adding-a-dataset.md)
 - [docs/output-schema.md](docs/output-schema.md) — the result JSON
+- [docs/results.md](docs/results.md) — committed result rows: schema, validator, adding a row, a set or new curves
 - [docs/perf.md](docs/perf.md) — the timing protocol
 - [docs/props.md](docs/props.md) — dipoles, quadrupoles, polarisabilities, IP/EA
 - [tools/README.md](tools/README.md) — the analysis and dataset-building scripts

@@ -9,8 +9,9 @@ takes several of them, and a benchmark submission is one of them plus the comman
 |---|---|
 | `lrbench_version` | the version that produced the file |
 | `created`, `host`, `argv`, `wall_s` | when, where, the exact command line, and how long it took |
+| `code_commit` | the git commit of the lrbench source that ran, with `+dirty` if it had uncommitted changes; `null` from an installed wheel |
 | `label` | what to call this model in tables (`--label`, else the spec) |
-| `members` | one entry per ensemble member: spec, path, **sha256** of the weights, backend, whether it could be passed formal charges / charge+spin, and `external_model` (name, version, **licence**, how charge/spin enter, the long-range term) for adapters |
+| `members` | one entry per ensemble member: spec, path, **sha256** of the weights (also for an `ase:` adapter spec whose `path=` / `model=` names a file), backend, whether it could be passed formal charges / charge+spin, and `external_model` (name, version, **licence**, how charge/spin enter, the long-range term) for adapters |
 | `level` | `model_level`, `model_level_source` (given or inferred), `label_levels` per set, and `mismatch` |
 | `element_offsets` | `mode` (`fit` / file / `none`), the fitted offsets per level in eV, and the residual MAE per atom |
 | `normalise` | the normalisation settings in force (floor, temperature, units, gates) |
@@ -21,6 +22,10 @@ takes several of them, and a benchmark submission is one of them plus the comman
 
 Three of these exist specifically so a number can be audited later: the weight `sha256`, the dataset `sha256` and
 `argv`. Keep them.
+
+The file itself is not committed, because `host`, `path` and the data paths name the machine it ran on. To commit a
+result, `lrbench results add` turns it into a row ([results.md](results.md)). A row keeps the hashes and the
+command, and drops every directory.
 
 ## A set block (`sets.<set>`)
 

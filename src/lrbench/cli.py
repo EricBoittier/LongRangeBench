@@ -193,7 +193,8 @@ def cmd_eval(args):
     t0 = time.time()
     data = {s: subsample(load_set(s, args.data, args.revision), args.max_per_set, args.seed) for s in sets}
     lvc = level_check(data, members, args.model_level, args.allow_level_mismatch)
-    out = {"lrbench_version": __version__, "level": lvc, "created": datetime.datetime.now().isoformat(timespec="seconds"),
+    from .results import code_commit, spec_weights_file
+    out = {"lrbench_version": __version__, "code_commit": code_commit(), "level": lvc, "created": datetime.datetime.now().isoformat(timespec="seconds"),
            "host": platform.node(), "argv": sys.argv[1:], "label": args.label or os.path.basename(members[0]),
            "members": [], "sets": {}, "notes": []}
     preds: List[Dict[str, Dict[str, dict]]] = []  # member -> set -> term -> pred
@@ -211,7 +212,7 @@ def cmd_eval(args):
         preds.append(per)
         p = _model_path(spec)
         out["members"].append({"spec": spec, "path": os.path.abspath(p) if os.path.exists(p) else p,
-                               "sha256": _file_sha256(p) if not args.no_hash else None,
+                               "sha256": _file_sha256(spec_weights_file(p)) if not args.no_hash else None,
                                "formal_charges": formal, **be.info()})
         if not be.passes_charge_spin:
             out["notes"].append(f"{spec}: backend passes no charge/spin; charged structures are evaluated neutral")
@@ -632,6 +633,9 @@ def main(argv=None):
 
     from .priors.run import add_parser as _priors_parser
     _priors_parser(sub, _common)
+
+    from .results import add_parser as _results_parser
+    _results_parser(sub)
 
     p = sub.add_parser("toy", help="write the self-contained Lennard-Jones toy set (no download, for the quickstart)")
     p.add_argument("outdir")

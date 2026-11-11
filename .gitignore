@@ -12,10 +12,18 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
-# local runs: results, figures, downloaded or generated data
+# local runs: figures, downloaded or generated data. Run outputs go in runs/.
 toy-data/
 runs/
-results/
+# results/: only the committed layout (sets.json, SUMMARY.md, README.md, <set>/<model>.json rows) is tracked;
+# anything else at its top level is a local file, and results/private/ (unreleased models, internal-only data)
+# is never committed. See docs/results.md.
+/results/*
+!/results/README.md
+!/results/SUMMARY.md
+!/results/sets.json
+!/results/*/
+/results/private/
 figs/
 *.results.json
 perf.json

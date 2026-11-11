@@ -9,7 +9,7 @@ self-contained files. Adversarial reports about a metric are the third — see b
 git clone https://github.com/EricBoittier/LongRangeBench
 cd LongRangeBench
 pip install -e ".[dev,plot,viz]"
-pytest                  # 33 tests, CPU only, ~15 s
+pytest                  # CPU only, about a minute
 ruff check .            # real defects only (F, E9); formatting is not enforced
 ```
 
@@ -34,6 +34,7 @@ src/lrbench/
   equivariance.py rotation / reflection / translation / permutation probes
   perf.py         timing protocol
   report.py       markdown / HTML tables
+  results.py      committed result rows: set cards, validator, generated tables
   viz.py          chemiscope export
   suite.py        multi-model runs, one environment each
   toy.py          the self-contained LJ set
@@ -66,6 +67,17 @@ them:
 - differences are defined by **groups**, so per-element offsets and charge-state offsets cancel
 - a **licence** that permits what you are asking us to do with the data
 - known-bad references are **flagged**, not deleted, with `dft_pathology_do_not_score`
+
+## Adding a result
+
+A number reaches a table only as a validated row: `lrbench results add result.json`, then `lrbench results render`,
+and the row is committed together with the regenerated files. The steps, the schema and what the validator refuses
+are in [docs/results.md](docs/results.md).
+- **Public rows are for released models on public sets.** Each row needs:
+  - a weights sha256 or a package version;
+  - a clean code commit.
+- **Private rows go in `results/private/`, which is never committed.** This covers rows for unreleased models and
+  rows on internal-only data.
 
 ## Reporting a metric bug
 
