@@ -221,3 +221,23 @@ def test_response_component_is_the_fixed_charge_family_not_a_pooled_slope():
     # the family missing is "not measured", not "passed": the score says so by being partial
     absent = score_components(result(0.9, {"zwit_ene_rel48": 4.5}))
     assert absent["response"] is None and absent["partial"] is True
+
+
+def test_reference_only_set_carries_its_level(datadir, tmp_path):
+    """A set whose labels live only on the groups (no per-record energy) still has a level, so a cross-level eval
+    of it is refused or flagged rather than silently passed."""
+    import pytest
+    from lrbench.data import load_set
+    ds = load_set("toy", datadir)
+    ref_only = tmp_path / "ref_only"
+    ref_only.mkdir()
+    with open(ref_only / "refonly.jsonl", "w") as f:
+        for r in ds.records:
+            f.write(json.dumps({**r, "set": "refonly", "energy": None, "forces": None, "level": "CCSD(T)/CBS"}) + "\n")
+    with open(ref_only / "refonly.groups.json", "w") as f:
+        json.dump(ds.groups, f)
+    assert load_set("refonly", str(ref_only)).levels() == ["CCSD(T)/CBS"]
+    out = tmp_path / "ro.json"
+    with pytest.raises(SystemExit, match="level"):
+        main(["eval", "--model", LJ, "--sets", "refonly", "--data", str(ref_only), "--out", str(out),
+              "--n-boot", "20", "--no-hash", "--model-level", "PBE0+MBD"])

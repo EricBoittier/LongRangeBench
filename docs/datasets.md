@@ -18,7 +18,7 @@ the revision, so a table can always be traced back to the exact bytes it was com
 | set family | contents | status |
 |---|---|---|
 | **toy** | 2 dimer scans, 3 ΔΔE quartets, 1 flagged pathology; references from a Lennard-Jones calculator | **ships with the repo** (`lrbench toy`), CC0. Used by the tests and CI |
-| **canonical long-range sets** | the table below | reference data at ωB97M-V/def2-TZVPD (the OMol25 protocol). **Access-gated while unpublished**; being prepared for release as a public HuggingFace dataset (CC0), with further sets to follow from the CSCS runs |
+| **canonical long-range sets** | the table below | reference data at ωB97M-V/def2-TZVPD (the OMol25 protocol). `dimers`, `families_fixedq` and `trimers` are **public** (CC BY 4.0): their result rows are committed and their structures are shown in the explorer. The rest of the sets are being prepared for release as a public HuggingFace dataset, with further sets to follow from the CSCS runs |
 | **external public QM sets** | GSCDB137 NC, NCI Atlas, BFDB biodimers, DES370K, SAPT10k, PLA15, Ko et al. 4G | converters included; you fetch the upstream data under its own licence |
 
 Until the canonical sets are public, a stranger can still run the whole harness on the toy set and on the external

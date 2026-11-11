@@ -35,8 +35,8 @@ Worth stating first, because they shape every decision below.
 - [x] `lrbench priors`: twenty pass/fail checks of physical, model and data assumptions, with planted-defect tests
 - [ ] **next** — `lrbench fetch <set>`: wrap those converters so the download, the checksum and the conversion are
       one command instead of a paragraph of instructions
-- [ ] **next** — make the level-of-theory refusal fire for reference-only sets (count records referenced by groups,
-      not only records carrying an `energy`), so `ext_*` cannot be scored cross-level without the explicit flag
+- [x] Make the level-of-theory refusal fire for reference-only sets: records referenced by a group with a `ref` count,
+      not only records carrying an `energy`, so `ext_*` cannot be scored cross-level without the explicit flag
 - [ ] **next** — PyPI release (`pip install longrangebench`) and tagged versions
 - [ ] **in progress** — CI on 3.11–3.13 plus a weekly job that checks every adapter still imports against current
       upstream releases (adapters rot silently otherwise)
