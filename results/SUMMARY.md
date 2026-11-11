@@ -71,11 +71,14 @@ Reference level wB97M-V/def2-TZVPD; licence geometries CC-BY-4.0 (BFDB); labels 
 | `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `so3lr` | PBE0+MBD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD); screen (1 seed) |
+| `so3lr-tauri` | PBE0+MBD-NL | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD-NL); screen (1 seed) |
+| `so3lr-tauri-s` | PBE0+MBD-NL | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD-NL); screen (1 seed) |
 
-| metric | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` |
-|---|---|---|---|---|
-| tail fraction, ion_pair (d >= 8 A) | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.919 [0.917, 0.922] | 0.927 [0.925, 0.929] |
-| \|E_int\| error >= 12 A, ion_pair (meV) | 1003.4 [995.8, 1010.8] | 308.7 [239.5, 378.1] | 157.9 [153.5, 162.1] | 154.3 [151.9, 156.2] |
+| metric | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `so3lr` | `so3lr-tauri` | `so3lr-tauri-s` |
+|---|---|---|---|---|---|---|---|
+| tail fraction, ion_pair (d >= 8 A) | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.919 [0.917, 0.922] | 0.927 [0.925, 0.929] | 0.675 [0.656, 0.696] | 0.756 [0.754, 0.758] | 0.850 [0.845, 0.855] |
+| \|E_int\| error >= 12 A, ion_pair (meV) | 1003.4 [995.8, 1010.8] | 308.7 [239.5, 378.1] | 157.9 [153.5, 162.1] | 154.3 [151.9, 156.2] | 2250.4 [2114.0, 2390.4] | 421.3 [411.1, 429.4] | 673.9 [659.8, 683.7] |
 
 ## ext_gscdb_nc
 
@@ -89,10 +92,13 @@ Reference level CCSD(T)/CBS (GSCDB137 ref); licence CC-BY-4.0; current revision 
 | `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
 | `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
 | `maceles-off` | wB97M-D3(BJ)/def2-TZVPPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-D3(BJ)/def2-TZVPPD); THIN COVERAGE: 1962 of ~3483 scored (56%); screen (1 seed) |
+| `so3lr` | PBE0+MBD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD); THIN COVERAGE: 1962 of ~2922 scored (67%); screen (1 seed) |
+| `so3lr-tauri` | PBE0+MBD-NL | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD-NL); screen (1 seed) |
+| `so3lr-tauri-s` | PBE0+MBD-NL | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD-NL); screen (1 seed) |
 
-| metric | `caceles-water` | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` |
-|---|---|---|---|---|---|---|
-| all dE slope / MAE (meV) | 0.883 [0.875, 0.896] / 202.4 [147.2, 269.6] | 0.873 [0.756, 0.957] / 72.5 [53.0, 94.8] | 1.082 [0.973, 1.243] / 188.9 [135.2, 254.8] | 0.948 [0.854, 1.013] / 32.1 [19.0, 48.5] | 0.982 [0.910, 1.026] / 54.8 [38.5, 74.7] | 1.005 [0.999, 1.013] / 19.9 [16.7, 23.9] |
+| metric | `caceles-water` | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` | `so3lr` | `so3lr-tauri` | `so3lr-tauri-s` |
+|---|---|---|---|---|---|---|---|---|---|
+| all dE slope / MAE (meV) | 0.883 [0.875, 0.896] / 202.4 [147.2, 269.6] | 0.873 [0.756, 0.957] / 72.5 [53.0, 94.8] | 1.082 [0.973, 1.243] / 188.9 [135.2, 254.8] | 0.948 [0.854, 1.013] / 32.1 [19.0, 48.5] | 0.982 [0.910, 1.026] / 54.8 [38.5, 74.7] | 1.005 [0.999, 1.013] / 19.9 [16.7, 23.9] | 0.968 [0.871, 1.034] / 105.7 [86.8, 128.2] | 0.872 [0.657, 1.013] / 69.6 [43.5, 104.0] | 0.898 [0.776, 0.990] / 86.3 [62.1, 114.9] |
 
 ## families_corrected
 
