@@ -32,6 +32,13 @@ from __future__ import annotations
 
 # ---------------------------------------------------------------- identity: qualitative, no implied order
 QUALITATIVE = {
+    # tableau:tab10_new — Tableau 10. The house palette of this project (it is the one used in mmml), and the
+    # default for model families. It is *not* colour-vision safe across all pairs: its red (#E15759) and green
+    # (#59A14F) are indistinguishable to a deuteranope. That is tolerable here only because colour is never the
+    # sole encoding of a model — the family name is printed beside every swatch and members differ by marker —
+    # and it is why "okabe_ito" is kept below as a one-line switch for anyone who needs it.
+    "tableau10": ["#4E79A7", "#F28E2B", "#76B7B2", "#E15759", "#B07AA1", "#9C755F", "#59A14F", "#EDC948",
+                  "#FF9DA7", "#BAB0AB"],
     # matplotlib:okabe_ito — eight hues designed to stay distinguishable under deuteranopia and protanopia
     "okabe_ito": ["#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"],
     # tol:muted — Paul Tol's muted set, for when more than eight are needed
@@ -63,22 +70,41 @@ CHEMISCOPE = {
     "signed": ["bwr", "seismic", "rwg", "brg"],
 }
 
+#: The stops chemiscope actually renders for the palette this project assigns to each job, so a control can show
+#: the ramp it is about to apply instead of naming it.
+CHEMISCOPE_STOPS = {
+    "identity": ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F"],
+    "magnitude": ["#00224E", "#434E6C", "#7D7C78", "#BCAE6C", "#FEE838"],
+    "signed": ["#0000FF", "#8080FF", "#FFFEFE", "#FF7E7E", "#FF0000"],
+}
+
 INK, GREY, FAINT = "#15171a", "#6e7073", "#e3e2df"
+
+#: **Structure is achromatic; data is chromatic.** The benchmark's task groups are structure — they label the
+#: page, they are not a measurement — so they are drawn in neutral greys (crameri:grayC). Model families are data,
+#: so they take the chromatic palette above. Nothing in the two sets can be confused, because one has no chroma at
+#: all; that is a guarantee, not a judgement about particular hues.
+GROUPS = {
+    "A": {"colour": "#2B2B2B", "title": "Asymptotics", "sub": "the far field"},
+    "B": {"colour": "#4A4A4A", "title": "Response", "sub": "the reply to a distant charge"},
+    "C": {"colour": "#6B6B6B", "title": "Electrostatic variables", "sub": "charges and moments"},
+    "D": {"colour": "#8D8D8D", "title": "Many-body", "sub": "what pairs cannot reach"},
+}
 
 #: Model families, in the order they are assigned colours. A family shares a hue; members are told apart by marker
 #: and line style, so the family reads at a glance and the member reads on inspection. Matching is by substring on
 #: the result's name, longest first, so ``so3lr-tauri`` wins over ``so3lr``.
 FAMILIES = {
-    "oracle":  {"match": ("oracle",),            "colour": "#000000", "label": "oracle / ceiling"},
+    "oracle":  {"match": ("oracle",),            "colour": "#15171a", "label": "oracle / ceiling"},
     "mace":    {"match": ("mace-polar", "mace-h", "mace-omol", "maceles", "mace"),
-                "colour": "#0072B2", "label": "MACE"},
-    "so3lr":   {"match": ("so3lr",),             "colour": "#009E73", "label": "SO3LR"},
-    "orbmol":  {"match": ("orbmol", "orb"),      "colour": "#D55E00", "label": "OrbMol"},
-    "dpa4":    {"match": ("dpa4", "deepmd"),     "colour": "#CC79A7", "label": "DeePMD / DPA4"},
-    "aimnet":  {"match": ("aimnet",),            "colour": "#56B4E9", "label": "AIMNet2"},
-    "grace":   {"match": ("grace", "ace"),       "colour": "#E69F00", "label": "GRACE (ACE)"},
-    "cace":    {"match": ("cace",),              "colour": "#7570B3", "label": "CACE"},
-    "fairchem": {"match": ("uma", "esen"),       "colour": "#1B9E77", "label": "fairchem"},
+                "colour": "#4E79A7", "label": "MACE"},
+    "so3lr":   {"match": ("so3lr",),             "colour": "#F28E2B", "label": "SO3LR"},
+    "orbmol":  {"match": ("orbmol", "orb"),      "colour": "#76B7B2", "label": "OrbMol"},
+    "dpa4":    {"match": ("dpa4", "deepmd"),     "colour": "#E15759", "label": "DeePMD / DPA4"},
+    "aimnet":  {"match": ("aimnet",),            "colour": "#B07AA1", "label": "AIMNet2"},
+    "grace":   {"match": ("grace", "ace"),       "colour": "#9C755F", "label": "GRACE (ACE)"},
+    "cace":    {"match": ("cace",),              "colour": "#59A14F", "label": "CACE"},
+    "fairchem": {"match": ("uma", "esen"),       "colour": "#EDC948", "label": "fairchem"},
 }
 
 #: Marker and dash, cycled within a family so members of one family are separable without a second hue.

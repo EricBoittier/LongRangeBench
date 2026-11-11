@@ -257,8 +257,6 @@ table.rank td.lrs {{ font-family:var(--mono); font-weight:500; font-size:14.5px;
 .bar button {{ font-family:var(--sans); font-size:12.5px; padding:4px 10px; border-radius:999px;
   border:1px solid var(--rule); background:var(--card); color:var(--fg); cursor:pointer; line-height:1.5; }}
 .bar button:hover {{ border-color:var(--accent); }}
-.bar button[aria-pressed="true"] {{ background:var(--accent); border-color:var(--accent); color:#fff;
-  font-weight:500; }}
 .bar .sep {{ width:1px; height:18px; background:var(--rule); margin:0 5px; }}
 .panes {{ display:flex; flex-wrap:wrap; gap:12px; }}
 .left {{ flex:1 1 590px; min-width:320px; }} .right {{ flex:1 1 400px; min-width:290px; }}
@@ -270,9 +268,23 @@ code {{ font-family:var(--mono); font-size:13.5px;
   vertical-align:-1px; }}
 .eyebrow {{ font-family:var(--sans); font-size:11.5px; font-weight:600; letter-spacing:0.1em;
   text-transform:uppercase; color:var(--mut); margin:0 0 8px; }}
-h2 .tid {{ display:inline-block; font-family:var(--mono); font-size:13px; font-weight:500; color:#fff;
+h2 .tid, .tid.sm {{ display:inline-block; font-family:var(--mono); font-size:13px; font-weight:500; color:#fff;
   background:var(--fg); border-radius:5px; padding:2px 8px; margin-right:11px; vertical-align:2px;
   letter-spacing:0.02em; }}
+.tid.sm {{ font-size:11.5px; padding:1px 7px; margin:0; }}
+h2 .gid {{ display:inline-block; font-family:var(--mono); font-size:17px; font-weight:500; color:#fff;
+  background:var(--fg); border-radius:7px; padding:1px 13px; margin-right:13px; vertical-align:2px; }}
+.grouphead {{ border-top:2px solid var(--fg); }}
+table.idx td {{ padding:7px 10px; }}
+table.idx td:nth-child(2), table.idx td:nth-child(3) {{ text-align:left; }}
+.bar button i.dot {{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px;
+  vertical-align:0; flex:none; }}
+.bar button i.sw {{ width:26px; height:9px; border-radius:2px; display:inline-block; margin-right:7px;
+  vertical-align:0; flex:none; border:1px solid color-mix(in srgb, var(--fg) 18%, transparent); }}
+.bar button {{ display:inline-flex; align-items:center; }}
+.bar button[aria-pressed="true"] {{ background:var(--on, var(--accent)); border-color:var(--on, var(--accent));
+  color:#fff; font-weight:500; }}
+.bar button[aria-pressed="true"] i.dot {{ box-shadow:0 0 0 1.5px #fff; }}
 .chips {{ display:flex; flex-wrap:wrap; gap:7px 18px; margin:-4px 0 14px; font-family:var(--sans);
   font-size:12.5px; color:var(--mut); }}
 .chips span {{ display:inline-flex; align-items:center; gap:7px; }}
@@ -309,25 +321,7 @@ value is known <em>a priori</em>, which makes a single number interpretable with
 </div>
 <p class="sub">{summary}</p>
 </header>
-{scans}
-{ranking}
-{key}
-{sections}
-<section id="notes">
-<h2><span class="num">method</span>How this was made</h2>
-<p class="sub">No model was re-evaluated for these figures. Every point comes from the canonical records and the
-per-term energies saved by <code>lrbench eval --save-predictions</code>, recombined through each group's own
-definition — so a model's value and its reference are the same linear combination and a point compares like with
-like. Records flagged as DFT pathologies are excluded. Energies in meV.</p>
-<p class="sub"><b>Encoding.</b> A class is an identity, so it is carried by marker shape, never by a colour ramp:
-chemiscope's palettes are continuous, and reading categories off a continuous bar is exactly what good practice
-forbids. A signed error is carried by a diverging palette centred on zero, so white means no error and the two
-hues are the two directions of being wrong. A magnitude — a separation, an absolute error — is carried by a
-perceptually uniform sequential ramp.</p>
-<p class="sub"><b>Levels of theory are never pooled.</b> A model trained at a different level from the reference
-data is marked ⚠ in the table: its energies are not comparable with these references, its dimensionless
-diagnostics are.</p>
-</section>
+{body}
 <footer>lrbench · chemiscope {ver} · equations set with KaTeX</footer>
 </div>
 <script>
@@ -394,9 +388,35 @@ function centreColour(st) {{
   }} catch (e) {{ console.warn("centre:", e); }}
 }}
 
-function button(label, pressed, onclick) {{
+/* A control wears the sign of what it controls: a model button carries its family's hue, a colour button carries
+   the ramp it will apply. Buttons that change a *mode* rather than an identity — log/linear, the identity line —
+   stay neutral, because they refer to nothing that has a colour. */
+const MODELCOL = {modelcol};
+const CHEMSTOPS = {chemstops};
+function rampOf(ds, prop) {{
+  const kind = paletteKind(ds, prop);
+  const stops = CHEMSTOPS[kind === "categorical" ? "identity" : kind === "diverging" ? "signed" : "magnitude"];
+  return kind === "categorical"
+    ? `linear-gradient(90deg, ${{stops.map((c, i) =>
+        `${{c}} ${{(i / stops.length) * 100}}%, ${{c}} ${{((i + 1) / stops.length) * 100}}%`).join(", ")}})`
+    : `linear-gradient(90deg, ${{stops.join(", ")}})`;
+}}
+function button(label, pressed, onclick, opts) {{
   const b = document.createElement("button");
-  b.textContent = label;
+  const o = opts || {{}};
+  if (o.swatch) {{
+    const sw = document.createElement("i");
+    sw.className = "sw";
+    sw.style.background = o.swatch;
+    b.appendChild(sw);
+  }} else if (o.dot) {{
+    const d = document.createElement("i");
+    d.className = "dot";
+    d.style.background = o.dot;
+    b.appendChild(d);
+  }}
+  b.appendChild(document.createTextNode(label));
+  if (pressed && o.dot) b.style.setProperty("--on", o.dot);
   b.setAttribute("aria-pressed", pressed ? "true" : "false");
   b.onclick = onclick;
   return b;
@@ -409,7 +429,8 @@ function group(bar, label, items, isOn, choose) {{
     l.className = "lbl"; l.textContent = label;
     bar.appendChild(l);
   }}
-  items.forEach(it => bar.appendChild(button(it.label, isOn(it), () => {{ choose(it); redraw(bar); }})));
+  items.forEach(it => bar.appendChild(button(it.label, isOn(it), () => {{ choose(it); redraw(bar); }},
+                                             {{ swatch: it.swatch, dot: it.dot }})));
 }}
 const DRAW = new WeakMap();
 function redraw(bar) {{ const f = DRAW.get(bar); if (f) f(); }}
@@ -425,11 +446,13 @@ function buildBar(st, v) {{
     const models = st.models || [];
     if (v.parity && models.length) {{
       const px = prefix(s.x.property) || "E_int", py = prefix(s.y.property) || "E_int";
-      group(bar, "x model", models.map(m => ({{ label: m, m }})), it => suffix(s.x.property) === it.m,
+      group(bar, "x model", models.map(m => ({{ label: m, m, dot: MODELCOL[m] }})),
+            it => suffix(s.x.property) === it.m,
             it => {{ const p = px + "/" + it.m;
                      if (st.ds.properties[p]) st.viz.applySettings({{ map: {{ x: {{ property: p }} }} }});
                      setDiagonal(st); }});
-      group(bar, "y model", models.map(m => ({{ label: m, m }})), it => suffix(s.y.property) === it.m,
+      group(bar, "y model", models.map(m => ({{ label: m, m, dot: MODELCOL[m] }})),
+            it => suffix(s.y.property) === it.m,
             it => {{ const p = py + "/" + it.m;
                      if (st.ds.properties[p]) st.viz.applySettings({{ map: {{ y: {{ property: p }} }} }});
                      setDiagonal(st); }});
@@ -447,7 +470,8 @@ function buildBar(st, v) {{
       }});
     }} else if (models.length) {{
       const cur = suffix(s.y.property) || suffix(s.x.property);
-      group(bar, "model", models.map(m => ({{ label: m, m }})), it => it.m === cur, it => {{
+      group(bar, "model", models.map(m => ({{ label: m, m, dot: MODELCOL[m] }})), it => it.m === cur,
+            it => {{
         const k = prefix(s.y.property) || "err";
         const p = k + "/" + it.m;
         if (st.ds.properties[p]) {{
@@ -462,14 +486,14 @@ function buildBar(st, v) {{
     const colours = ["separation", "class", "total charge", "atoms", "fragment", "q_lowdin"]
       .filter(c => props.includes(c))
       .concat(props.filter(p => p.startsWith("abserr/") || p.startsWith("err/")).slice(0, 2));
-    group(bar, "colour", colours.map(c => ({{ label: c, c }})), it => it.c === s.color.property, it => {{
+    /* The palette is a consequence of what the property *is*, so it is applied, not offered: the swatch on each
+       button is the ramp that choosing it will bring. */
+    group(bar, "colour", colours.map(c => ({{ label: c, c, swatch: rampOf(st.ds, c) }})),
+          it => it.c === s.color.property, it => {{
       const kind = paletteKind(st.ds, it.c);
       st.viz.applySettings({{ map: {{ color: {{ property: it.c, palette: PALETTES[kind][0] }} }} }});
       if (kind === "diverging") centreColour(st);
     }});
-    const pal = PALETTES[paletteKind(st.ds, s.color.property)];
-    group(bar, "palette", pal.map(p => ({{ label: p, p }})), it => it.p === s.color.palette,
-          it => st.viz.applySettings({{ map: {{ color: {{ palette: it.p }} }} }}));
     group(bar, "x", [{{ label: "log", v: "log" }}, {{ label: "linear", v: "linear" }}],
           it => it.v === s.x.scale,
           it => {{ st.viz.applySettings({{ map: {{ x: {{ scale: it.v }} }} }}); setDiagonal(st); }});
@@ -561,8 +585,8 @@ window.addEventListener("load", () => {{
 """
 
 SECTION = """<section id="{id}">
-<p class="eyebrow">{group}</p>
-<h2><span class="tid">{tid}</span>{title}</h2>
+<p class="eyebrow" style="color:{gcol}">{group}</p>
+<h2><span class="tid" style="background:{gcol}">{tid}</span>{title}</h2>
 <div class="eq">$${equation}$$</div>
 <div class="chips">{chips}</div>
 <p>{prose}</p>
@@ -576,12 +600,7 @@ SECTION = """<section id="{id}">
 </section>
 """
 
-SCANS = """<section id="scans">
-<h2><span class="num">00</span>The canonical scans, and what goes wrong on them</h2>
-<p>Three diagrams, each built from the same arithmetic the harness uses. They take no data: drag the controls and
-watch the quantity being defined. The geometry is drawn to scale on the left and the energy on the right.</p>
-
-<div class="scanwrap">
+PROTOCOL_A = """<div class="scanwrap">
   <div class="scanhead"><b>A · the dimer scan</b> — two fragments pulled apart along one axis. Everything the
   tail diagnostics measure happens in this picture.</div>
   <div class="ctl">
@@ -595,8 +614,9 @@ watch the quantity being defined. The geometry is drawn to scale on the left and
   <div class="scanrow"><svg id="A-geo" viewBox="0 0 420 150"></svg><svg id="A-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="A-read"></div>
 </div>
+"""
 
-<div class="scanwrap">
+PROTOCOL_B = """<div class="scanwrap">
   <div class="scanhead"><b>B · the fixed-charge quartet</b> — a local pair of sites, and one charge far away.
   Four energies, differenced twice, so that everything except the long-range reply cancels.</div>
   <div class="ctl">
@@ -608,15 +628,15 @@ watch the quantity being defined. The geometry is drawn to scale on the left and
   <div class="scanrow"><svg id="B-geo" viewBox="0 0 420 200"></svg><svg id="B-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="B-read"></div>
 </div>
+"""
 
-<div class="scanwrap">
+PROTOCOL_C = """<div class="scanwrap">
   <div class="scanhead"><b>C · the pathologies</b> — points the harness reports but refuses to score, and the one
   case where a metric stops being able to tell a model from a flat line.</div>
   <div class="bar" id="C-bar"></div>
   <div class="scanrow"><svg id="C-geo" viewBox="0 0 420 180"></svg><svg id="C-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="C-read"></div>
 </div>
-</section>
 """
 
 SCAN_CSS = """
@@ -876,6 +896,67 @@ function initScans() {{
 """
 
 
+METHOD = """<section id="notes">
+<p class="eyebrow">method</p>
+<h2>Protocol and conventions</h2>
+<p class="sub">No model was re-evaluated for these figures. Every point comes from the canonical records and the
+per-term energies saved by <code>lrbench eval --save-predictions</code>, recombined through each group's own
+definition — so a model's value and its reference are the same linear combination and a point compares like with
+like. Records flagged as DFT pathologies are excluded. Energies in meV.</p>
+<p class="sub"><b>Encoding.</b> A class is an identity, so it is carried by marker shape, never by a colour ramp:
+chemiscope's palettes are continuous, and reading categories off a continuous bar is exactly what good practice
+forbids. A signed error is carried by a diverging palette centred on zero, so white means no error and the two
+hues are the two directions of being wrong. A magnitude — a separation, an absolute error — is carried by a
+perceptually uniform sequential ramp.</p>
+<p class="sub"><b>Levels of theory are never pooled.</b> A model trained at a different level from the reference
+data is marked ⚠ in the table: its energies are not comparable with these references, its dimensionless
+diagnostics are.</p>
+{protocol}
+</section>
+"""
+
+TASK_INDEX = """<section id="tasks">
+<p class="eyebrow">benchmark tasks</p>
+<h2>The task index</h2>
+<p class="sub">Each task is constructed so that the correct value is known in advance. That is what makes a single
+number interpretable: a result can be read against the value it should have, not against another model.</p>
+<table class="rank idx"><thead><tr><th>id</th><th>task</th><th>quantity</th><th>correct</th>
+<th>no long-range term</th></tr></thead><tbody>{rows}</tbody></table>
+</section>
+"""
+
+GROUP_HEADER = """<section class="grouphead" id="group-{letter}">
+<p class="eyebrow" style="color:{colour}">group {letter} — {sub}</p>
+<h2><span class="gid" style="background:{colour}">{letter}</span>{title}</h2>
+<p>{blurb}</p>
+{protocol}
+</section>
+"""
+
+GROUP_BLURB = {
+    "A": "What a charged pair does once the fragments are far enough apart that nothing local can reach between "
+         "them. The reference is not a fitted curve but an asymptotic law, so a model either reproduces it or it "
+         "does not. The protocol below is the scan every task in this group is measured on.",
+    "B": "A charge is placed far from a pair of local arrangements, and the energies are differenced twice. "
+         "Composition and total charge are identical in all four terms, so every offset cancels and only the "
+         "long-range reply survives — a quantity a Coulomb tail alone cannot produce.",
+    "C": "The electrostatic variables themselves: whether a model's atomic charges sum to the charge it was given, "
+         "and how they compare with the reference partitioning. A model can have a plausible energy and "
+         "implausible charges.",
+    "D": "What is left after every pair contribution is removed. A potential assembled from pairs has no access "
+         "to this term however well it does on dimers.",
+}
+
+TASK_ROWS = [
+    ("A1", "Asymptotic decay", "tail fraction", "1", "0"),
+    ("A2", "Residuals against the reference", "E_int error (meV)", "0", "the DFT span"),
+    ("A3", "Parity between two models", "agreement on the identity line", "—", "—"),
+    ("B1", "Fixed-charge response", "ΔΔE slope", "1", "0"),
+    ("C1", "Charge conservation", "Σq − Q, parity vs Löwdin", "0", "n/a if no charges"),
+    ("D1", "Three-body non-additivity", "E₃ (meV)", "reference E₃", "0"),
+]
+
+
 KEY = """<section id="key">
 <p class="eyebrow">notation</p>
 <h2>Model colour key</h2>
@@ -1110,15 +1191,17 @@ def main(argv=None) -> int:
     summary = [f"{b['n']} {k}" for k, b in built.items() if not k.endswith("-atoms")]
 
     sections, views = [], []
-    for v in view_specs(built):
+    specs = view_specs(built)
+    for v in specs:
         views.append({"id": v["id"], "key": v["key"], "settings": v["settings"],
                       "models": v.get("models", []), "diagonal": bool(v.get("diagonal")),
                       "parity": bool(v.get("parity")), "center0": bool(v.get("center0"))})
         chips = "".join(f'<span><i style="background:{col}"></i>{txt}</span>'
                         for col, txt in v.get("terms", []))
-        sections.append(SECTION.format(
-            id=v["id"], tid=v["tid"], group=f"{v['group']} · {TASK_GROUPS[v['group']]}",
-            title=v["title"], equation=v["equation"], chips=chips, prose=v["prose"]))
+        sections.append((v["group"], SECTION.format(
+            id=v["id"], tid=v["tid"], gcol=pal.GROUPS[v["group"]]["colour"],
+            group=f"{v['group']} · {TASK_GROUPS[v['group']]}",
+            title=v["title"], equation=v["equation"], chips=chips, prose=v["prose"])))
 
     rank_names = []
     rank = {"cols": [], "rows": [], "sort": "lrs", "components": [
@@ -1189,19 +1272,36 @@ def main(argv=None) -> int:
             f'<div><svg width="14" height="14" viewBox="0 0 14 14" fill="{colour}">{MARK.get(mk, MARK["o"])}'
             f'</svg>{nm}</div>' for nm, mk in sorted(members))
         key_html += '<div class="keyfam"><b>' + label + '</b>' + rows + '</div>'
+    # the labels first, then each letter group with its protocol standing beside its tasks
+    idx = "".join(
+        f'<tr><td class="name"><span class="tid sm" style="background:{pal.GROUPS[tid[0]]["colour"]}">{tid}'
+        f'</span></td><td>{task}</td><td>{q}</td><td class="ok">{good}</td><td class="bad">{floor}</td></tr>'
+        for tid, task, q, good, floor in TASK_ROWS if any(v["tid"] == tid for v in specs))
+    PROTO = {"A": PROTOCOL_A, "B": PROTOCOL_B}
+    body = [TASK_INDEX.format(rows=idx), RANKING if rank["rows"] else "",
+            KEY.format(families=key_html) if key_html else ""]
+    for letter, gspec in pal.GROUPS.items():
+        mine = [sec for g, sec in sections if g == letter]
+        if not mine:
+            continue
+        body.append(GROUP_HEADER.format(letter=letter, colour=gspec["colour"], title=gspec["title"],
+                                        sub=gspec["sub"], blurb=GROUP_BLURB[letter],
+                                        protocol=PROTO.get(letter, "")))
+        body += mine
+    body.append(METHOD.format(protocol=PROTOCOL_C))
+
     html = HTML.format(
-        key=KEY.format(families=key_html) if key_html else "",
-        scans=SCANS,
+        body="\n".join(body),
         scan_css=SCAN_CSS.format(),
         scan_js=SCAN_JS.format(seq=json.dumps(pal.SEQUENTIAL["batlow"]),
                                div=json.dumps(pal.DIVERGING["vik"]),
                                fam=json.dumps(fam_colours)),
-        ranking=RANKING if rank["rows"] else "",
+        modelcol=json.dumps({n: pal.style_of(n, rank_names)["colour"] for n in rank_names}),
+        chemstops=json.dumps(pal.CHEMISCOPE_STOPS),
         rank=json.dumps(rank),
         ver=a.chemiscope_version,
         summary=" · ".join(summary) + f" · {len(built.get('dimers', {}).get('models', []))} models · "
                "one embedded dataset per set, reused by every view",
-        sections="\n".join(sections),
         data="{" + ",".join(f'"{k}":"{v["blob"]}"' for k, v in built.items()) + "}",
         views=json.dumps(views),
     )

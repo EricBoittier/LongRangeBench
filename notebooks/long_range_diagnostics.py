@@ -88,9 +88,14 @@ def _(io, mo):
     import matplotlib.pyplot as plt
 
     SERIF = ["Crimson", "Crimson Pro", "Garamond Libre", "CMU Serif", "Charter", "Liberation Serif", "DejaVu Serif"]
-    INK, GREY, FAINT = "#1a1a1a", "#767676", "#e2e2e2"
-    BLUE, VERM = "#0072B2", "#D55E00"
-    RAMP = ["#eef4fa", "#cfe0f0", "#a6cbe6", "#6ba8d2", "#3b7fb5", "#1b5490"]
+    # The same system as the explorer page (lrbench.palette), with the values inlined because this notebook also
+    # runs as WebAssembly, where the package is not importable. Structure is achromatic, data is chromatic:
+    # Tableau 10 for model identity, Crameri batlow for magnitude, Crameri vik for signed quantities.
+    INK, GREY, FAINT = "#15171a", "#6e7073", "#e3e2df"
+    BLUE, VERM = "#4E79A7", "#E15759"            # has a long-range term / local only
+    RAMP = ["#011959", "#144D62", "#3C6D56", "#828231", "#D29343", "#FDAC9E", "#FACCFA"]   # batlow
+    DIVER = ["#001261", "#034481", "#307DA6", "#94BED2", "#ECE5E0", "#DBAA8D", "#C27041", "#912D06",
+             "#590008"]                                                                     # vik
     matplotlib.rcParams.update({
         "font.family": "serif", "font.serif": SERIF, "font.size": 11,
         "axes.labelsize": 10.5, "axes.titlesize": 12, "xtick.labelsize": 10, "ytick.labelsize": 10,
@@ -123,7 +128,7 @@ def _(io, mo):
         if subtitle:
             ax.annotate(subtitle, xy=(0, 1), xycoords="axes fraction", xytext=(0, 6),
                         textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=GREY)
-    return BLUE, FAINT, GREY, INK, RAMP, VERM, frame, heading, plt, svg
+    return BLUE, DIVER, FAINT, GREY, INK, RAMP, VERM, frame, heading, plt, svg
 
 
 @app.cell
