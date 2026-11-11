@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
-from conftest import lj
+from conftest import LJ, lj
 from lrbench.adapters import Adapter, default_level
 from lrbench.backends import ASEBackend
 from lrbench.cli import main
@@ -209,3 +209,53 @@ def test_metatomic_records_the_package_version(monkeypatch):
     monkeypatch.setattr(B, "metatomic_calculator", lambda path, device: _FakeMetatomicCalc(["charge"]))
     meta = metatomic("pet-omol-s.pt", device="cpu").lrbench_meta
     assert meta["package"] == "metatomic-torch" and meta["version"] != "?"
+
+
+def test_partial_prediction_failure_is_announced(datadir, tmp_path, monkeypatch):
+    """A model that fails on *some* structures must not produce a full-looking table.
+
+    This is the dangerous failure, not the total one. The structures that fail are rarely a random sample: with a
+    TorchScript fuser bug they were the largest, most separated geometries, which are exactly what the tail metrics
+    are made of. The survivors then yield a table that looks ordinary while describing only the short range.
+    """
+    import lrbench.backends as B
+
+    real = B.ASEBackend._predict
+
+    def flaky(self, structs):
+        out = real(self, structs)
+        for i, o in enumerate(out):          # fail the second half, as a size-sorted fuser bug would
+            if i >= len(out) // 2:
+                o.update(energy=None, forces=None, error="RuntimeError: Global alloc not supported yet")
+        return out
+
+    monkeypatch.setattr(B.ASEBackend, "_predict", flaky)
+    out = tmp_path / "flaky.json"
+    with pytest.warns(UserWarning, match="predictions failed"):
+        main(["eval", "--model", LJ, "--sets", "toy", "--data", datadir, "--no-hash", "--n-boot", "50",
+              "--out", str(out)])
+    notes = " ".join(json.load(open(out))["notes"])
+    assert "predictions failed" in notes and "coverage is not what the group n implies" in notes
+    assert "Global alloc not supported yet" in notes, "the first error must be recorded, not just the count"
+
+
+def test_metatomic_disables_the_torchscript_fuser(monkeypatch):
+    """The fuser is a correctness setting for these exports, so the guard must actually fire -- and must be
+    overridable for a future torch that no longer needs it."""
+    import lrbench.backends as B
+
+    called = []
+    monkeypatch.setattr(B, "MetatomicCalculator", _FakeMetatomicCalc([]), raising=False)
+
+    import torch
+    for fn in ("_jit_set_profiling_executor", "_jit_set_profiling_mode"):
+        monkeypatch.setattr(torch._C, fn, lambda v, _f=fn: called.append((_f, v)))
+
+    monkeypatch.delenv("LRBENCH_TORCHSCRIPT_FUSER", raising=False)
+    B._quiet_torchscript_fuser()
+    assert ("_jit_set_profiling_executor", False) in called
+
+    called.clear()
+    monkeypatch.setenv("LRBENCH_TORCHSCRIPT_FUSER", "1")
+    B._quiet_torchscript_fuser()
+    assert called == [], "the override must leave torch alone"

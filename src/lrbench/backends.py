@@ -329,11 +329,39 @@ def ase_from_spec(spec: str):
     return getattr(importlib.import_module(mod), attr)(**kw)
 
 
+def _quiet_torchscript_fuser() -> None:
+    """Turn off TorchScript's profiling executor before running a metatomic export.
+
+    The fuser is not merely a speed choice here: it is a correctness one. A metatomic ``.pt`` runs unfused for its
+    first few calls while the profiling executor gathers shapes, then compiles a fused graph -- and for the PET
+    exports that compilation raises ``RuntimeError: Global alloc not supported yet`` on some shapes. The first
+    structures therefore succeed and later ones fail, which is the worst possible shape for this benchmark: the
+    failures land on the *large, far-separated* geometries, exactly the ones the tail metrics are made of, so a
+    model would be scored on its short range alone and reported as though it had been scored on everything.
+
+    Disabling the profiling executor costs some speed and nothing else. Set ``LRBENCH_TORCHSCRIPT_FUSER=1`` to keep
+    the fuser if a future torch no longer has the bug.
+    """
+    if os.environ.get("LRBENCH_TORCHSCRIPT_FUSER") == "1":
+        return
+    try:
+        import torch
+    except ImportError:
+        return
+    for fn, arg in (("_jit_set_profiling_executor", False), ("_jit_set_profiling_mode", False),
+                    ("_jit_set_texpr_fuser_enabled", False), ("_jit_override_can_fuse_on_gpu", False)):
+        try:
+            getattr(torch._C, fn)(arg)
+        except Exception:  # the private API moves between torch versions; each one is individually optional
+            pass
+
+
 def metatomic_calculator(path: str, device: str = "cpu"):
     try:
         from metatomic_ase import MetatomicCalculator
     except ImportError:
         from metatomic.torch.ase_calculator import MetatomicCalculator
+    _quiet_torchscript_fuser()
     return MetatomicCalculator(path, device=None if device in ("auto", "") else device)
 
 

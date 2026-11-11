@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/EricBoittier/LongRangeBench/actions/workflows/ci.yml/badge.svg)](https://github.com/EricBoittier/LongRangeBench/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/code-BSD--3--Clause-blue.svg)](LICENSE)
+[![Data: CC0](https://img.shields.io/badge/data-CC0--1.0-lightgrey.svg)](LICENSE-DATA)
+[![Open in molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/EricBoittier/LongRangeBench/blob/main/notebooks/long_range_diagnostics.py)
 
 **Does your machine-learned potential have any long-range physics at all?**
 
@@ -143,6 +145,32 @@ level is inferred from the checkpoint name and the charge handling is read off t
 lists them with their training level, licence and how charge/spin enter). `lrbench suite` runs several, each in its
 own Python environment, and writes one combined table. See [docs/models.md](docs/models.md) and
 [docs/adding-a-model.md](docs/adding-a-model.md).
+
+## Notebooks
+
+The diagnostics are also a [marimo](https://marimo.io) notebook, which is a Python file rather than JSON, so it
+reviews and diffs like code:
+
+```sh
+marimo edit notebooks/long_range_diagnostics.py      # live, against your own runs/
+marimo run  notebooks/long_range_diagnostics.py      # read-only app
+```
+
+[![Open in molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/EricBoittier/LongRangeBench/blob/main/notebooks/long_range_diagnostics.py)
+runs it in the cloud with no install at all. The notebook in this repo is the **generator**: it carries the
+diagnostics and the figures but no results, so opened cold it shows an empty state and waits for a `runs/`
+directory. That is deliberate — the numbers for third-party models belong to whoever ran them, and a benchmark that
+ships a frozen leaderboard inside its own notebook is a benchmark nobody can check.
+
+To get a notebook with results in it, point it at your own `runs/`, or export a self-contained one:
+
+```sh
+lrbench eval --model <spec> --sets all --data ./lr-sets --out runs/mymodel.json
+marimo export html-wasm notebooks/long_range_diagnostics.py --single-file -o site/index.html
+```
+
+The WASM export ([docs](https://docs.marimo.io/guides/wasm/)) is a single HTML file that runs the notebook in the
+browser with no server, which is what the linked chemiscope views are built on.
 
 ## Commands
 

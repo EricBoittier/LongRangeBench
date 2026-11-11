@@ -541,7 +541,7 @@ def metatomic_level(path: str) -> str:
     return best
 
 
-def metatomic(path: str, device: str = "cuda", level: str = "", name: str = "", licence: str = "BSD-3-Clause",
+def metatomic(path: str, device: str = "auto", level: str = "", name: str = "", licence: str = "BSD-3-Clause",
               long_range: str = "none (local message passing)"):
     """Any model exported to metatomic TorchScript (``mtt export`` / ``metatomic``), e.g. the ``upet`` PET family.
 
