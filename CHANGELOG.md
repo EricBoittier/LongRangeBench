@@ -33,6 +33,9 @@ Notable changes to LongRangeBench. Newest first.
 
 ### Fixed
 
+- The six PET-LR registry entries now use mlip.cpp build `cf878fd` (6e2ead3 + a graph INDEX fix). On 6e2ead3
+  every one-atom structure failed (624 of 3762 `dimers` terms, the bare-ion monomers). Weights and keys are
+  unchanged.
 - `mlipcpp-eval` frames with a non-finite energy or force count as failed predictions. Before, they were scored as
   numbers.
 
