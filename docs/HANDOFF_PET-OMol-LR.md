@@ -23,19 +23,25 @@ paths and wording differ.
 | periodic-cell analysis, like-charge r² correction, provisional `ct_candidate` / `unbound_anion_candidate` | `tools/ext_biodimer_{pbc_check,score}.py`, `tools/ext_biodimers.py` | present |
 | priors suite, probe builders, `priors_table.py` | `src/lrbench/priors/`, `tools/priors_*.py` | present |
 
-**Do not back-port `src/` or `tests/` from the workspace.** This repository is ahead there: it has
+**Do not back-port `src/`, `tests/` or `tools/` from the workspace.** This repository is ahead there: it has
 `drop_ase_cache`, `oracle:refs`, ten more adapters, `toy.py`, `diagnostics.py` and the scrubbed docstrings. Every
-`src/` difference is either one of those or a private path.
+line that only the workspace has, in every differing file, falls into one of four kinds:
+- a private path or HF repo name in a docstring or default;
+- an unused import;
+- a superseded variant, such as `oracle.from_spec` without `oracle:refs`, or the old SO3LR `@v0.2.0` pin;
+- the inline test fixtures that `toy.py` replaced.
 
 ### Missing: worth porting
 
 | workspace file | target here | what it adds | notes |
 |---|---|---|---|
-| `runs/trained-models/run_frame_ipea.sh` | `tools/ipea_relabel/run_frame.sh` (suggested) | the ORCA ΔSCF protocol behind the `charge_state` IP/EA probes. It reproduces the stored label (r0), then runs UKS stability rounds until a round is stable. Its single retry uses SlowConv KDIIS SOSCF, because ORCA refuses TRAH with self-consistent VV10 (EnGrad). | Keep `ORCA_BIN` and the positional args. It is the documented way to make the probes `tools/priors_ipea.py` and `tools/props_ipea.py` consume. |
+| `runs/trained-models/run_frame_ipea.sh` | `tools/ipea_relabel/run_frame.sh` (suggested) | the per-frame ORCA protocol that produces the chains `tools/props_ipea.py` reads (`STATUS_r`, N / N−1 / N+1 per fragment). `props_ipea.py` → `priors_ipea.py` → `lrbench priors --ipea` then builds the `charge_state` probes from them. The protocol reproduces the stored label (r0), then runs UKS stability rounds until one is stable. Its single retry uses SlowConv KDIIS SOSCF, because ORCA refuses TRAH with self-consistent VV10 (EnGrad). | Keep `ORCA_BIN` and the positional args. **Dependency:** the frame directories it runs in come from an input generator that is in neither tree (a short ORCA-input writer: N, N−1, N+1 per fragment, OMol25 SCF settings). Port or rewrite that generator alongside, or the worker has nothing to run. |
 | `runs/trained-models/run_chunk_ipea.sbatch` | `tools/ipea_relabel/run_chunk.sbatch` (suggested) | Slurm array driver for the above | It has site-specific modules and partition names. Port it as a template next to `configs/slurm-gpu.sbatch-header`, or skip it. |
 | `lrbench/README.md` § Conventions (*CT-ambiguous and unbound points*) | `docs/metrics.md` | `scf_wrong_state` points (`emulation`): the SCF landed above DFT's lowest state, so these are bad labels and are excluded from both emulation scores, while CT/unbound points are kept | not in `docs/` yet |
 | `lrbench/README.md` § Conventions (*Uncertainty*) | `docs/metrics.md` | CQR intervals are asymmetric and are reported as such, next to the Mondrian split-conformal ones | one sentence |
 | `lrbench/README.md` § External QM benchmark sets | `docs/datasets.md` § External public sets | the data facts in (b) below, and the biodimer converter command lines (`ext_biodimers.py LRBENCH_SRC bio_dimers.xyz BAS EXT_DIR`, `ext_biodimer_relabel.py build PARSED POINTS BIODIMERS EXT_DIR`) | `docs/datasets.md` already has 976 / 121 and the cell r² handling |
+| `lrbench/README.md` § External QM benchmark sets (distance) | `docs/datasets.md` | almost no published CC point reaches 8 Å: 51 of 22,507 GSCDB-NC + NCI Atlas points, all neutral; charged ones stop at 4.1 Å (GSCDB) and 5.1 Å (NCI Atlas) | not in `docs/` yet; it is why the biodimers and tier A matter |
+| `lrbench/README.md` tier-A band table (`<!-- tierA-table -->`, generated from the tier-A summary JSON) | `docs/datasets.md` (optional) | tier-A E_int MAE by class × band (4–8, 8–12, ≥ 12 Å) for PET-OMol-S and two unreleased single-seed fine-tunes | Publish only with models people can reproduce; otherwise port the generator and the band layout, not the numbers. |
 | `lrbench/CHANGELOG.md` § Open | `CHANGELOG.md` Known limitations / `ROADMAP.md` | the open items listed in (e) that are not yet here | |
 
 ### Missing: do not port (study-specific)
@@ -43,8 +49,10 @@ paths and wording differ.
 These depend on private data locations or one-off studies, so they do not belong in a public harness. Each could be
 replaced by a sentence in `tools/README.md`.
 
-- `tools/upet_dication_check.py`: a one-off check of upet on Ca²⁺/Mg²⁺–H₂O, with hard-coded paths. Its finding is
-  already covered by `charge_conditioning` and the `drop_ase_cache` fix.
+- `tools/upet_dication_check.py`: a one-off fp64 upet evaluation of Ca²⁺/Mg²⁺–H₂O E_int at 8 and 24 Å, plus the
+  bare ions' charge sensitivity, with hard-coded paths. The general version of the question is the
+  `charge_conditioning` check.
+- The rest of `runs/` (`trained-models/`, `gscdb/`): study-specific campaign drivers and result tables.
 - `tools/explorer/build_explorer.py` and `tools/explorer/build_space.py`: build the private explorer Space from
   workspace result trees.
 - `configs/clariden.sbatch-header` and `configs/lyra.sbatch-header`: site headers. `configs/slurm-gpu.sbatch-header`
@@ -79,12 +87,12 @@ the **docs and flags** should state it.
    shapes differ from the ωB97M-V shapes by these medians; the source shapes are cell-corrected HSE06 (75 % HF) +
    MBD-NL:
 
-   | class | median shape difference | coverage |
-   |---|---|---|
-   | ion pairs | 51 meV, 22 % of the 230 meV mean \|dE\| | all tier-A ion-pair curves |
-   | like-charge | 32 meV | all tier-A like-charge curves |
-   | ion–neutral | 0.9 meV | first 23 curves only |
-   | neutral | 0.1 meV | all tier-A neutral curves |
+   | class | median shape difference |
+   |---|---|
+   | ion pairs | 51 meV, 22 % of the 230 meV mean \|dE\| |
+   | like-charge | 32 meV |
+   | ion–neutral | 0.9 meV, first 23 curves only |
+   | neutral | 0.1 meV |
 
    One model's ion-pair tail fraction beyond 9.5 Å read 1.21 against the source and 0.91 against ωB97M-V on the same
    curves.
@@ -117,9 +125,10 @@ from these sets go into this repository. `CHANGELOG.md` already states this in g
 ## (e) Open items from the workspace changelog
 
 Not yet recorded here:
-- **External sets: run `ext_ncia` / `ext_gscdb_nc` at the end of every model release.** An earlier run returned 40
-  non-finite points, all on structures where a lone atom sits ≥ 8 Å from the rest (RG10N, D442x10). The cause was a
-  backend (mlip.cpp) error, not the benchmark. The NaN guard in the scorer is worth keeping.
+- **Pending re-score on `ext_ncia` and `ext_gscdb_nc`.** One mlip.cpp-served model returned 40 non-finite points,
+  all on structures where a lone atom sits ≥ 8 Å from the rest (RG10N, D442x10). The cause was an mlip.cpp backend
+  error, not a benchmark issue. A re-score with the fixed build is pending; record the result here as a backend note,
+  not a set defect.
 - **Not staged:** Dip146 / Pol130 (need models that output dipoles; `props`) and the MACE-POLAR-1 ml-peg long-range
   protocols.
 - **Optional relabels, not started:**
