@@ -1,0 +1,84 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "maceles-off",
+  "--label",
+  "maceles-off",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/maceles-off.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "maceles-off",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "MACELES-OFF_small_converted.model",
+   "package": "mace-torch",
+   "sha256": "44c0f363dd577eafc0912341f44e658fcf5d58d02b88da8682562d654889cf80",
+   "spec": "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.410 [0.215, 0.471]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "159 / 11 groups",
+   "note": "zero model MAE 270.3 meV",
+   "value": "0.665 [0.361, 1.095] / 153.6 [70.3, 246.5]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "390",
+   "note": "absolute; same-level models only",
+   "value": "154.1"
+  }
+ ],
+ "model": "maceles-off",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 2562,
+ "n_scored": 1254,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 2562 of 3762 predictions failed on dimers (68%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on dimers: ValueError: N/A: charge-blind model, structure has charge -1 / multiplicity 1",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 132 of 230 predictions failed on families_fixedq (57%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on families_fixedq: ValueError: N/A: charge-blind model, structure has charge -2 / multiplicity 1",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 39 of 41 predictions failed on trimers (95%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on trimers: ValueError: N/A: charge-blind model, structure has charge 1 / multiplicity 1",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

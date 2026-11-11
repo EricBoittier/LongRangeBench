@@ -1,0 +1,102 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "maceles-off",
+  "--label",
+  "maceles-off",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/maceles-off.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "62463d247980aa7a2e2a0c650f6137a404eb5e38f209bf60d250d60d41c118d0",
+  "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "maceles-off",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "MACELES-OFF_small_converted.model",
+   "package": "mace-torch",
+   "sha256": "44c0f363dd577eafc0912341f44e658fcf5d58d02b88da8682562d654889cf80",
+   "spec": "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "30 ddE / 3 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "0.1596 [0.1564, 0.1597]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "30",
+   "note": "zero model 88.4 meV",
+   "value": "74.3 [54.2, 78.9]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "33.8"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "32.0"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "65",
+   "note": "absolute; same-level models only",
+   "value": "110.2"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "30",
+   "note": "median; -1 = flat model",
+   "value": "-0.839"
+  }
+ ],
+ "model": "maceles-off",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 132,
+ "n_scored": 120,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 2562 of 3762 predictions failed on dimers (68%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on dimers: ValueError: N/A: charge-blind model, structure has charge -1 / multiplicity 1",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 132 of 230 predictions failed on families_fixedq (57%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on families_fixedq: ValueError: N/A: charge-blind model, structure has charge -2 / multiplicity 1",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 39 of 41 predictions failed on trimers (95%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on trimers: ValueError: N/A: charge-blind model, structure has charge 1 / multiplicity 1",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}
