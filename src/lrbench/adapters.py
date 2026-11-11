@@ -421,7 +421,15 @@ def aimnet2(model: str = "aimnet2", lrcoulomb: str = "simple", cutoff: float = 1
     from aimnet.calculators import AIMNet2ASE
     calc = AIMNet2ASE(model, charge=0, mult=1)
     if lrcoulomb and lrcoulomb != "simple":
-        calc.set_lrcoulomb_method(lrcoulomb, cutoff=cutoff, dsf_alpha=dsf_alpha)
+        # aimnet >= 0.2 keeps the Coulomb switch on the wrapped AIMNet2Calculator, not on the ASE wrapper
+        inner = calc if hasattr(calc, "set_lrcoulomb_method") else getattr(calc, "base_calc", None)
+        if inner is None or not hasattr(inner, "set_lrcoulomb_method"):
+            raise RuntimeError("this aimnet version exposes no set_lrcoulomb_method; cannot select "
+                               f"lrcoulomb={lrcoulomb!r}, and silently scoring 'simple' would mislabel the row")
+        inner.set_lrcoulomb_method(lrcoulomb, cutoff=cutoff, dsf_alpha=dsf_alpha)
+        got = getattr(inner, "coulomb_method", lrcoulomb)
+        if got != lrcoulomb:
+            raise RuntimeError(f"aimnet reports coulomb_method={got!r} after asking for {lrcoulomb!r}")
     if device and hasattr(calc, "to"):
         try:
             calc.to(device)
