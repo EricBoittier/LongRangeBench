@@ -21,6 +21,8 @@ default (12 Å, switched from 0.45 x cutoff, or PME in a box) would truncate the
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
@@ -560,23 +562,33 @@ def metatomic(path: str, device: str = "cuda", level: str = "", name: str = "", 
     from .backends import metatomic_calculator
     calc = metatomic_calculator(path, device)
     level = level or metatomic_level(path)
-    inputs = ()
+    inputs, known = (), True
+    model = getattr(calc, "_model", None)  # private, so treat not finding it as "cannot ask", never as "no charge"
     try:
-        model = getattr(calc, "_model", None)
-        if model is not None:
+        if model is None:
+            known = False
+        else:
             try:
                 inputs = tuple(sorted(model.requested_inputs(use_new_names=True).keys()))
             except TypeError:  # older metatomic: no use_new_names
                 inputs = tuple(sorted(model.requested_inputs().keys()))
-    except Exception:  # a model that cannot be asked is treated as not conditioned, and says so below
-        inputs = ()
+    except Exception:
+        known = False
+    if not known:
+        # The two mistakes are not symmetric. Stripping the charge from a model that needs one turns an ion pair
+        # neutral and yields a confidently flat tail -- a wrong number that looks like a finding. Leaving it in for
+        # a model that does not want one costs nothing, because metatomic only forwards the inputs the model asks
+        # for. So an unreadable model keeps its charge and is recorded as unknown rather than as unconditioned.
+        warnings.warn(f"cannot read requested_inputs() from {path}: charge/spin are left in atoms.info for "
+                      "metatomic to forward or ignore, and charge_spin is recorded as unknown")
     conditioned = "charge" in inputs
     stem = str(path).replace("\\", "/").rsplit("/", 1)[-1]
-    meta = _pkg_meta("metatomic", name or stem, {
+    meta = _pkg_meta("metatomic-torch", name or stem, {
         "licence": licence,
         "checkpoint": stem,
-        "requested_inputs": list(inputs),
+        "requested_inputs": list(inputs) if known else None,
         "charge_spin": ("atoms.info charge / spin_multiplicity (declared by the model)" if conditioned else
-                        "NONE: the model requests no charge input (recorded, not silently ignored)"),
+                        "NONE: the model requests no charge input (recorded, not silently ignored)" if known else
+                        "UNKNOWN: the model could not be asked what it consumes; charge/spin left for metatomic"),
         "long_range": long_range})
-    return Adapter(calc, level, meta, charge_spin=conditioned)
+    return Adapter(calc, level, meta, charge_spin=conditioned or not known)

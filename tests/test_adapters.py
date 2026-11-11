@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
@@ -173,9 +175,14 @@ def test_metatomic_charge_spin_follows_what_the_model_declares(monkeypatch):
         assert ("charge" in ad.inner.seen) is conditioned
 
 
-def test_metatomic_survives_a_model_that_cannot_be_asked(monkeypatch):
-    """An older or wrapped model with no ``requested_inputs`` must degrade to 'not conditioned' and say so, rather
-    than raising or claiming a charge input it cannot demonstrate."""
+def test_metatomic_fails_safe_when_the_model_cannot_be_asked(monkeypatch):
+    """``_model`` is private, so not finding it must mean "cannot ask", never "takes no charge".
+
+    The two mistakes are not symmetric. Stripping the charge from a model that needs one turns an ion pair neutral
+    and produces a confidently flat tail -- a wrong number that looks like a finding. Leaving the charge in for a
+    model that does not want it costs nothing, because metatomic forwards only the inputs the model asks for. So the
+    charge stays, the record says ``UNKNOWN`` rather than ``NONE``, and the user is warned.
+    """
     import lrbench.backends as B
     from lrbench.adapters import metatomic
 
@@ -185,6 +192,20 @@ def test_metatomic_survives_a_model_that_cannot_be_asked(monkeypatch):
             self._model = None
 
     monkeypatch.setattr(B, "metatomic_calculator", lambda path, device: Mute())
-    ad = metatomic("mystery.pt", device="cpu", level="L")
-    assert ad.charge_spin is False and ad.lrbench_level == "L"
-    assert ad.lrbench_meta["requested_inputs"] == []
+    with pytest.warns(UserWarning, match="requested_inputs"):
+        ad = metatomic("mystery.pt", device="cpu", level="L")
+    assert ad.charge_spin is True, "an unreadable model must keep its charge, not lose it"
+    assert ad.lrbench_level == "L"
+    assert ad.lrbench_meta["requested_inputs"] is None          # unknown, not "empty"
+    assert ad.lrbench_meta["charge_spin"].startswith("UNKNOWN")
+    assert ASEBackend(ad).predict([_s()])[0]["error"] is None
+
+
+def test_metatomic_records_the_package_version(monkeypatch):
+    """The distribution is ``metatomic-torch``; asking for ``metatomic`` records the version as '?'."""
+    import lrbench.backends as B
+    from lrbench.adapters import metatomic
+
+    monkeypatch.setattr(B, "metatomic_calculator", lambda path, device: _FakeMetatomicCalc(["charge"]))
+    meta = metatomic("pet-omol-s.pt", device="cpu").lrbench_meta
+    assert meta["package"] == "metatomic-torch" and meta["version"] != "?"
