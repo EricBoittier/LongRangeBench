@@ -48,12 +48,13 @@ def _(EMBEDDED):
     R, P = _d["results"], _d["priors"]
     SOURCE = _d.get("source", "frozen at build time")
     CHEM, VIEWS = _d.get("chemiscope", {}), _d.get("views", [])
+    SCORES = _d.get("scores", {})
 
     KE = 14.399645            # e^2/(4 pi eps0), eV A - so k q_A q_B / r is in eV for r in A
     SET = "dimers"
     CLS = "ion_pair"
     DDE_SET = "families_fixedq"
-    return CHEM, CLS, DDE_SET, KE, P, R, SET, SOURCE, VIEWS, io, mo, np, pd
+    return CHEM, CLS, DDE_SET, KE, P, R, SCORES, SET, SOURCE, VIEWS, io, mo, np, pd
 
 
 '''

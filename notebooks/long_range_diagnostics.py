@@ -449,7 +449,7 @@ def _(CLS, DDE_SET, R, SCORES, SET, mo, pd):
         mo.md(r"""<a id="ranking"></a>
 ## The long-range score
 
-$$\mathrm{LRS} = 100\\left(\\prod_j s_j\\right)^{1/n}, \\qquad s_j \\in [0,1],\; 1 = \\text{correct}$$
+$$\mathrm{LRS} = 100\left(\prod_j s_j\right)^{1/n}, \qquad s_j \in [0,1],\; 1 = \text{correct}$$
 
 Four quantities that each have a value right by construction, mapped so **1** is correct and **0** is the
 no-long-range floor: the fraction of the $r$-dependence reproduced, how much of the physical magnitude is

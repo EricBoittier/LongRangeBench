@@ -200,7 +200,12 @@ def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200
                     pts = [pts[int(i * step)] for i in range(max_points)]
                 d["sets"][s]["parity"] = pts
         results[name] = d
-    for p in sorted(glob.glob(os.path.join(runs, "priors", "*.json"))):
+    # `lrbench priors --out` writes wherever it is told, and the docs show a bare file name, so look in the
+    # conventional subdirectory *and* alongside the eval results rather than silently finding nothing
+    prior_paths = sorted(set(glob.glob(os.path.join(runs, "priors", "*.json")))
+                         | set(glob.glob(os.path.join(runs, "*.priors.json")))
+                         | set(glob.glob(os.path.join(runs, "priors-*.json"))))
+    for p in prior_paths:
         try:
             with open(p) as f:
                 J = json.load(f)
@@ -254,4 +259,8 @@ def score_components(r: dict) -> dict:
     s["lrs"] = None if len(have) < 2 else round(
         100.0 * (math.prod(have) ** (1.0 / len(have))), 1)
     s["n_components"] = len(have)
+    # A geometric mean over three components is not comparable with one over four: a model that was never asked
+    # the response question scores as though it had passed it. Consumers must show this, so it travels with the
+    # score rather than being left for them to look up.
+    s["partial"] = len(have) < len(COMPONENTS)
     return s

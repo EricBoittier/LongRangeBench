@@ -970,14 +970,15 @@ neither channel is load-bearing on its own.</p>
 RANKING = """<section id="score">
 <h2><span class="num">score</span>The long-range score</h2>
 <div class="eq">$$\\mathrm{LRS} = 100\\left(\\prod_{j} s_j\\right)^{1/n},\\qquad
-s_j \\in [0,1],\; 1 = \\text{correct}$$</div>
+s_j \\in [0,1],\\; 1 = \\text{correct}$$</div>
 <p>Four quantities, each with a value that is right by construction, each mapped so that <b>1</b> is correct and
 <b>0</b> is the no-long-range floor: the fraction of the \\(r\\)-dependence reproduced, how much of the physical
 magnitude is captured, the reply to a distant charge, and the offset-free error measured against what a flat model
 would score. The <em>geometric</em> mean is the point — a model that scores zero on any one of them has no
 long-range physics, and credit elsewhere should not disguise that.</p>
 <p class="sub">The bars beside each score are the four components in that order, so the number is never shown
-without the thing it was built from. This summarises these tests on these sets; it is not a ranking of models in
+without the thing it was built from. A score marked <b>*</b> was built from fewer than four — a task that did not
+run cannot be told from one that was passed, so those are not comparable with the rest. This summarises these tests on these sets; it is not a ranking of models in
 general. The ceiling row is the dataset's own multipole + induction prior, not a model. Click a column to re-sort.</p>
 <table class="rank" id="rank-body"></table>
 </section>
@@ -1073,7 +1074,8 @@ def view_specs(built: dict) -> list:
     dim = built.get("dimers")
     if dim:
         m_lr = pick(dim["models"], "mace-polar", "so3lr-tauri", "orbmol")
-        m_loc = pick([m for m in dim["models"] if m != m_lr], "mace-h", "dpa4-plus", "grace", "mace-omol")
+        others = [m for m in dim["models"] if m != m_lr]
+        m_loc = pick(others, "mace-h", "dpa4-plus", "grace", "mace-omol") if others else ""
         c0, c1, c2 = TERM_COLOURS[0], TERM_COLOURS[1], TERM_COLOURS[2]
         out.append(dict(
             id="v-decay", key="dimers", tid="A1", group="A", models=dim["models"], diagonal=False, center0=True,
@@ -1091,7 +1093,8 @@ def view_specs(built: dict) -> list:
             settings={"map": {"x": {"property": "separation", "scale": "log"},
                               "y": {"property": f"err/{m_lr}"},
                               "color": {"property": f"err/{m_lr}", "palette": "bwr"},
-                              "size": {"property": f"abserr/{m_loc}", "factor": 40}}}))
+                              # the second model's channel only exists when there *is* a second model
+                              **({"size": {"property": f"abserr/{m_loc}", "factor": 40}} if m_loc else {})}}))
         out.append(dict(
             id="v-residual", key="dimers", tid="A2", group="A", models=dim["models"], diagonal=True,
             center0=False,
@@ -1118,7 +1121,8 @@ def view_specs(built: dict) -> list:
                    "spread away from it is where they differ. Two models that fail on the same structures fail "
                    "for a reason in the data; two that fail on different ones fail for reasons of their own. "
                    "Class is carried by both shape and colour here, so the legend is readable either way."),
-            settings={"map": {"x": {"property": f"E_int/{m_lr}"}, "y": {"property": f"E_int/{m_loc}"},
+            settings={"map": {"x": {"property": f"E_int/{m_lr}"},
+                              "y": {"property": f"E_int/{m_loc or m_lr}"},
                               "symbol": "class",
                               "color": {"property": "class", "palette": "tab10"}}}))
     if "families_fixedq" in built:
@@ -1215,7 +1219,9 @@ def main(argv=None) -> int:
         _d = collect(a.runs, with_points=False)
         rank["cols"] = [
             {"k": "model", "t": "model", "h": "colour is the model family"},
-            {"k": "lrs", "t": "LRS", "h": "long-range score, the geometric mean of the four components"},
+            {"k": "lrs", "t": "LRS",
+             "h": "long-range score, the geometric mean of the four components; * = fewer than four ran, so it "
+                  "is not comparable with a complete score"},
             {"k": "bars", "t": "decay · scale · response · accuracy"},
             {"k": "lr", "t": "LR term"},
             {"k": "tail", "t": "tail", "h": "tail fraction: 1 follows the reference, 0 flat"},
@@ -1239,7 +1245,8 @@ def main(argv=None) -> int:
             rank["rows"].append({
                 "fam": st["colour"], "family": st["label"], "marker": st["marker"],
                 "model": r["label"][:36], "ceiling": "oracle" in name,
-                "lrs": sc["lrs"],
+                "lrs": None if sc["lrs"] is None else
+                       (f"{sc['lrs']}*" if sc.get("partial") else sc["lrs"]),
                 "s_decay": sc["decay"], "s_scale": sc["scale"], "s_response": sc["response"],
                 "s_accuracy": sc["accuracy"],
                 "lr": "ceiling" if "oracle" in name else ("yes" if r["has_lr"] else "no"),
