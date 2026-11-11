@@ -417,6 +417,69 @@ function setDiagonal(st) {{
   try {{ st.viz.map._relayout({{ shapes: st.diag ? [diagonalShape(st.viz, st.ds)].filter(Boolean) : [] }}); }}
   catch (e) {{ console.warn("diagonal:", e); }}
 }}
+/* The data range of one axis, or null when the property holds nothing finite. */
+function axisRange(st, prop) {{
+  const p = st.ds.properties[prop];
+  if (!p) return null;
+  const v = finite(p.values);
+  return v.length ? [Math.min(...v), Math.max(...v)] : null;
+}}
+
+/* A log axis is a claim that the quantity is positive. A signed error is not, and chemiscope would simply drop
+   every non-positive point -- silently losing exactly the half of the data that says the model has the sign wrong. */
+function canLog(st, prop) {{
+  const r = axisRange(st, prop);
+  return !!r && r[0] > 0;
+}}
+
+/* What "log" should mean for a given axis, or null when it can mean nothing.
+   Offering the button only where the data is already positive is correct and nearly useless -- on these views that
+   is one axis out of twelve, because almost everything here is a signed error or a negative interaction energy.
+   But the thing a reader actually wants from a log axis on a signed error is the *magnitude* over orders of
+   magnitude, and every error property on this page has an absolute twin. So the button switches to that twin and
+   says so: "log |y|" is a different quantity from y, and relabelling is the honest way to offer it. */
+function logTarget(st, prop) {{
+  if (canLog(st, prop)) return {{ property: prop, label: "log" }};
+  const i = (prop || "").indexOf("/");
+  if (i > 0) {{
+    const twin = "abserr/" + prop.slice(i + 1);
+    if (st.ds.properties[twin] && canLog(st, twin)) return {{ property: twin, label: "log |·|" }};
+  }}
+  return null;
+}}
+
+/* One axis's scale buttons: a log option when one exists, and linear always. */
+function scaleGroup(bar, st, axis, cur) {{
+  const t = logTarget(st, cur);
+  const items = (t ? [{{ label: t.label, v: "log", prop: t.property }}] : [])
+    .concat([{{ label: "linear", v: "linear" }}]);
+  const s = st.viz.saveSettings().map;
+  group(bar, axis, items, it => it.v === s[axis].scale, it => {{
+    const next = {{}};
+    next[axis] = {{ scale: it.v }};
+    if (it.prop && it.prop !== cur) next[axis].property = it.prop;
+    st.viz.applySettings({{ map: next }});
+    if (st.shared) setShared(st);
+    setDiagonal(st);
+  }});
+}}
+
+/* Two axes on one scale. A parity plot is only readable this way: with independent autoscaling, y = x is not the
+   45-degree line it appears to be, and two models whose errors differ by an order of magnitude can look alike. */
+function setShared(st) {{
+  try {{
+    const s = st.viz.saveSettings().map;
+    const rx = axisRange(st, s.x.property), ry = axisRange(st, s.y.property);
+    if (!rx || !ry) return;
+    const next = st.shared
+      ? {{ x: {{ min: Math.min(rx[0], ry[0]), max: Math.max(rx[1], ry[1]) }},
+           y: {{ min: Math.min(rx[0], ry[0]), max: Math.max(rx[1], ry[1]) }} }}
+      : {{ x: {{ min: rx[0], max: rx[1] }}, y: {{ min: ry[0], max: ry[1] }} }};
+    st.viz.applySettings({{ map: next }});
+    setDiagonal(st);
+  }} catch (e) {{ console.warn("shared axis:", e); }}
+}}
+
 /* a diverging scale is only honest when it is centred on zero */
 function centreColour(st) {{
   try {{
@@ -537,9 +600,10 @@ function buildBar(st, v) {{
       st.viz.applySettings({{ map: {{ color: {{ property: it.c, palette: PALETTES[kind][0] }} }} }});
       if (kind === "diverging") centreColour(st);
     }});
-    group(bar, "x", [{{ label: "log", v: "log" }}, {{ label: "linear", v: "linear" }}],
-          it => it.v === s.x.scale,
-          it => {{ st.viz.applySettings({{ map: {{ x: {{ scale: it.v }} }} }}); setDiagonal(st); }});
+    scaleGroup(bar, st, "x", s.x.property);
+    scaleGroup(bar, st, "y", s.y.property);
+    group(bar, "", [{{ label: "shared axis", v: 1 }}], () => !!st.shared,
+          () => {{ st.shared = !st.shared; setShared(st); }});
     group(bar, "", [{{ label: "y = x", v: 1 }}], () => st.diag,
           () => {{ st.diag = !st.diag; setDiagonal(st); }});
   }};
@@ -617,11 +681,12 @@ function scoreBars(r) {{
       if (v.settings) ds.settings = v.settings;
       const viz = await Chemiscope.DefaultVisualizer.load(
         {{ map: v.id + "-map", info: v.id + "-info", meta: v.id + "-meta", structure: v.id + "-structure" }}, ds);
-      const st = {{ id: v.id, viz, ds, models: v.models || [], diag: !!v.diagonal }};
+      const st = {{ id: v.id, viz, ds, models: v.models || [], diag: !!v.diagonal,
+                   shared: !!v.parity }};   // a parity plot is wrong by default without it
       STATES.push(st);
       buildBar(st, v);
       viz.onSettingChange(() => redraw(document.getElementById(v.id + "-bar")));
-      setTimeout(() => {{ if (v.center0) centreColour(st); setDiagonal(st); }}, 450);
+      setTimeout(() => {{ if (v.center0) centreColour(st); if (st.shared) setShared(st); setDiagonal(st); }}, 450);
     }} catch (e) {{
       document.getElementById(v.id + "-view").innerHTML =
         '<p class="err">chemiscope could not load this view: ' + e + '</p>';
