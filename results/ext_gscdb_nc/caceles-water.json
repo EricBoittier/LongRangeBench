@@ -1,0 +1,67 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "caceles-water",
+  "--label",
+  "caceles-water",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/caceles-water.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "e6db2300fd1d60d00aaaa6753664c641baffc7404819ef48729a7faef8cb1568",
+  "jsonl_sha256": "e7833e1b74ea8c12f5f32af61e3a10b61bed772c693d36c802b1344f6e6e678c",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "caceles-water",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "caceles-r-4.5-nl-1-nu-2_best_model.pth",
+   "package": "cace",
+   "sha256": "1dd2dc9261c8ce64006586507e4d0044e64832a50a42e659a7a1db3a2772f338",
+   "spec": "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth'",
+   "version": null
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "78 / 72 groups",
+   "note": "zero model MAE 1739.1 meV",
+   "value": "0.883 [0.875, 0.896] / 202.4 [147.2, 269.6]"
+  }
+ ],
+ "model": "caceles-water",
+ "model_level": "RPBE-D3 (water, CACE-LES training set)",
+ "n_failed": 5119,
+ "n_scored": 1962,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model RPBE-D3 (water, CACE-LES training set) vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)'], 'ext_biodimers_wb97mv': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': 5119 of 5711 predictions failed on ext_gscdb_nc (90%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': first error on ext_gscdb_nc: ValueError: N/A: elements [np.int64(6)] not in the training set",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': 1218 of 1218 predictions failed on ext_biodimers_wb97mv (100%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': first error on ext_biodimers_wb97mv: ValueError: N/A: charge-blind model, structure has charge -1 / multiplicity 1"
+ ],
+ "reference_level": [
+  "CCSD(T)/CBS (GSCDB137 ref)"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_gscdb_nc"
+}

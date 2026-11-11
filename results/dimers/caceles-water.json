@@ -1,0 +1,84 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "caceles-water",
+  "--label",
+  "caceles-water",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/caceles-water.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "caceles-water",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "caceles-r-4.5-nl-1-nu-2_best_model.pth",
+   "package": "cace",
+   "sha256": "1dd2dc9261c8ce64006586507e4d0044e64832a50a42e659a7a1db3a2772f338",
+   "spec": "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth'",
+   "version": null
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "18 pts / 3 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.130 [-0.508, 0.410]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "15 / 1 groups",
+   "note": "zero model MAE 1.3 meV",
+   "value": "0.130 / 1.2"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "36",
+   "note": "absolute; same-level models only",
+   "value": "210.2"
+  }
+ ],
+ "model": "caceles-water",
+ "model_level": "RPBE-D3 (water, CACE-LES training set)",
+ "n_failed": 3456,
+ "n_scored": 1254,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model RPBE-D3 (water, CACE-LES training set) vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': 3456 of 3762 predictions failed on dimers (92%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': first error on dimers: ValueError: N/A: elements [np.int64(6)] not in the training set",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': 230 of 230 predictions failed on families_fixedq (100%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': first error on families_fixedq: ValueError: N/A: elements [np.int64(9), np.int64(15)] not in the training set",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': 41 of 41 predictions failed on trimers (100%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:cace?model='caceles-r-4.5-nl-1-nu-2_best_model.pth': first error on trimers: ValueError: N/A: charge-blind model, structure has charge 1 / multiplicity 1",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

@@ -1,0 +1,68 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "maceles-off",
+  "--label",
+  "maceles-off",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/maceles-off.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "e6db2300fd1d60d00aaaa6753664c641baffc7404819ef48729a7faef8cb1568",
+  "jsonl_sha256": "e7833e1b74ea8c12f5f32af61e3a10b61bed772c693d36c802b1344f6e6e678c",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "maceles-off",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "MACELES-OFF_small_converted.model",
+   "package": "mace-torch",
+   "sha256": "44c0f363dd577eafc0912341f44e658fcf5d58d02b88da8682562d654889cf80",
+   "spec": "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "776 / 373 groups",
+   "note": "zero model MAE 246.4 meV",
+   "value": "1.005 [0.999, 1.013] / 19.9 [16.7, 23.9]"
+  }
+ ],
+ "model": "maceles-off",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 1521,
+ "n_scored": 1962,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)'], 'ext_biodimers_wb97mv': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 1521 of 5711 predictions failed on ext_gscdb_nc (27%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on ext_gscdb_nc: ValueError: N/A: charge-blind model, structure has charge 1 / multiplicity 1",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': 608 of 1218 predictions failed on ext_biodimers_wb97mv (50%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:maceles?model='MACELES-OFF_small_converted.model': first error on ext_biodimers_wb97mv: ValueError: N/A: charge-blind model, structure has charge -1 / multiplicity 1",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "CCSD(T)/CBS (GSCDB137 ref)"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_gscdb_nc"
+}
