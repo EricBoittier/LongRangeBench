@@ -41,6 +41,7 @@ The generally useful ones first.
 | `ext_biodimer_score.py` | offset-free shape scores on the biodimer curves |
 | `priors_table.py` | several `lrbench priors` JSONs → one check × model table |
 | `headline_table.py` | transpose selected rows of an `lrbench compare` table into a compact models-as-rows table |
+| `build_pages.py` | `results/SUMMARY.md` → the results page of the GitHub Pages site (`.github/workflows/pages.yml`; reads no raw result JSON) |
 | `gscdb_report.py` | tables and figures for a GSCDB137 score |
 | `gscdb_campaign.py` | calculation list and cost estimate for a GSCDB137 labelling campaign |
 | `props_eval.py`, `props_summary.py` | score one model on `props` (optionally with finite-field polarisability) and collect the results |

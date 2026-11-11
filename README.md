@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/code-BSD--3--Clause-blue.svg)](LICENSE)
 [![Data: CC0](https://img.shields.io/badge/data-CC0--1.0-lightgrey.svg)](LICENSE-DATA)
 [![Open in molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/EricBoittier/LongRangeBench/blob/main/notebooks/long_range_diagnostics.py)
+[![Results](https://img.shields.io/badge/results-GitHub%20Pages-2b5c8a.svg)](https://ericboittier.github.io/LongRangeBench/)
 
 **Does your machine-learned potential have any long-range physics at all?**
 
@@ -168,6 +169,10 @@ To get a notebook with results in it, point it at your own `runs/`, or export a 
 lrbench eval --model <spec> --sets all --data ./lr-sets --out runs/mymodel.json
 marimo export html-wasm notebooks/long_range_diagnostics.py --single-file -o site/index.html
 ```
+
+The committed results and this notebook (as WebAssembly) are published at
+<https://ericboittier.github.io/LongRangeBench/> by `.github/workflows/pages.yml` on every push to `main`
+(`tools/build_pages.py` renders `results/SUMMARY.md`; no raw result JSON is read).
 
 The WASM export ([docs](https://docs.marimo.io/guides/wasm/)) is a single HTML file that runs the notebook in the
 browser with no server, which is what the linked chemiscope views are built on.

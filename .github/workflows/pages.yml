@@ -1,0 +1,48 @@
+name: Pages
+
+# The public site: results/SUMMARY.md as a page, and the diagnostics notebook exported to WebAssembly.
+# Built on every PR (so a broken export fails review); deployed only from main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install "marimo>=0.25" markdown
+      - name: Results page
+        run: python tools/build_pages.py -o site
+      - name: Notebook (WebAssembly)
+        run: marimo export html-wasm notebooks/long_range_diagnostics.py --mode run -o site/notebook --force
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
