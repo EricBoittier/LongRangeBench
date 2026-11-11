@@ -2,6 +2,7 @@
 """Build a chemiscope explorer: several pre-configured views over the scored structures, in one page.
 
     python tools/build_chemiscope_views.py RUNS_DIR [--data DIR] [-o OUT.html] [--open]
+    python tools/build_chemiscope_views.py RUNS_DIR --rows results [--private] ...   # only models with a row
 
 No model is re-evaluated. Every number comes from the canonical records and the per-term energies that
 ``lrbench eval --save-predictions`` already wrote, recombined through each group's own definition, so a model value
@@ -1812,6 +1813,28 @@ def view_specs(built: dict) -> list:
     return out
 
 
+#: the sets this page draws; a run is admitted when it has a row on any of them
+PAGE_SETS = ("dimers", "trimers", "families_fixedq")
+
+
+def rows_view(runs_dir: str, results: str, private: bool = False) -> str:
+    """A directory of links to the runs in RUNS_DIR that have a committed row in RESULTS, so the page is built from
+    the same models the tables publish. Public rows only, unless ``private``; a stem with no row is left out and
+    named, so a model never appears on the page without a row behind it."""
+    import tempfile
+    bases = [pathlib.Path(results)] + ([pathlib.Path(results) / "private"] if private else [])
+    named = {f.stem for b in bases for s in PAGE_SETS for f in (b / s).glob("*.json")}
+    out = pathlib.Path(tempfile.mkdtemp(prefix="lrbench-views-"))
+    kept, dropped = [], []
+    for p in sorted(pathlib.Path(runs_dir).glob("*.json")):
+        (kept if p.stem in named else dropped).append(p.stem)
+        if p.stem in named:
+            (out / p.name).symlink_to(p.resolve())
+    print(f"[rows] {len(kept)} runs with a {'public or private' if private else 'public'} row; "
+          f"left out (no row): {', '.join(dropped) or 'none'}")
+    return str(out)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("runs")
@@ -1822,8 +1845,24 @@ def main(argv=None) -> int:
                     help="ship KaTeX beside the page (default: auto). A published artifact's CSP drops a "
                          "stylesheet loaded from a CDN, so 'cdn' produces a page whose equations do not survive "
                          "publishing.")
+    ap.add_argument("--rows", default=None, metavar="RESULTS",
+                    help="show only the runs that have a committed row in this results tree (results/<set>/"
+                         "<model>.json, matched on the run's file stem): the page then shows exactly the models the "
+                         "repository publishes. Without it, every run in RUNS_DIR is shown")
+    ap.add_argument("--private", action="store_true",
+                    help="with --rows, also admit rows under RESULTS/private/ (unreleased models). A page built "
+                         "this way must never be published")
+    ap.add_argument("--status", default=None, metavar="JSON",
+                    help="per-run status shown beside the model name and listed under the title, e.g. "
+                         "{\"FTq14\": \"partial: 1 of 4 seeds, 2026-11-11\"}; for pages built while runs are still landing")
+    ap.add_argument("--title", default=None, help="page heading (default: the report title)")
     ap.add_argument("--open", action="store_true")
     a = ap.parse_args(argv)
+    status = json.loads(pathlib.Path(a.status).read_text()) if a.status else {}
+    if a.private and not a.rows:
+        ap.error("--private needs --rows")
+    if a.rows:
+        a.runs = rows_view(a.runs, a.rows, a.private)
 
     built = payloads(a.runs, a.data)
     if not built:
@@ -1892,7 +1931,7 @@ def main(argv=None) -> int:
             st = pal.style_of(name, list(_d["results"]))
             rank["rows"].append({
                 "fam": st["colour"], "family": st["label"], "marker": st["marker"],
-                "model": r["label"][:36], "key": name, "ceiling": "oracle" in name,
+                "model": r["label"][:36] + (f" · {status[name]}" if name in status else ""), "key": name, "ceiling": "oracle" in name,
                 "lrs": None if sc["lrs"] is None else
                        (f"{sc['lrs']}*" if sc.get("partial") else sc["lrs"]),
                 "s_decay": sc["decay"], "s_scale": sc["scale"], "s_response": sc["response"],
@@ -1978,10 +2017,14 @@ def main(argv=None) -> int:
         rank=json.dumps(rank),
         ver=a.chemiscope_version,
         summary=" · ".join(summary) + f" · {len(built.get('dimers', {}).get('models', []))} models · "
-               "one embedded dataset per set, reused by every view",
+               "one embedded dataset per set, reused by every view"
+               + ("".join(f"<br><b>{k}</b>: {v}" for k, v in sorted(status.items())) if status else ""),
         data="{" + ",".join(f'"{k}":"{v["blob"]}"' for k, v in built.items()) + "}",
         views=json.dumps(views),
     )
+    if a.title:
+        html = html.replace("<title>Long-range explorer</title>", f"<title>{a.title}</title>", 1)
+        html = html.replace("<b>Long-range explorer</b>", f"<b>{a.title}</b>", 1)
     out.write_text(html)
     print(f"[chemiscope] wrote {out}  ({out.stat().st_size / 1e6:.2f} MB, {len(views)} views)")
     if a.open:
