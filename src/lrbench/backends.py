@@ -256,7 +256,8 @@ class MlipcppCAPI(Backend):
         return _C()
 
     def info(self):
-        return dict(super().info(), lib=self.lib_path, device=self.device,
+        reg = {"gguf_registry": self.registry} if getattr(self, "registry", None) else {}
+        return dict(super().info(), **reg, lib=self.lib_path, device=self.device,
                     ragged=os.environ.get("MLIPCPP_RAGGED", ""),
                     precision="TF32 (MLIPCPP_TF32=1)" if self.tf32 else "fp32")
 
@@ -385,7 +386,13 @@ def make_backend(spec: str, device: str = "cpu", formal: bool = False, tf32: boo
     if spec.startswith("mlipcpp-capi:"):
         if formal:
             raise ValueError("the C API does not take formal charges; use the mlipcpp-eval path")
-        return MlipcppCAPI(spec[len("mlipcpp-capi:"):], mlipcpp_lib, device if device != "cpu" else "cpu", tf32)
+        path = spec[len("mlipcpp-capi:"):]
+        from .gguf_registry import capi_for  # a registered GGUF gets the C API library of its own build
+        reg = capi_for(path, mlipcpp_lib, device)
+        be = MlipcppCAPI(path, reg["lib"] if reg else mlipcpp_lib, device if device != "cpu" else "cpu", tf32)
+        if reg:
+            be.registry = reg["provenance"]
+        return be
     if spec.endswith(".pt"):
         if formal:
             raise ValueError("metatomic models get no formal charges here (--formal-charges none)")

@@ -77,3 +77,16 @@ def test_unregistered_gguf_is_left_alone(reg, tmp_path):
     p = tmp_path / "other.gguf"
     p.write_bytes(b"x")
     assert G.backend_for(str(p), None) is None
+
+
+def test_capi_library_of_the_build_is_chosen_and_checked(reg):
+    lib = reg["builds"] / "aaa1111-capi" / "lib"
+    lib.mkdir(parents=True)
+    (lib / "libmlipcpp_c.so").write_bytes(b"\0pet.plato_lr.lrc_qmodel pet.plato_lr.lrc_links\0")
+    (lib / "COMMIT").write_text("aaa1111\n")
+    from lrbench.models import resolve
+    assert resolve("mlipcpp-capi:m13") == "mlipcpp-capi:" + reg["model"]
+    c = G.capi_for(reg["model"], None)
+    assert c["lib"] == str(lib / "libmlipcpp_c.so") and c["provenance"]["binary_check"]["ok"]
+    with pytest.raises(ValueError, match="needs aaa1111"):
+        G.capi_for(reg["model"], str(reg["builds"] / "bbb2222/bin/mlipcpp-eval"))

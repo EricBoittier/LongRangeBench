@@ -120,6 +120,23 @@ def binary_path(e: dict, R: Optional[dict] = None, device: str = "cpu") -> str:
     return _expand(b.get("binary", base + "/bin/mlipcpp-eval"))
 
 
+def lib_path(e: dict, R: Optional[dict] = None, device: str = "cpu") -> str:
+    """``libmlipcpp_c.so`` of the entry's build (the C API: ``mlipcpp-capi:`` specs, MD in ``lrbench priors``), from
+    ``${LRBENCH_MLIPCPP_BUILDS}/<commit>[-cuda]-capi`` (``-DMLIPCPP_BUILD_LAMMPS=ON``) or the build's own dir."""
+    R = R or registry()
+    b = R["builds"].get(e["build"], {})
+    if b.get("lib"):
+        return _expand(b["lib"])
+    base = _expand("${LRBENCH_MLIPCPP_BUILDS}/" + e["build"])
+    dirs = ([base + "-cuda-capi", base + "-cuda"] if device == "cuda" else []) + [base + "-capi", base]
+    for d in dirs:
+        for sub in ("lib", "src", "bin", "."):
+            p = os.path.join(d, sub, "libmlipcpp_c.so")
+            if os.path.isfile(p):
+                return p
+    return os.path.join(dirs[0], "lib", "libmlipcpp_c.so")
+
+
 def resolve(name: str) -> Optional[str]:
     """Model path for a registered name, else None (lrbench.models.resolve falls through to its own names)."""
     e = lookup(name)
@@ -262,6 +279,23 @@ def backend_for(spec: str, binary: Optional[str], device: str = "cpu") -> Option
     prov = {k: e.get(k) for k in ("name", "title", "group", "seed", "build", "level", "released", "licence", "sha256")}
     prov.update(binary_check=chk, files=files)
     return {"binary": b, "provenance": prov, "level": e.get("level")}
+
+
+def capi_for(spec_path: str, lib: Optional[str], device: str = "cpu") -> Optional[dict]:
+    """``backend_for`` for the C API: the entry's ``libmlipcpp_c.so`` unless one was given, checked like a binary."""
+    e = entry_for_path(spec_path)
+    if e is None:
+        return None
+    L = lib or lib_path(e, device=device)
+    if not os.path.isfile(L):
+        raise FileNotFoundError(f"{e['name']}: libmlipcpp_c.so for build {e['build']} not found at {L}")
+    chk = check_binary(e, L, spec_path)
+    files = verify_files(e, spec_path, hashes=True)
+    if files["problems"] and os.environ.get(ENV_ALLOW) != "1":
+        raise ValueError(f"{e['name']}: " + "; ".join(files["problems"]))
+    prov = {k: e.get(k) for k in ("name", "title", "group", "seed", "build", "level", "released", "licence", "sha256")}
+    prov.update(binary_check=chk, files=files)
+    return {"lib": L, "provenance": prov}
 
 
 def entry_from_file(name: str, gguf: str, build: str, binary: str, **fields) -> dict:

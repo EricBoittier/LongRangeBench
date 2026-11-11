@@ -318,6 +318,10 @@ def lookup(name: str) -> Optional[NamedModel]:
 
 def resolve(spec: str) -> str:
     """Model spec for a name (unchanged if it is not a name: paths, ase:/oracle:/mlipcpp-capi: specs)."""
+    if spec and spec.startswith("mlipcpp-capi:") and not spec.endswith(".gguf"):  # mlipcpp-capi:<registered name>
+        from .gguf_registry import resolve as gguf_resolve
+        p = gguf_resolve(spec.split(":", 1)[1])
+        return "mlipcpp-capi:" + p if p else spec
     if not spec or spec.startswith(("ase:", "oracle:", "mlipcpp-capi:")) or spec.endswith((".gguf", ".pt")):
         return spec
     m = lookup(spec)
