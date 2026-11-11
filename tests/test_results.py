@@ -319,3 +319,47 @@ def test_coverage_flag_does_not_blame_a_model_for_a_set_with_no_energies():
 
     # a real shortfall is still called one
     assert "THIN COVERAGE" in flags(9, 33)
+
+
+def test_summary_leads_with_the_screens_caveat_while_no_row_is_a_claim():
+    """A table of numbers is read as a leaderboard whatever its footnotes say, so the caveat goes at the top.
+
+    It is also conditional: once four-seed rows exist the blanket warning would be false, and the header switches to
+    counting how many rows are still screens.
+    """
+    from lrbench.results import CLAIM_SEEDS, summary_md
+
+    def fake(tmp, evidences):
+        import json
+        import os
+        os.makedirs(os.path.join(tmp, "toy"), exist_ok=True)
+        json.dump({"toy": {"reference_level": ["L"], "licence": "CC0-1.0", "public": True, "description": "",
+                           "revisions": [{"jsonl_sha256": "a", "groups_sha256": "b", "n_records": 1,
+                                          "n_groups": 1, "date": "2026-01-01", "note": "initial"}]}},
+                  open(os.path.join(tmp, "sets.json"), "w"))
+        for i, ev in enumerate(evidences):
+            json.dump({"set": "toy", "model": f"m{i}", "label": f"m{i}", "model_level": "L",
+                       "reference_level": ["L"], "level_mismatch": False, "seeds": 1 if ev == "screen" else 4,
+                       "evidence": ev, "n_failed": 0, "n_scored": 10, "date": "2026-01-01",
+                       "code_commit": "abc1234", "lrbench_version": "0", "argv": [], "notes": [],
+                       "members": [], "metrics": [{"metric": "tail fraction", "value": "1.0"}],
+                       "schema": "lrbench-row/1",
+                       "data": {"jsonl_sha256": "a", "groups_sha256": "b", "n_records": 1, "n_groups": 1}},
+                      open(os.path.join(tmp, "toy", f"m{i}.json"), "w"))
+        return tmp
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as t:
+        md = summary_md(fake(t, ["screen", "screen"]))
+    assert "[!IMPORTANT]" in md and "screens, not a ranking" in md
+    assert "not a basis for ordering models" in md
+
+    with tempfile.TemporaryDirectory() as t:
+        md = summary_md(fake(t, ["screen", "claim"]))
+    assert "screens, not a ranking" not in md, "a blanket warning is false once a claim exists"
+    assert "1 of 2 rows are screens" in md
+
+    with tempfile.TemporaryDirectory() as t:
+        md = summary_md(fake(t, ["claim", "claim"]))
+    assert "[!IMPORTANT]" not in md, "nothing to warn about when every row is a claim"
+    assert str(CLAIM_SEEDS) in md

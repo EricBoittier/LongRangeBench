@@ -348,9 +348,20 @@ const PALETTES = {{
   sequential: ["cividis", "viridis", "magma", "plasma", "inferno"],
 }};
 const isCategorical = (ds, p) => !!ds.properties[p] && ds.properties[p].values.some(v => typeof v === "string");
+
+/* Numbers that are not magnitudes. Detecting a category by "are the values strings" catches `class` and misses
+   everything encoded as an integer: a fragment id is an identity, and a sequential ramp over it asserts that
+   fragment 3 is more of something than fragment 1. Likewise a *signed* quantity read as a magnitude loses the one
+   landmark that matters -- zero -- so a total charge and a Löwdin charge belong on a diverging scale with the
+   neutral at 0, not on a ramp that makes -1 and +1 the two ends of an ordering. */
+const IDENTITY_PROPS = ["fragment", "fragment id", "fragment_id"];
+const SIGNED_PROPS = ["total charge", "charge", "q_lowdin", "formal charge", "formal_charge"];
 function paletteKind(ds, prop) {{
+  const p = (prop || "").toLowerCase();
   if (isCategorical(ds, prop)) return "categorical";
-  return (prop || "").startsWith("err/") ? "diverging" : "sequential";
+  if (IDENTITY_PROPS.includes(p)) return "categorical";
+  if (p.startsWith("err/") || SIGNED_PROPS.includes(p)) return "diverging";
+  return "sequential";
 }}
 
 async function inflate(b64) {{
@@ -493,15 +504,29 @@ function cmrScale(stops) {{
   return stops.map((c, i) => [i / (stops.length - 1), c]);
 }}
 function applyRamp(st) {{
+  /* The ramp is a *layout* change, not a trace one. chemiscope's markers carry `marker.coloraxis`, and a trace
+     bound to a shared colour axis ignores its own `marker.colorscale` entirely -- Plotly reads
+     `layout.coloraxis.colorscale` instead. Setting the trace attribute therefore did nothing visible, which is why
+     the page still showed chemiscope's own red-white-blue. (It was worse than nothing: `restyle` reads an array as
+     one value *per trace*, so the list of stops was dealt out across the three traces and the first trace got the
+     single pair [0, "#720633"].) Verified against a live instance: layout.coloraxis.colorscale goes from
+     chemiscope's ramp to these stops. */
   try {{
     const kind = paletteKind(st.ds, st.viz.saveSettings().map.color.property);
     const stops = CMR[kind === "diverging" ? "signed" : kind === "sequential" ? "magnitude" : null];
-    if (!stops || !st.viz.map || !st.viz.map._restyle) return;
-    st.viz.map._restyle({{ "marker.colorscale": cmrScale(stops) }}, [0, 1]);
+    const bar = document.getElementById(st.id + "-bar");
+    if (!stops || !st.viz.map || !st.viz.map._relayout) {{
+      if (bar) bar.dataset.ramp = "none";
+      return;
+    }}
+    st.viz.map._relayout({{ "coloraxis.colorscale": cmrScale(stops) }});
     /* The signed ramp's neutral is a pale grey so that zero reads as neutral rather than as nothing -- but a pale
-       marker on a pale page still needs an edge to be seen at all. */
+       marker on a pale page still needs an edge to be seen at all. A scalar is unambiguous to restyle. */
     if (kind === "diverging")
       st.viz.map._restyle({{ "marker.line.width": 0.6, "marker.line.color": "#6e7073" }}, [0, 1]);
+    /* Recorded on the bar so that "did the ramp reach the plot?" is answerable from the DOM. chemiscope's map
+       needs a live browser, so this is the only honest check available to a headless one. */
+    if (bar) bar.dataset.ramp = kind;
   }} catch (e) {{ console.warn("ramp:", e); }}
 }}
 

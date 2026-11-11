@@ -20,6 +20,7 @@ import argparse
 import datetime
 import html
 import pathlib
+import re
 import subprocess
 
 import markdown
@@ -47,6 +48,11 @@ nav a {{ margin-right:1.2em; }}
 h1 {{ font-size:1.6em; margin-bottom:.2em; }}
 h2 {{ font-size:1.25em; margin-top:2em; border-bottom:1px solid var(--rule); padding-bottom:.2em; }}
 .table-wrap {{ overflow-x:auto; }}
+blockquote.callout {{ margin:1.4em 0; padding:.85em 1.1em; border-left:4px solid #b07c2a;
+  background:rgba(176,124,42,.09); border-radius:0 4px 4px 0; }}
+blockquote.callout p {{ margin:0; }}
+blockquote.callout.important {{ border-left-color:#b07c2a; }}
+blockquote.callout.note {{ border-left-color:#6e7073; background:rgba(110,112,115,.08); }}
 table {{ border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; margin:.8em 0; }}
 th, td {{ padding:4px 10px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top; }}
 th {{ font-weight:600; border-bottom:2px solid var(--fg); }}
@@ -86,6 +92,11 @@ def main() -> None:
     src = "\n".join(lines).replace("](../", f"]({REPO}/blob/main/")
     body = markdown.markdown(src, extensions=["tables", "fenced_code"])
     body = body.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
+    # GitHub renders "> [!IMPORTANT]" as a callout; python-markdown does not, and would publish the literal
+    # "[!IMPORTANT]" inside a plain blockquote. The caveat that these rows are screens rather than a ranking is the
+    # one thing on this page that must not look like an aside, so it is given the callout it is written as.
+    body = re.sub(r'<blockquote>\s*<p>\s*\[!(\w+)\]\s*(?:<br\s*/?>)?\s*',
+                  lambda m: f'<blockquote class="callout {m.group(1).lower()}"><p>', body)
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=HERE, capture_output=True, text=True,
                              check=True).stdout.strip()
