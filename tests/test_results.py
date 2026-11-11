@@ -257,3 +257,30 @@ def test_partial_failures_reach_the_row(datadir, tmp_path, monkeypatch):
         assert row["n_failed"] > 0, kind
         assert any("fail" in n for n in row["notes"]), kind
         assert RS.validate_row(row, root, private=True) == [], kind
+def test_a_thin_row_says_so_in_the_table():
+    """"33 failed" reads as a footnote. "9 of ~42 scored (21%)" reads as what it is.
+
+    PET-SPICE-S on the trimers is the real case: 9 groups scored, 33 failed, because the model does not support
+    several elements and whole systems drop out. The old flag reported the failure count alone, which does not tell
+    a reader that the metric beside it was computed on a fifth of the task -- and these failures are never a random
+    sample, so the surviving fifth is not a smaller version of the whole.
+    """
+    from lrbench.results import MIN_COVERAGE, _flags
+
+    def flags(n_scored, n_failed, mismatch=False):
+        return _flags({"level_mismatch": mismatch, "model_level": "L", "n_failed": n_failed,
+                       "n_scored": n_scored, "evidence": "screen", "seeds": 1, "data": None}, None)
+
+    thin = flags(9, 33)
+    assert "THIN COVERAGE" in thin and "9 of ~42" in thin and "21%" in thin
+
+    # complete coverage says nothing about failures at all
+    assert "failed" not in flags(1254, 0) and "THIN" not in flags(1254, 0)
+
+    # a few failures are reported with their coverage, but not as a warning
+    ok = flags(95, 5)
+    assert "THIN" not in ok and "95%" in ok and "5 failed" in ok
+
+    # the threshold is the documented one, tested at the boundary rather than assumed
+    assert "THIN" not in flags(int(MIN_COVERAGE * 1000), 1000 - int(MIN_COVERAGE * 1000))
+    assert "THIN" in flags(int(MIN_COVERAGE * 1000) - 20, 1000 - int(MIN_COVERAGE * 1000) + 20)

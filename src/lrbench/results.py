@@ -32,6 +32,16 @@ ROW_KEYS = {"schema", "set", "model", "label", "members", "model_level", "refere
             "seeds", "evidence", "n_failed", "n_scored", "date", "code_commit", "lrbench_version", "data", "argv",
             "metrics", "notes"}
 CARD_KEYS = {"reference_level", "licence", "public", "description", "revisions"}
+#: Below this fraction scored, a row's numbers describe too little of the set to quote, and the table says so.
+#:
+#: The fraction is ``n_scored / (n_scored + n_failed)``. It is an estimate, not an identity: ``n_failed`` is the
+#: largest failure count any block of the set reports and can count predictions where ``n_scored`` counts groups.
+#: It is still the right order of magnitude, and the order of magnitude is the point -- PET-SPICE-S on the trimers
+#: scored 9 of some 42, which the old flag reported only as "33 failed", a phrasing that reads as a footnote rather
+#: than as what it is: a number computed on a fifth of the task. Coverage this low is almost never a random sample
+#: either; these failures are whole systems dropped for an unsupported element.
+MIN_COVERAGE = 0.75
+
 #: seeds needed before a row is a claim rather than a screen (the house rule: four seeds make a claim)
 CLAIM_SEEDS = 4
 BEGIN, END = "<!-- BEGIN lrbench results render: {} -->", "<!-- END lrbench results render: {} -->"
@@ -362,7 +372,12 @@ def _flags(row: dict, card: dict) -> str:
     if row["level_mismatch"]:
         f.append(f"LEVEL MISMATCH (model {row['model_level']})")
     if row["n_failed"]:
-        f.append(f"{row['n_failed']} failed")
+        attempted = row["n_failed"] + (row["n_scored"] or 0)
+        cov = (row["n_scored"] or 0) / attempted if attempted else 0.0
+        if cov < MIN_COVERAGE:
+            f.append(f"THIN COVERAGE: {row['n_scored']} of ~{attempted} scored ({cov:.0%})")
+        else:
+            f.append(f"{row['n_failed']} failed ({cov:.0%} scored)")
     f.append(f"{row['evidence']} ({row['seeds']} seed{'s' if row['seeds'] != 1 else ''})")
     if card and not _same_data(card["revisions"][-1], row["data"]):
         f.append("STALE: scored on an earlier revision")
