@@ -210,10 +210,20 @@ def parity(J: dict, setname: str, groups: Optional[list] = None, kind: str = "E_
 
 
 def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200,
-            base: Optional[str] = None) -> dict:
-    """Every result in ``runs/*.json`` and every prior suite in ``runs/priors/*.json``, distilled."""
+            base: Optional[str] = None, data: Optional[str] = None) -> dict:
+    """Every result in ``runs/*.json`` and every prior suite in ``runs/priors/*.json``, distilled.
+
+    ``data`` (default ``$LRBENCH_DATA``, else ``<runs>/../lr-sets``) is where the per-point tables of the
+    multivalent and charge-transfer panels (:mod:`lrbench.ionct`) read the sets from. Anything under
+    ``$LRBENCH_PRIVATE_IONS`` -- the internal-only sets -- is refused there, so it is never frozen into a site.
+    """
+    from . import ionct
+
     results, priors = {}, {}
     base = base or os.path.dirname(os.path.abspath(runs))   # where the evals ran, for the recorded data paths
+    data = data or os.environ.get("LRBENCH_DATA") or os.path.join(base, "lr-sets")
+    private = os.environ.get("LRBENCH_PRIVATE_IONS") or None
+    cache: dict = {}
     for p in sorted(glob.glob(os.path.join(runs, "*.json"))):
         try:
             with open(p) as f:
@@ -223,7 +233,15 @@ def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200
         if "sets" not in J:
             continue
         name = os.path.basename(p)[:-5]
+        # a set scored on internal-only data (anything under $LRBENCH_PRIVATE_IONS) is dropped whole: not its
+        # summary numbers, not its DFT class means, not its parity points -- nothing of it may reach a frozen site
+        hidden = ionct.private_sets(J, private, base)
+        if hidden:
+            J = dict(J, sets={k: v for k, v in (J.get("sets") or {}).items() if k not in hidden},
+                     data={k: v for k, v in (J.get("data") or {}).items() if k not in hidden})
         d = distil(name, J)
+        if hidden:
+            d["private_sets_dropped"] = len(hidden)
         if with_points:
             for s in d["sets"]:
                 d["sets"][s]["scans"] = scans(J, s)
@@ -232,6 +250,7 @@ def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200
                     step = len(pts) / max_points
                     pts = [pts[int(i * step)] for i in range(max_points)]
                 d["sets"][s]["parity"] = pts
+            ionct.attach(d, J, data=data, base=base, private=private, cache=cache)
         results[name] = d
     # `lrbench priors --out` writes wherever it is told, and the docs show a bare file name, so look in the
     # conventional subdirectory *and* alongside the eval results rather than silently finding nothing

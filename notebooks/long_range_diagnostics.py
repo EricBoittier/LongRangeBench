@@ -352,6 +352,8 @@ def _(P, R, SOURCE, mo):
             - [The priors](#tests)
             - [Structure by structure](#explore)
             - [Charges](#atoms)
+            - [Multivalent ions](#multivalent)
+            - [Charge transfer](#ct)
             - [Physical priors](#priors)
             - [Caveats](#caveats)
             """
@@ -674,6 +676,569 @@ model has to reproduce.""")]
         + [x for v in _atomic for x in (mo.md(f"**{v['title']}** — {v['prose']}"), chemiscope_view(v))]
         if _atomic else [mo.md('<a id="atoms"></a>\n## Atoms and charges\n\n_no atomic dataset in this build_')]
     )
+    return
+
+
+@app.cell
+def _(DIVER, FAINT, GREY, INK, KE, R, VERM, frame, heading, np, pd, plt, svg):
+    # The multivalent-ion and charge-transfer panels read per-point tables (`sets.<set>.ionct`, built from the saved
+    # predictions and the set's own records), one row per E_int of a charged pair. A structure that two sets both
+    # list (the emulation set re-lists dimer points) is one point, taken from the first set in this order; levels of
+    # theory stay apart because the level is part of the key.
+    import re as _re
+
+    from matplotlib.colors import LinearSegmentedColormap as _LSC
+    from matplotlib.colors import TwoSlopeNorm as _TSN
+
+    TAB10 = ["#4E79A7", "#F28E2B", "#59A14F", "#B07AA1", "#76B7B2", "#EDC948", "#9C755F", "#FF9DA7", "#BAB0AC",
+             "#E15759"]
+    VIK = _LSC.from_list("vik", DIVER)
+    ION_SET_ORDER = ["dimers", "dimers_q2", "ext_biodimers_wb97mv", "pbe0mbd_subset", "ext_gscdb_nc", "ext_ncia",
+                     "emulation"]
+    KIND_MARK = {"ion pair": "o", "like charge": "s", "ion–neutral": "^"}
+
+    def ion_kind(qa, qb):
+        return "ion pair" if qa * qb < 0 else "like charge" if qa * qb > 0 else "ion–neutral"
+
+    def ion_category(row):
+        """The charge-magnitude column a point is scored in. Li⁺···Na⁺ is a dication of two monovalent ions and is
+        kept apart from both the |q| = 1 and the |q| = 2 columns."""
+        if str(row["base"]).startswith("Li_Na"):
+            return "Li+ ··· Na+"
+        return f"|q|={int(row['qmax'])} {row['kind']}"
+
+    def ion_frame(results):
+        rows = []
+        for _name, _r in results.items():
+            for _S in (_r.get("sets") or {}).values():
+                _t = _S.get("ionct")
+                if not _t:
+                    continue
+                for _row in _t["rows"]:
+                    _d = dict(zip(_t["cols"], _row))
+                    _d.update(mkey=_name, label=_r["label"][:28], has_lr=bool(_r.get("has_lr")),
+                              charges=bool(_r.get("charges")), mlevel=_r.get("level", "?"))
+                    rows.append(_d)
+        if not rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(rows)
+        df["kind"] = [ion_kind(a, b) for a, b in zip(df["qA"], df["qB"])]
+        df["qmax"] = np.maximum(df["qA"].abs(), df["qB"].abs())
+        df["base"] = [_re.sub(r":(o\d+|full|orca)", "", p) for p in df["pair"]]
+        df["scan"] = [s + "|" + (_re.sub(r"[:_]d\d+(\.\d+)?", "", i) if _re.search(r"[:_]d\d", i) else p)
+                      for s, i, p in zip(df["set"], df["id"], df["pair"])]
+        df["cat"] = df.apply(ion_category, axis=1)
+        df["err"] = df["model"] - df["ref"]
+        df["nct"] = [len(c) > 0 for c in df["ct"]]
+        _prio = {s: i for i, s in enumerate(ION_SET_ORDER)}
+        df["_p"] = [_prio.get(s, 50) for s in df["set"]]
+        return (df.sort_values(["_p", "d"]).drop_duplicates(["mkey", "geo", "level"]).drop(columns="_p")
+                .reset_index(drop=True))
+
+    ION = ion_frame(R)
+    ION_REF = (ION.drop_duplicates(["geo", "level"]).reset_index(drop=True) if not ION.empty else ION)
+
+    def logx(ax, d):
+        """Log distance axis with plain-number ticks (3, 5, 10, 20 Å…), not 3 × 10⁰."""
+        ax.set_xscale("log")
+        t = [x for x in (2, 3, 5, 8, 10, 15, 20, 30, 50, 100) if d.min() * 0.95 <= x <= d.max() * 1.05]
+        ax.set_xticks(t, [f"{x:g}" for x in t])
+        ax.xaxis.set_minor_locator(plt.NullLocator())
+
+    def model_styles(df):
+        """Model identity by hue (Tableau 10), the long-range declaration by line style: solid has an explicit term."""
+        keys = list(dict.fromkeys(df.sort_values(["has_lr", "label"], ascending=[False, True])["mkey"]))
+        return {k: (TAB10[i % len(TAB10)], "-" if df.loc[df["mkey"] == k, "has_lr"].iloc[0] else (0, (4, 2)))
+                for i, k in enumerate(keys)}
+
+    def _mark_ref(ax, pts, x, y, size=26):
+        """Reference points: marker = class, hollow = DFT-pathology-tagged, × = never scored, vermillion ring = CT
+        label. Nothing flagged is dropped."""
+        for _, p in pts.iterrows():
+            m = "x" if p["path"] == 2 else KIND_MARK.get(p["kind"], "D")
+            hollow = p["path"] == 1
+            if m == "x":
+                ax.scatter([p[x]], [p[y]], marker="x", s=size, zorder=5, linewidths=0.9, c=GREY)
+            else:
+                ax.scatter([p[x]], [p[y]], marker=m, s=size, zorder=5, linewidths=0.9,
+                           facecolors="none" if hollow else INK, edgecolors=INK)
+            if p["nct"]:
+                ax.scatter([p[x]], [p[y]], marker="o", s=size * 3.2, facecolors="none", edgecolors=VERM,
+                           linewidths=1.0, zorder=4)
+
+    def mv_curves(df, title, subtitle=None, max_panels=12):
+        """One panel per multivalent pair: DFT points (marker = class, flags kept), each model as a line, and the
+        bare Coulomb k q_A q_B / r (centroid distance) where both fragments are charged."""
+        if df.empty:
+            return None
+        ref = df.drop_duplicates(["geo", "level"])
+        sty = model_styles(df[df["model"].notna()]) if df["model"].notna().any() else {}
+        bases = list(dict.fromkeys(ref.sort_values(["qmax", "base"], ascending=[False, True])["base"]))[:max_panels]
+        ncol = min(3, len(bases))
+        nrow = int(np.ceil(len(bases) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(3.1 * ncol, 2.5 * nrow + 0.6), squeeze=False)
+        for ax, b in zip(axes.ravel(), bases):
+            pts = ref[ref["base"] == b].sort_values("d")
+            for sc, g in df[(df["base"] == b) & df["model"].notna()].groupby(["mkey", "scan"]):
+                g = g.sort_values("d")
+                ax.plot(g["d"], g["model"], color=sty[sc[0]][0], ls=sty[sc[0]][1], lw=1.3, zorder=3)
+            for _sc, g in pts[pts["path"] < 2].groupby("scan"):
+                ax.plot(g["d"], g["ref"], color=INK, lw=0.6, alpha=0.5, zorder=2)
+            # a never-scored point (the SCF landed in the wrong state) can sit tens of eV away: it is drawn at the
+            # panel edge rather than allowed to set the scale for everything else
+            _ok = pd.concat([pts.loc[pts["path"] < 2, "ref"],
+                             df.loc[(df["base"] == b) & df["model"].notna(), "model"]])
+            if len(_ok):
+                _lo, _hi = _ok.min(), _ok.max()
+                _pad = 0.08 * (_hi - _lo or 1.0)
+                ax.set_ylim(_lo - _pad, _hi + _pad)
+                pts = pts.assign(ref=pts["ref"].clip(_lo - 0.5 * _pad, _hi + 0.5 * _pad))
+            _mark_ref(ax, pts, "d", "ref", size=18)
+            ii = pts[(pts["qA"] * pts["qB"] != 0) & pts["r"].notna()]
+            if not ii.empty:
+                rr = np.linspace(ii["r"].min(), ii["r"].max(), 100)
+                ax.plot(rr - (ii["r"] - ii["d"]).median(), 1e3 * KE * ii["qA"].iloc[0] * ii["qB"].iloc[0] / rr,
+                        color=GREY, lw=0.9, ls=(0, (1, 2)), zorder=1)
+            ax.axhline(0, color=FAINT, lw=0.8, zorder=0)
+            if pts["d"].max() / max(pts["d"].min(), 1e-3) > 6:
+                logx(ax, pts["d"])
+            lv = pts["level"].iloc[0]
+            ax.annotate(f"{b}  ({int(pts['qA'].iloc[0]):+d}, {int(pts['qB'].iloc[0]):+d})"
+                        + ("" if lv.startswith("wB97M-V") else f"\n{lv[:30]}"),
+                        xy=(0, 1), xycoords="axes fraction", xytext=(2, 2), textcoords="offset points",
+                        ha="left", va="bottom", fontsize=9, color=INK)
+            frame(ax)
+            ax.tick_params(labelsize=8.5)
+        for ax in axes.ravel()[len(bases):]:
+            ax.set_visible(False)
+        for ax in axes[-1]:
+            ax.set_xlabel("closest contact d (Å)", fontsize=9.5)
+        for ax in axes[:, 0]:
+            ax.set_ylabel("E_int (meV)", fontsize=9.5)
+        hs = [plt.Line2D([], [], color=c, ls=ls, lw=1.4, label=df.loc[df["mkey"] == k, "label"].iloc[0])
+              for k, (c, ls) in sty.items()]
+        hs += [plt.Line2D([], [], color=GREY, ls=(0, (1, 2)), label="k q_A q_B / r"),
+               plt.Line2D([], [], marker="o", ls="", color=INK, label="DFT · ion pair"),
+               plt.Line2D([], [], marker="^", ls="", color=INK, label="DFT · ion–neutral"),
+               plt.Line2D([], [], marker="s", ls="", color=INK, label="DFT · like charge"),
+               plt.Line2D([], [], marker="^", ls="", mfc="none", color=INK, label="DFT pathology (not scored)"),
+               plt.Line2D([], [], marker="x", ls="", color=GREY, label="wrong SCF state (at the edge)"),
+               plt.Line2D([], [], marker="o", ls="", mfc="none", ms=9, color=VERM, label="CT-labelled")]
+        fig.legend(handles=hs, loc="lower center", ncol=4, fontsize=8.5, bbox_to_anchor=(0.5, -0.02 - 0.03 * (
+            len(hs) > 8)), handletextpad=0.4, columnspacing=1.2)
+        fig.suptitle(title, x=0.012, ha="left", fontsize=12.5, color=INK)
+        if subtitle:
+            fig.text(0.012, 1 - 0.55 / fig.get_figheight(), subtitle, ha="left", fontsize=9.5, color=GREY)
+        fig.tight_layout(rect=(0, 0.06 + 0.025 * (len(hs) // 4), 1, 1 - 0.75 / fig.get_figheight()))
+        return svg(fig)
+
+    def coulomb_parity(df, title, subtitle=None, dmin=5.0):
+        """E_int divided by the bare Coulomb k q_A q_B / r (centroid distance) against separation, for every pair with
+        two charged fragments: 1 is a bare Coulomb tail, 0 is no tail. The reference first, then one panel per model
+        and set, each point coloured by its signed energy error on a diverging palette."""
+        if df.empty:
+            return None
+        ii = df[(df["qA"] * df["qB"] != 0) & df["r"].notna() & (df["d"] >= dmin)].copy()
+        if ii.empty:
+            return None
+        ii["coul"] = 1e3 * KE * ii["qA"] * ii["qB"] / ii["r"]
+        ii["y_ref"] = ii["ref"] / ii["coul"]
+        ii["y_mod"] = ii["model"] / ii["coul"]
+        ii["big"] = (ii["qA"] * ii["qB"]).abs() >= 2
+        ref = ii.drop_duplicates(["geo", "level"])
+        mods = [k for k in dict.fromkeys(ii.sort_values("label")["mkey"]) if ii.loc[ii["mkey"] == k, "model"].notna().any()]
+        panels = [("DFT reference", None)] + [(ii.loc[ii["mkey"] == k, "label"].iloc[0], k) for k in mods]
+        ncol = min(4, len(panels))
+        nrow = int(np.ceil(len(panels) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(2.55 * ncol, 2.3 * nrow + 0.9), squeeze=False,
+                                 sharex=True, sharey=True)
+        lim = float(np.nanpercentile(np.abs(ii["err"].dropna()), 95)) if ii["err"].notna().any() else 1.0
+        norm = _TSN(0.0, -max(lim, 1.0), max(lim, 1.0))
+        for ax, (lab, k) in zip(axes.ravel(), panels):
+            ax.axhline(1.0, color=INK, lw=0.8, zorder=1)
+            ax.axhline(0.0, color=GREY, lw=0.7, ls=(0, (1, 2.5)), zorder=1)
+            if k is None:
+                for kind, g in ref.groupby("kind"):
+                    ax.scatter(g["d"], g["y_ref"].clip(-1, 3), marker=KIND_MARK.get(kind, "D"),
+                               s=np.where(g["big"], 26, 9), c=np.where(g["nct"], VERM, np.where(g["big"], INK, GREY)),
+                               linewidths=0, zorder=3)
+                for b, g in ref[ref["big"]].groupby("base"):
+                    p = g.sort_values("d").iloc[-1]
+                    ax.annotate(b.replace("_", "–"), xy=(p["d"], min(max(p["y_ref"], -1), 3)), xytext=(-3, -10),
+                                textcoords="offset points", ha="right", fontsize=8, color=INK)
+            else:
+                g = ii[(ii["mkey"] == k) & ii["model"].notna()]
+                for kind, gg in g.groupby("kind"):
+                    ax.scatter(gg["d"], gg["y_mod"].clip(-1, 3), marker=KIND_MARK.get(kind, "D"),
+                               s=np.where(gg["big"], 26, 11), c=gg["err"], cmap=VIK, norm=norm, linewidths=0.2,
+                               edgecolors=GREY, zorder=3)
+            ax.set_ylim(-1.15, 3.15)
+            ax.annotate(lab, xy=(0, 1), xycoords="axes fraction", xytext=(2, 2), textcoords="offset points",
+                        ha="left", va="bottom", fontsize=9, color=INK)
+            frame(ax)
+            ax.tick_params(labelsize=8)
+        logx(axes[0, 0], ii["d"])
+        for ax in axes.ravel()[len(panels):]:
+            ax.set_visible(False)
+        for ax in axes[-1]:
+            ax.set_xlabel("closest contact d (Å)", fontsize=9.5)
+        for ax in axes[:, 0]:
+            ax.set_ylabel("E_int / (k q_A q_B / r)", fontsize=9.5)
+        fig.subplots_adjust(top=1 - 1.0 / fig.get_figheight(), hspace=0.35, right=0.88 if len(panels) > 1 else 0.97)
+        if len(panels) > 1:
+            sm = plt.cm.ScalarMappable(norm=norm, cmap=VIK)
+            cb = fig.colorbar(sm, cax=fig.add_axes((0.91, 0.25, 0.015, 0.5)))
+            cb.set_label("model − DFT (meV)", fontsize=9)
+            cb.outline.set_visible(False)
+        fig.suptitle(title, x=0.012, ha="left", fontsize=12.5, color=INK)
+        if subtitle:
+            fig.text(0.012, 1 - 0.55 / fig.get_figheight(), subtitle, ha="left", fontsize=9.5, color=GREY)
+        return svg(fig)
+
+    def signed_matrix(rows, cols, cells, title, subtitle=None):
+        """Model × column, signed median error on a diverging palette centred on zero, the value and n printed in
+        every cell, † where the model's training level is not the reference level."""
+        if not rows or not cols:
+            return None
+        M = np.full((len(rows), len(cols)), np.nan)
+        for (i, r) in enumerate(rows):
+            for (j, c) in enumerate(cols):
+                v = cells.get((r, c))
+                if v is not None and v[0] is not None:
+                    M[i, j] = v[0]
+        lim = np.nanpercentile(np.abs(M), 90) if np.isfinite(M).any() else 1.0
+        norm = _TSN(0.0, -max(lim, 1.0), max(lim, 1.0))
+        fig, ax = plt.subplots(figsize=(1.25 * len(cols) + 3.0, 0.46 * len(rows) + 2.0))
+        ax.imshow(np.where(np.isfinite(M), M, 0.0), cmap=VIK, norm=norm, aspect="auto")
+        for i, r in enumerate(rows):
+            for j, c in enumerate(cols):
+                v = cells.get((r, c))
+                if v is None or v[0] is None:
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color="white", zorder=2))
+                    ax.text(j, i, "·", ha="center", va="center", color=GREY, fontsize=11, zorder=3)
+                    continue
+                dark = abs(norm(v[0]) - 0.5) > 0.33
+                ax.text(j, i, f"{v[0]:+.0f}{' †' if v[2] else ''}\nn={v[1]}", ha="center", va="center",
+                        fontsize=8.2, color="white" if dark else INK, zorder=3)
+        ax.set_xticks(range(len(cols)), [c.replace(" ", "\n", 1) for c in cols], fontsize=8.5)
+        ax.set_yticks(range(len(rows)), rows, fontsize=9.5)
+        ax.tick_params(length=0)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        heading(ax, title, subtitle)
+        fig.tight_layout()
+        return svg(fig)
+    return ION, ION_REF, KIND_MARK, VIK, coulomb_parity, ion_frame, logx, model_styles, mv_curves, signed_matrix
+
+
+@app.cell
+def _(ION, ION_REF, coulomb_parity, mo, mv_curves, np, pd, signed_matrix):
+    def _mv(df):
+        return df[(df["qmax"] >= 2) | df["base"].str.startswith("Li_Na")] if not df.empty else df
+
+    _MV = _mv(ION)
+    _ref = _mv(ION_REF)
+    if _ref.empty:
+        _inv = mo.md("_No multivalent points in this copy: it needs an eval of a set that has them, with "
+                     "`--save-predictions`, and the set's files in the data directory._")
+    else:
+        _inv = mo.ui.table(pd.DataFrame([{
+            "set": s, "pair": b, "charges": f"{int(g['qA'].iloc[0]):+d} / {int(g['qB'].iloc[0]):+d}",
+            "reference": g["level"].iloc[0][:26], "points": len(g), "d (Å)": f"{g['d'].min():g}–{g['d'].max():g}",
+            "≥ 8 Å": int((g["d"] >= 8).sum()), "CT-labelled": int(g["nct"].sum()),
+            "DFT pathology": int((g["path"] > 0).sum())}
+            for (s, b), g in _ref.groupby(["set", "base"])]), selection=None, page_size=20)
+
+    # errors by charge magnitude: every charged pair, so |q| = 2 is read against the |q| = 1 columns beside it.
+    # Scored points only: CT-labelled and pathology-tagged points are in the curves above, not in a median.
+    _cells, _cols = {}, []
+    _sc = ION[ION["phys"] & ION["model"].notna()] if not ION.empty else ION
+    if not _sc.empty:
+        _sc = _sc.assign(row=_sc["label"] + " · " + _sc["set"])
+    _rows = list(dict.fromkeys(_sc.sort_values(["has_lr", "label", "set"], ascending=[False, True, True])["row"])) \
+        if not _sc.empty else []
+    _mats = []
+    for _band, _sel in (("d < 8 Å", lambda d: d < 8), ("d ≥ 8 Å", lambda d: d >= 8)):
+        _cells, _cols = {}, []
+        if not _sc.empty:
+            _b = _sc[_sel(_sc["d"])]
+            for (_lab, _cat, _lv), _g in _b.groupby(["row", "cat", "level"]):
+                _col = _cat + ("" if _lv.startswith("wB97M-V") else f" [{_lv.split('/')[0][:12]}]")
+                _cols.append(_col)
+                _cells[(_lab, _col)] = (float(np.median(_g["err"])), len(_g),
+                                        bool(_g["mlevel"].iloc[0] != _lv))
+            _cols = sorted(set(_cols), key=lambda c: (c.startswith("Li"), c))
+        _mats.append(signed_matrix(_rows, _cols, _cells, f"Median signed error by charge magnitude, {_band}",
+                                   "model − reference (meV); blue too attractive, red too repulsive")
+                     or mo.md(f"_no scored points at {_band}_"))
+
+    _n_ct = int(_ref["nct"].sum()) if not _ref.empty else 0
+    _n_path = int((_ref["path"] > 0).sum()) if not _ref.empty else 0
+    mo.vstack([
+        mo.md(r"""<a id="multivalent"></a>
+## Multivalent ions
+
+$$E_{\rm int}(r) \to \frac{k\,q_Aq_B}{r}\ \ \text{(ion–ion)}, \qquad
+E_{\rm int}(r) \to -\frac{k\,q\,\mu\cos\theta}{r^2} - \frac{k\,\alpha\,q^2}{2r^4}\ \ \text{(ion–neutral)}$$
+
+Every long-range term grows with the charge: the ion–ion tail with $q_Aq_B$, induction with $q^2$. A model that
+learned the tail on monovalent ions and has no explicit electrostatics misses 4× as much physics on Mg²⁺·H₂O, and
+a model that does carry charges has to put +2 on the cation rather than spreading it over the pair. Multiply charged
+fragments are also where the reference itself is least reliable: Mg²⁺ and Ca²⁺ next to water drift into charge-
+transfer states at long range, and isolated SO₄²⁻ is unbound in the basis. Those points are drawn, labelled, and
+left out of every median."""),
+        _inv,
+        mv_curves(_MV, "Interaction energy against separation",
+                  f"{_ref['base'].nunique() if not _ref.empty else 0} pairs with |q| ≥ 2 or the Li⁺···Na⁺ "
+                  f"dication · {_n_ct} CT-labelled and {_n_path} pathology-tagged reference points, all shown")
+        or mo.md(""),
+        coulomb_parity(ION, "The tail against k q_A q_B / r",
+                       "d ≥ 5 Å · 1 = bare Coulomb, 0 = no tail · large: |q_A q_B| ≥ 2 · vermillion: CT-labelled "
+                       "· clipped to [−1, 3]") or mo.md(""),
+        *_mats,
+        mo.md("A row is one model on one set, because two models scored on different sets are not a comparison. "
+              "Columns are never pooled across reference levels: a set labelled at another level (CCSD(T) for the "
+              "NCI Atlas and GSCDB anions) gets its own column, and † marks a model trained at a level other than "
+              "the column's, so that cell is an end-to-end error, not the model's."),
+    ])
+    return
+
+
+@app.cell
+def _(mo):
+    _default = ""
+    # --- BEGIN LIVE ONLY ---
+    import os as _os
+
+    _default = _os.environ.get("LRBENCH_PRIVATE_IONS", "")
+    # --- END LIVE ONLY ---
+    priv_path = mo.ui.text(value=_default, full_width=True,
+                           label="internal multivalent / W18 sets: local directory (read here, never embedded)")
+    return (priv_path,)
+
+
+@app.cell
+def _(EMBEDDED, ion_frame, mo, mv_curves, priv_path):
+    # Internal-only data: read live from a local directory the user names, never from the notebook's own data and
+    # never written back into it. A frozen or exported copy drops this block entirely.
+    PRIV, PRIV_NOTE = {}, "Internal-only sets are never part of an exported notebook."
+    # --- BEGIN LIVE ONLY ---
+    if not EMBEDDED and priv_path.value.strip():
+        import importlib as _il
+        import os as _os
+
+        if _os.path.isdir(priv_path.value.strip()):
+            try:
+                PRIV = _il.import_module("lrbench.ionct").private_points(priv_path.value.strip())
+                PRIV_NOTE = (f"{len(PRIV.get('sets', []))} internal set(s) read from the local path, with model "
+                             f"predictions from its own `runs/` ({len(PRIV.get('models', {}))} result(s)). Keep "
+                             "results scored on these sets there, not in the public run directory.")
+            except Exception as _e:
+                PRIV_NOTE = f"could not read the internal sets ({type(_e).__name__})."
+        else:
+            PRIV_NOTE = "the internal-set path is not a directory here."
+    elif not EMBEDDED:
+        PRIV_NOTE = ("No internal sets loaded. Set `$LRBENCH_PRIVATE_IONS` or type a local directory above to see "
+                     "them; the panel above shows the public subset only.")
+    # --- END LIVE ONLY ---
+    _out = [mo.md("### Internal multivalent and W18 sets"), mo.callout(mo.md(PRIV_NOTE), kind="neutral")]
+    if PRIV.get("sets"):
+        # the reference curves alone first (model None everywhere), then every result scored on these sets
+        _res = {"(reference)": {"label": "(reference)", "level": "?", "has_lr": False, "charges": False,
+                                "sets": {s: {"ionct": {"cols": PRIV["cols"], "rows": r}} for s, r in PRIV["ref"].items()}}}
+        for _lab, _bys in PRIV["models"].items():
+            _res[_lab] = {"label": _lab, "level": "?", "has_lr": True, "charges": False,
+                          "sets": {s: {"ionct": {"cols": PRIV["cols"], "rows": r}} for s, r in _bys.items()}}
+        _out.append(mv_curves(ion_frame(_res), "Internal sets: interaction energy against separation",
+                              "read from the local path; not embedded, not published") or mo.md(""))
+    mo.vstack([priv_path] + _out)
+    return
+
+
+@app.cell
+def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, R, VERM, VIK, frame, heading, logx, mo, np, pd, plt, svg):
+    _FRAC = 0.02      # the dataset's label rule: a fragment within 0.02 e of its formal charge is integer-like
+    _FLOOR = 1e-4     # Löwdin sums are stored to 4 decimals; anything smaller is drawn on the floor
+
+    def _dq(df, a="lwA", b="lwB"):
+        return np.maximum((df[a] - df["qA"]).abs(), (df[b] - df["qB"]).abs())
+
+    def ct_figure(ref):
+        """DFT Löwdin charge moved between the fragments against separation, every charged pair with reference
+        charges; CT-labelled points ringed and named, nothing dropped."""
+        p = ref[ref["lwA"].notna()].copy()
+        if p.empty:
+            return None, ""
+        p["dq"] = _dq(p).clip(lower=_FLOOR)
+        fig, ax = plt.subplots(figsize=(7.6, 3.9))
+        for kind, g in p[~p["nct"]].groupby("kind"):
+            ax.scatter(g["d"], g["dq"], marker=KIND_MARK.get(kind, "D"), s=10, c=GREY,
+                       linewidths=0, alpha=0.7, zorder=2, label=f"{kind}")
+        ct = p[p["nct"]]
+        for kind, g in ct.groupby("kind"):
+            ax.scatter(g["d"], g["dq"], marker=KIND_MARK.get(kind, "D"), s=22, c=VERM,
+                       linewidths=0, zorder=3)
+        _seen = {}
+        for b, g in ct[ct["dq"] > _FRAC].groupby("base"):
+            if b.startswith("bd"):
+                continue
+            q = g.sort_values("dq").iloc[-1]
+            _k = (round(np.log10(q["d"]), 1), round(np.log10(q["dq"]), 0))
+            _seen[_k] = _seen.get(_k, -1) + 1
+            ax.annotate(b.replace("_", "–"), xy=(q["d"], q["dq"]), xytext=(4, 2 - 9 * _seen[_k]),
+                        textcoords="offset points", fontsize=7.8, color=VERM)
+        ax.axhline(_FRAC, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        ax.annotate("0.02 e label rule", xy=(p["d"].max(), _FRAC), xytext=(-2, 3), textcoords="offset points",
+                    ha="right", fontsize=8.5, color=GREY, style="italic")
+        ax.axvline(9, color=FAINT, lw=1.0, zorder=0)
+        ax.set_yscale("log")
+        ax.set_ylim(_FLOOR * 0.7, max(1.5, p["dq"].max() * 1.6))
+        if p["d"].max() / p["d"].min() > 8:
+            logx(ax, p["d"])
+        ax.set_xlabel("closest contact d (Å)")
+        ax.set_ylabel("|q_frag(Löwdin) − Q_frag| (e)")
+        ax.scatter([], [], c=VERM, s=22, label="CT-labelled (kept)")
+        ax.legend(fontsize=8.5, loc="center right", ncol=1, handletextpad=0.3)
+        frame(ax)
+        heading(ax, "Charge transfer in the reference",
+                "DFT Löwdin fragment sums, the larger of the two fragments; values below 10⁻⁴ e drawn on the floor")
+        fig.tight_layout()
+        ta = p[(p["set"] == "ext_biodimers_wb97mv") & (p["d"] >= 9)]
+        note = (f"**Tier A at d ≥ 9 Å:** {len(ta)} points, largest |Δq| {ta['dq'].max():.4f} e, "
+                f"{int((ta['dq'] > _FRAC).sum())} above the 0.02 e label rule — no charge transfer there, which "
+                "is why the ct_candidate label stays provisional." if not ta.empty else "")
+        return svg(fig), note
+
+    def ct_table(ref):
+        rows = []
+        for _, r in ref[ref["nct"]].iterrows():
+            for lab in r["ct"]:
+                rows.append({"set": r["set"], "label": lab, "d": r["d"], "pair": r["base"]})
+        if not rows:
+            return None
+        t = pd.DataFrame(rows)
+        return mo.ui.table(t.groupby(["set", "label"]).agg(points=("d", "size"), pairs=("pair", "nunique"),
+                                                           d_min=("d", "min"), d_max=("d", "max"))
+                           .reset_index(), selection=None, page_size=20)
+
+    def leak_figure(df):
+        """The charge a model puts on the neutral partner of an ion–neutral pair, against separation. DFT is ≈ 0 well
+        before 8 Å; a global charge equilibration that leaks shows a plateau that never decays."""
+        if df.empty:
+            return None
+        q = df[(df["kind"] == "ion–neutral") & df["qmA"].notna()].copy()
+        if q.empty:
+            return None
+        q["qn"] = np.where(q["qA"] == 0, q["qmA"], q["qmB"])
+        q["qn_dft"] = np.where(q["qA"] == 0, q["lwA"], q["lwB"])
+        mods = list(dict.fromkeys(q.sort_values("label")["mkey"]))
+        ncol = min(3, len(mods))
+        nrow = int(np.ceil(len(mods) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(3.0 * ncol, 2.4 * nrow + 0.5), squeeze=False,
+                                 sharex=True, sharey=True)
+        lim = max(float(np.nanpercentile(np.abs(q["qn"]), 98)), 0.02)
+        from matplotlib.colors import TwoSlopeNorm
+        norm = TwoSlopeNorm(0.0, -lim, lim)
+        for ax, k in zip(axes.ravel(), mods):
+            g = q[q["mkey"] == k]
+            ax.scatter(g["d"], g["qn_dft"], s=7, c=FAINT, linewidths=0, zorder=2)
+            ax.scatter(g["d"], g["qn"], s=10, c=g["qn"], cmap=VIK, norm=norm, linewidths=0.2, edgecolors=GREY,
+                       zorder=3)
+            ax.axhline(0, color=INK, lw=0.7)
+            ax.axvline(8, color=GREY, lw=0.7, ls=(0, (1, 2.5)))
+            far = g[g["d"] >= 8]["qn"].abs()
+            ax.annotate(f"{g['label'].iloc[0]}\nmedian |q| ≥ 8 Å: {far.median():.3f} e" if len(far) else
+                        g["label"].iloc[0], xy=(0, 1), xycoords="axes fraction", xytext=(2, -2),
+                        textcoords="offset points", ha="left", va="top", fontsize=8.5, color=INK)
+            ax.set_yscale("symlog", linthresh=0.01)
+            frame(ax)
+            ax.tick_params(labelsize=8)
+        for ax in axes.ravel()[len(mods):]:
+            ax.set_visible(False)
+        for ax in axes[-1]:
+            ax.set_xlabel("closest contact d (Å)", fontsize=9.5)
+        for ax in axes[:, 0]:
+            ax.set_ylabel("q on the neutral (e)", fontsize=9.5)
+        fig.suptitle("Leakage onto the neutral partner", x=0.012, ha="left", fontsize=12.5, color=INK)
+        fig.text(0.012, 1 - 0.5 / fig.get_figheight(), "model charge, diverging palette by sign; grey: DFT Löwdin",
+                 ha="left", fontsize=9.5, color=GREY)
+        fig.tight_layout(rect=(0, 0, 1, 1 - 0.6 / fig.get_figheight()))
+        return svg(fig)
+
+    def conservation_figure(df, ref):
+        """Σq per fragment against the formal charge, d ≥ 8 Å: the median and 90 % range of |Σ_f q − Q_f| per model,
+        with DFT's own Löwdin value as the reference row (it is not zero where DFT transfers charge)."""
+        if df.empty:
+            return None
+        far = df[(df["d"] >= 8) & df["qmA"].notna()].copy()
+        if far.empty:
+            return None
+        rows = []
+        for st in sorted(far["set"].unique()):
+            # DFT's own value on the same set first: models scored on different sets are not compared directly
+            r8 = ref[(ref["set"] == st) & (ref["d"] >= 8) & ref["lwA"].notna()]
+            if not r8.empty:
+                v = _dq(r8)
+                rows.append((f"DFT Löwdin · {st}", float(np.median(v)), float(np.percentile(v, 5)),
+                             float(np.percentile(v, 95)), None, len(v)))
+            for k, g in far[far["set"] == st].groupby("mkey"):
+                v = _dq(g, "qmA", "qmB")
+                tot = (g["qmA"] + g["qmB"] - g["qA"] - g["qB"]).abs()
+                rows.append((f"{g['label'].iloc[0]} · {st}", float(np.median(v)), float(np.percentile(v, 5)),
+                             float(np.percentile(v, 95)), float(np.median(tot)), len(v)))
+        fig, ax = plt.subplots(figsize=(7.4, 0.42 * len(rows) + 1.8))
+        for i, (lab, med, lo, hi, tot, n) in enumerate(rows):
+            ax.hlines(i, max(lo, _FLOOR), max(hi, _FLOOR), color=GREY, lw=1.0)
+            ax.plot([max(med, _FLOOR)], [i], "o", ms=6, color=INK if lab.startswith("DFT") else VERM,
+                    markeredgecolor="white", markeredgewidth=0.7, zorder=3)
+            if tot is not None and tot > _FLOOR:
+                ax.plot([tot], [i], "|", ms=11, mew=1.6, color=INK, zorder=3)
+            _t = "" if tot is None or tot <= _FLOOR else f" · pair {tot:.3f}"
+            ax.annotate(f"{med:.3f} e{_t}  (n={n})", xy=(1, i), xycoords=("axes fraction", "data"),
+                        xytext=(6, 0), textcoords="offset points", va="center", fontsize=8.8, color=INK)
+        ax.set_xscale("log")
+        ax.set_yticks(range(len(rows)), [r[0] for r in rows], fontsize=9.5)
+        ax.set_ylim(-0.7, len(rows) - 0.3)
+        ax.invert_yaxis()
+        ax.axvline(0.02, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        ax.set_xlim(_FLOOR * 0.7, None)
+        ax.set_xlabel("|Σ_f q − Q_f| per fragment (e), d ≥ 8 Å; below 10⁻⁴ e on the floor")
+        ax.spines["left"].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+        frame(ax)
+        heading(ax, "Fragment charge against its formal charge",
+                "dot: median, bar: 5–95 %, tick: |Σq − Q| of the whole pair (C1)")
+        fig.tight_layout()
+        return svg(fig)
+
+    _ctfig, _tiernote = ct_figure(ION_REF) if not ION_REF.empty else (None, "")
+    _with = ION[ION["charges"]] if not ION.empty else ION
+    _without = sorted({r["label"][:28] for r in R.values() if not r.get("charges")})
+    mo.vstack([
+        mo.md(r"""<a id="ct"></a>
+## Charge transfer and leakage
+
+$$\sum_{i\in f} q_i = Q_f \quad (d \to \infty), \qquad
+q_{\text{neutral}}(d) \to 0 \ \ \text{well before } 8\ \text{Å}$$
+
+Two questions about where charge sits. **(a)** Where does the reference itself move charge between fragments? Those
+points carry a label — `ct_candidate`, `ct_ambiguous`, a CT class, a DFT-pathology tag — and they are kept and
+drawn, never dropped, because a model that emulates DFT has to follow them and one with integer-charge physics
+must not. **(b)** For models that report charges: does charge leak onto a partner that should be neutral, and does
+each fragment carry its own formal charge once the pair is apart? This is the charge-conservation check C1 made
+explicit, point by point."""),
+        mo.md("### (a) Charge-transfer-labelled points"),
+        _ctfig or mo.md("_no reference fragment charges in this copy_"),
+        mo.md(_tiernote) if _tiernote else mo.md(""),
+        ct_table(ION_REF) if not ION_REF.empty else mo.md(""),
+        mo.md("### (b) Leakage and per-fragment charge"),
+        leak_figure(_with) or mo.md("_no model in this copy reports charges on an ion–neutral pair_"),
+        conservation_figure(_with, ION_REF) or mo.md(""),
+        mo.md("**No charges** (not plotted, and not read as zero): " + ", ".join(_without) if _without else ""),
+        mo.md("<small style='color:#767676'>Charges are whatever the model reports — latent or equilibrated — summed "
+              "over each fragment's atoms; ensemble members are averaged. DFT reference charges are Löwdin sums, "
+              "a population analysis, so a 0.01 e difference between schemes is not a leak.</small>"),
+    ])
     return
 
 
