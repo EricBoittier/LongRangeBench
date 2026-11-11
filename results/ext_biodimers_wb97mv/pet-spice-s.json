@@ -1,0 +1,72 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-spice-s",
+  "--label",
+  "pet-spice-s",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/pet-spice-s.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "1d0a75c84284093e069184f66805520c3020507af00b64c21dead9647fab1810",
+  "jsonl_sha256": "a810abb301190266e52819689e5daeeb8bc547dd5086e51c0f3e6a587e45a1e7",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-spice-s",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-spice-s.pt",
+   "package": "metatomic-torch",
+   "sha256": "9d20e39eafbfeae3a5551cdbbbd0a6cf890bc178c2d4188b70be6a17228780f1",
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "160 pts / 40 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [0.000, 0.000]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "34",
+   "note": "DFT mean |E_int| 1003.4 meV",
+   "value": "1003.3 [995.7, 1010.8]"
+  }
+ ],
+ "model": "pet-spice-s",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 0,
+ "n_scored": 976,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)'], 'ext_biodimers_wb97mv': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': 757 of 5711 predictions failed on ext_gscdb_nc (13%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': first error on ext_gscdb_nc: ValueError: this model does not support the atomic type '5' which is present in the input systems",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_biodimers_wb97mv"
+}

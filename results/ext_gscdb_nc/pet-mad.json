@@ -1,0 +1,64 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-mad",
+  "--label",
+  "pet-mad",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/pet-mad.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "e6db2300fd1d60d00aaaa6753664c641baffc7404819ef48729a7faef8cb1568",
+  "jsonl_sha256": "e7833e1b74ea8c12f5f32af61e3a10b61bed772c693d36c802b1344f6e6e678c",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-mad",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": null,
+   "package": "pet-mad",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:pet_mad?version='latest'",
+   "version": "1.4.4"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "980 / 574 groups",
+   "note": "zero model MAE 310.1 meV",
+   "value": "0.963 [0.789, 1.084] / 266.2 [224.9, 317.5]"
+  }
+ ],
+ "model": "pet-mad",
+ "model_level": "PBEsol/PAW (MAD)",
+ "n_failed": 0,
+ "n_scored": 1962,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model PBEsol/PAW (MAD) vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)'], 'ext_biodimers_wb97mv': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:pet_mad?version='latest': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "CCSD(T)/CBS (GSCDB137 ref)"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_gscdb_nc"
+}

@@ -1,0 +1,94 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "dpa4-plus",
+  "--label",
+  "dpa4-plus",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/dpa4-plus.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "62463d247980aa7a2e2a0c650f6137a404eb5e38f209bf60d250d60d41c118d0",
+  "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "dpa4-plus",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": "DPA4-Plus-OMol25-100M-v20260820.pt",
+   "package": "deepmd-kit",
+   "sha256": "79167a61dedefb6d0c242377369856e45acfb4ee76a9268ce74d1baae88bb67a",
+   "spec": "ase:lrbench.adapters:deepmd?model='DPA4-Plus-OMol25-100M-v20260820.pt'&name='DPA4-Plus-OMol25-100M'",
+   "version": "3.2.0"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "90 ddE / 9 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "0.0000 [0.0000, 0.0000]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "90",
+   "note": "zero model 89.0 meV",
+   "value": "89.0 [84.4, 93.0]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "3.6"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "61.9"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "131",
+   "note": "absolute; same-level models only",
+   "value": "22.9"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "90",
+   "note": "median; -1 = flat model",
+   "value": "-1.000"
+  }
+ ],
+ "model": "dpa4-plus",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 120,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}

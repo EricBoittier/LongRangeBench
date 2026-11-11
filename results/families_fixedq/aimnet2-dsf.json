@@ -1,0 +1,99 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "aimnet2-dsf",
+  "--label",
+  "aimnet2-dsf",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/aimnet2-dsf.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "b056dacb687832b4ce8bc32be2d2cea6d946dd7e",
+ "data": {
+  "groups_sha256": "62463d247980aa7a2e2a0c650f6137a404eb5e38f209bf60d250d60d41c118d0",
+  "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "aimnet2-dsf",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "aimnet",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0",
+   "version": "0.2.6"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "90 ddE / 9 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "0.0001 [0.0000, 0.0001]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "90",
+   "note": "zero model 89.0 meV",
+   "value": "89.0 [84.3, 93.0]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "2.1"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "60.9"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "131",
+   "note": "absolute; same-level models only",
+   "value": "84.7"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "90",
+   "note": "median; -1 = flat model",
+   "value": "-1.000"
+  }
+ ],
+ "model": "aimnet2-dsf",
+ "model_level": "wB97M-D3/def2-TZVPPD",
+ "n_failed": 0,
+ "n_scored": 120,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0: 852 of 3762 predictions failed on dimers (23%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0: first error on dimers: ValueError: Some species are not implemented in the AIMNet2Calculator",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0: 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='dsf'&cutoff=15.0: first error on trimers: ValueError: Some species are not implemented in the AIMNet2Calculator",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}
