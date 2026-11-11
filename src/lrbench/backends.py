@@ -141,8 +141,10 @@ class MlipcppEval(Backend):
                 res.append({"energy": None, "forces": None, "charges": None, "error": f["error"]})
                 continue
             lq = f.get("latent_charges")
-            e_, F_ = float(f["energy"]), np.asarray(f["forces"], float).reshape(-1, 3)
-            if not (np.isfinite(e_) and np.isfinite(F_).all()):  # a NaN is a failure, not a number to score
+            # mlipcpp-eval writes a non-finite value as JSON null
+            e_ = float("nan") if f.get("energy") is None else float(f["energy"])
+            F_ = np.asarray([np.nan if x is None else x for x in (f.get("forces") or [])], float).reshape(-1, 3)
+            if not (np.isfinite(e_) and F_.size and np.isfinite(F_).all()):  # a NaN is a failure, not a number to score
                 res.append({"energy": None, "forces": None, "charges": None,
                             "error": "mlipcpp-eval returned a non-finite energy or force"})
                 continue
