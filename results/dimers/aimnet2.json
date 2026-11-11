@@ -1,0 +1,141 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "aimnet2",
+  "--label",
+  "aimnet2",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/aimnet2.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "aimnet2",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "aimnet",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:aimnet2?lrcoulomb='simple'",
+   "version": "0.2.6"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "108 pts / 18 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.936 [0.911, 0.962]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "60 pts / 10 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.006 [1.002, 1.009]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.826 [0.734, 0.940]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "54 pts / 9 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "-0.060 [-0.621, 0.758]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.049 [1.030, 1.115]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "18",
+   "note": "flat model 922.8 meV",
+   "value": "70.2 [54.8, 85.5]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "72",
+   "note": "DFT mean |E_int| 767.7 meV",
+   "value": "144.2 [120.2, 166.7]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "10",
+   "note": "flat model 938.8 meV",
+   "value": "7.2 [3.7, 11.2]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "40",
+   "note": "DFT mean |E_int| 779.1 meV",
+   "value": "30.8 [3.3, 58.9]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "344 / 24 groups",
+   "note": "zero model MAE 226.4 meV",
+   "value": "0.963 [0.930, 0.996] / 14.1 [7.2, 22.0]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "834",
+   "note": "absolute; same-level models only",
+   "value": "52.1"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "90",
+   "note": "median; 0 exact, -1 tail missing; tail error 1.19 k_BT (300 K)",
+   "value": "-0.073 [-0.116, -0.036]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "50",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.08 k_BT (300 K)",
+   "value": "0.003 [-0.001, 0.005]"
+  }
+ ],
+ "model": "aimnet2",
+ "model_level": "wB97M-D3/def2-TZVPPD",
+ "n_failed": 852,
+ "n_scored": 1254,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='simple': 852 of 3762 predictions failed on dimers (23%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='simple': first error on dimers: ValueError: Some species are not implemented in the AIMNet2Calculator",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='simple': 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:aimnet2?lrcoulomb='simple': first error on trimers: ValueError: Some species are not implemented in the AIMNet2Calculator",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

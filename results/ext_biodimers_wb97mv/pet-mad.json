@@ -1,0 +1,70 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-mad",
+  "--label",
+  "pet-mad",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/pet-mad.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "1d0a75c84284093e069184f66805520c3020507af00b64c21dead9647fab1810",
+  "jsonl_sha256": "a810abb301190266e52819689e5daeeb8bc547dd5086e51c0f3e6a587e45a1e7",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-mad",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": null,
+   "package": "pet-mad",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:pet_mad?version='latest'",
+   "version": "1.4.4"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "160 pts / 40 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [0.000, 0.000]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "34",
+   "note": "DFT mean |E_int| 1003.4 meV",
+   "value": "1003.4 [995.8, 1010.8]"
+  }
+ ],
+ "model": "pet-mad",
+ "model_level": "PBEsol/PAW (MAD)",
+ "n_failed": 0,
+ "n_scored": 976,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model PBEsol/PAW (MAD) vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)'], 'ext_biodimers_wb97mv': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:pet_mad?version='latest': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_biodimers_wb97mv"
+}
