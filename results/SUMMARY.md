@@ -10,24 +10,43 @@ Reference level wB97M-V/def2-TZVPD; licence CC-BY-4.0; current revision `2d2061b
 |---|---|---|---|---|
 | `caceles-water` | RPBE-D3 (water, CACE-LES training set) | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model RPBE-D3 (water, CACE-LES training set)); THIN COVERAGE: 1254 of ~4710 scored (27%); screen (1 seed) |
 | `mace-h` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `maceles-off` | wB97M-D3(BJ)/def2-TZVPPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-D3(BJ)/def2-TZVPPD); THIN COVERAGE: 1254 of ~3816 scored (33%); screen (1 seed) |
+| `so3lr` | PBE0+MBD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD); THIN COVERAGE: 1254 of ~2257 scored (56%); screen (1 seed) |
 
-| metric | `caceles-water` | `mace-h` | `mace-polar` | `maceles-off` |
+| metric | `caceles-water` | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` | `so3lr` |
+|---|---|---|---|---|---|---|---|
+| tail fraction, neutral_polar_control (d >= 8 A) | 0.130 [-0.508, 0.410] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 1.046 [1.024, 1.057] | 1.077 [1.041, 1.089] | 0.410 [0.215, 0.471] | 0.954 [0.919, 0.984] |
+| all dE slope / MAE (meV) | 0.130 / 1.2 | 0.000 [0.000, 0.000] / 266.2 [175.7, 357.1] | 0.000 [0.000, 0.000] / 266.2 [175.7, 357.1] | 0.964 [0.950, 0.979] / 14.7 [10.8, 18.9] | 0.963 [0.948, 0.979] / 18.0 [14.0, 22.2] | 0.665 [0.361, 1.095] / 153.6 [70.3, 246.5] | 0.634 [0.419, 0.845] / 88.5 [37.0, 149.8] |
+| force MAE (meV/A) | 210.2 | 44.8 | 26.9 | 3.3 | 3.1 | 154.1 | 123.8 |
+| tail fraction, ion_pair (d >= 8 A) | – | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.953 [0.946, 0.959] | 0.952 [0.945, 0.958] | – | 0.394 [0.277, 0.494] |
+| tail fraction, same_sign (d >= 8 A) | – | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 1.009 [1.004, 1.015] | 1.015 [1.010, 1.021] | – | 1.000 [0.991, 1.008] |
+| tail fraction, ion_polar (d >= 8 A) | – | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.800 [0.689, 0.949] | 0.742 [0.567, 0.970] | – | 0.577 [0.121, 1.017] |
+| tail fraction, ion_nonpolar (d >= 8 A) | – | -0.000 [-0.000, 0.000] | 0.000 [0.000, 0.000] | 0.369 [0.039, 0.993] | 0.194 [-0.509, 1.073] | – | -0.113 [-1.804, 1.429] |
+| offset-free dE error at 8 A, ion_pair (meV) | – | 979.1 [945.1, 1011.3] | 979.1 [945.1, 1011.3] | 44.1 [38.0, 50.2] | 46.3 [40.6, 52.2] | – | 584.2 [501.1, 670.0] |
+| \|E_int\| error >= 12 A, ion_pair (meV) | – | 786.6 [754.1, 820.6] | 1138.4 [975.2, 1293.0] | 81.5 [63.7, 100.4] | 87.2 [69.5, 107.0] | – | 2123.6 [1604.2, 2695.3] |
+| offset-free dE error at 8 A, same_sign (meV) | – | 964.6 [887.3, 1051.3] | 964.6 [887.3, 1051.3] | 11.1 [6.2, 16.2] | 16.1 [10.8, 22.6] | – | 12.2 [7.7, 16.5] |
+| \|E_int\| error >= 12 A, same_sign (meV) | – | 786.8 [723.9, 855.7] | 4146.0 [2249.4, 6327.7] | 7.9 [5.8, 10.2] | 9.1 [5.5, 12.8] | – | 414.8 [197.1, 621.1] |
+| normalised tail eps, ion_pair (d >= 8 A) | – | -1.000 [-1.000, -1.000] | -1.000 [-1.000, -1.000] | -0.048 [-0.055, -0.035] | -0.045 [-0.069, -0.038] | – | -0.592 [-0.878, -0.470] |
+| normalised tail eps, same_sign (d >= 8 A) | – | -1.000 [-1.000, -1.000] | -1.000 [-1.000, -1.000] | 0.009 [0.000, 0.016] | 0.011 [0.005, 0.021] | – | 0.003 [-0.023, 0.007] |
+
+## ext_biodimers_wb97mv
+
+Reference level wB97M-V/def2-TZVPD; licence geometries CC-BY-4.0 (BFDB); labels produced here, CC-BY-4.0; current revision `a810abb30119` (976 groups).
+
+| model | model level | date | commit | flags |
 |---|---|---|---|---|
-| tail fraction, neutral_polar_control (d >= 8 A) | 0.130 [-0.508, 0.410] | 0.000 [0.000, 0.000] | 1.046 [1.024, 1.057] | 0.410 [0.215, 0.471] |
-| all dE slope / MAE (meV) | 0.130 / 1.2 | 0.000 [0.000, 0.000] / 266.2 [175.7, 357.1] | 0.964 [0.950, 0.979] / 14.7 [10.8, 18.9] | 0.665 [0.361, 1.095] / 153.6 [70.3, 246.5] |
-| force MAE (meV/A) | 210.2 | 44.8 | 3.3 | 154.1 |
-| tail fraction, ion_pair (d >= 8 A) | – | 0.000 [0.000, 0.000] | 0.953 [0.946, 0.959] | – |
-| tail fraction, same_sign (d >= 8 A) | – | 0.000 [0.000, 0.000] | 1.009 [1.004, 1.015] | – |
-| tail fraction, ion_polar (d >= 8 A) | – | 0.000 [0.000, 0.000] | 0.800 [0.689, 0.949] | – |
-| tail fraction, ion_nonpolar (d >= 8 A) | – | -0.000 [-0.000, 0.000] | 0.369 [0.039, 0.993] | – |
-| offset-free dE error at 8 A, ion_pair (meV) | – | 979.1 [945.1, 1011.3] | 44.1 [38.0, 50.2] | – |
-| \|E_int\| error >= 12 A, ion_pair (meV) | – | 786.6 [754.1, 820.6] | 81.5 [63.7, 100.4] | – |
-| offset-free dE error at 8 A, same_sign (meV) | – | 964.6 [887.3, 1051.3] | 11.1 [6.2, 16.2] | – |
-| \|E_int\| error >= 12 A, same_sign (meV) | – | 786.8 [723.9, 855.7] | 7.9 [5.8, 10.2] | – |
-| normalised tail eps, ion_pair (d >= 8 A) | – | -1.000 [-1.000, -1.000] | -0.048 [-0.055, -0.035] | – |
-| normalised tail eps, same_sign (d >= 8 A) | – | -1.000 [-1.000, -1.000] | 0.009 [0.000, 0.016] | – |
+| `mace-h` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+
+| metric | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` |
+|---|---|---|---|---|
+| tail fraction, ion_pair (d >= 8 A) | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.919 [0.917, 0.922] | 0.927 [0.925, 0.929] |
+| \|E_int\| error >= 12 A, ion_pair (meV) | 1003.4 [995.8, 1010.8] | 308.7 [239.5, 378.1] | 157.9 [153.5, 162.1] | 154.3 [151.9, 156.2] |
 
 ## ext_gscdb_nc
 
@@ -36,11 +55,15 @@ Reference level CCSD(T)/CBS (GSCDB137 ref); licence CC-BY-4.0; current revision 
 | model | model level | date | commit | flags |
 |---|---|---|---|---|
 | `caceles-water` | RPBE-D3 (water, CACE-LES training set) | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model RPBE-D3 (water, CACE-LES training set)); THIN COVERAGE: 1962 of ~7081 scored (28%); screen (1 seed) |
+| `mace-h` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
+| `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
+| `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
+| `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-V/def2-TZVPD); screen (1 seed) |
 | `maceles-off` | wB97M-D3(BJ)/def2-TZVPPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-D3(BJ)/def2-TZVPPD); THIN COVERAGE: 1962 of ~3483 scored (56%); screen (1 seed) |
 
-| metric | `caceles-water` | `maceles-off` |
-|---|---|---|
-| all dE slope / MAE (meV) | 0.883 [0.875, 0.896] / 202.4 [147.2, 269.6] | 1.005 [0.999, 1.013] / 19.9 [16.7, 23.9] |
+| metric | `caceles-water` | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` |
+|---|---|---|---|---|---|---|
+| all dE slope / MAE (meV) | 0.883 [0.875, 0.896] / 202.4 [147.2, 269.6] | 0.873 [0.756, 0.957] / 72.5 [53.0, 94.8] | 1.082 [0.973, 1.243] / 188.9 [135.2, 254.8] | 0.948 [0.854, 1.013] / 32.1 [19.0, 48.5] | 0.982 [0.910, 1.026] / 54.8 [38.5, 74.7] | 1.005 [0.999, 1.013] / 19.9 [16.7, 23.9] |
 
 ## families_fixedq
 
@@ -49,17 +72,20 @@ Reference level wB97M-V/def2-TZVPD; licence CC-BY-4.0; current revision `3b435aa
 | model | model level | date | commit | flags |
 |---|---|---|---|---|
 | `mace-h` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `maceles-off` | wB97M-D3(BJ)/def2-TZVPPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-D3(BJ)/def2-TZVPPD); THIN COVERAGE: 120 of ~252 scored (48%); screen (1 seed) |
+| `so3lr` | PBE0+MBD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD); screen (1 seed) |
 
-| metric | `mace-h` | `mace-polar` | `maceles-off` |
-|---|---|---|---|
-| fixed-Q wire ddE slope | 0.0000 [0.0000, 0.0000] | 0.8668 [0.8331, 0.9100] | 0.1596 [0.1564, 0.1597] |
-| fixed-Q wire ddE MAE (meV) | 89.0 [84.4, 93.0] | 11.8 [7.7, 15.2] | 74.3 [54.2, 78.9] |
-| zwitterion local-zero MAE, zwit_ene (meV) | 3.6 | 35.3 | 33.8 |
-| zwitterion local-zero MAE, zwit_yne (meV) | 61.9 | 38.8 | 32.0 |
-| force MAE (meV/A) | 38.7 | 12.3 | 110.2 |
-| normalised wire ddE, (model - DFT)/DFT | -1.000 | -0.151 | -0.839 |
+| metric | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` | `so3lr` |
+|---|---|---|---|---|---|---|
+| fixed-Q wire ddE slope | 0.0000 [0.0000, 0.0000] | 0.0000 [0.0000, 0.0000] | 0.8668 [0.8331, 0.9100] | 0.8488 [0.8120, 0.8962] | 0.1596 [0.1564, 0.1597] | 0.5802 [0.4666, 0.6930] |
+| fixed-Q wire ddE MAE (meV) | 89.0 [84.4, 93.0] | 89.0 [84.4, 93.0] | 11.8 [7.7, 15.2] | 13.5 [9.0, 17.3] | 74.3 [54.2, 78.9] | 37.2 [27.2, 46.4] |
+| zwitterion local-zero MAE, zwit_ene (meV) | 3.6 | 3.6 | 35.3 | 5.2 | 33.8 | 29.9 |
+| zwitterion local-zero MAE, zwit_yne (meV) | 61.9 | 61.9 | 38.8 | 34.3 | 32.0 | 24.5 |
+| force MAE (meV/A) | 38.7 | 21.1 | 12.3 | 12.0 | 110.2 | 171.7 |
+| normalised wire ddE, (model - DFT)/DFT | -1.000 | -1.000 | -0.151 | -0.175 | -0.839 | -0.390 |
 
 ## trimers
 
@@ -68,14 +94,17 @@ Reference level wB97M-V/def2-TZVPD; licence CC-BY-4.0; current revision `e2618c4
 | model | model level | date | commit | flags |
 |---|---|---|---|---|
 | `mace-h` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-omol` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `mace-polar` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
+| `mace-polar-l` | wB97M-V/def2-TZVPD | 2026-11-11 | `a14f9f4` | screen (1 seed) |
 | `maceles-off` | wB97M-D3(BJ)/def2-TZVPPD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model wB97M-D3(BJ)/def2-TZVPPD); THIN COVERAGE: 9 of ~48 scored (19%); screen (1 seed) |
+| `so3lr` | PBE0+MBD | 2026-11-11 | `a14f9f4` | LEVEL MISMATCH (model PBE0+MBD); THIN COVERAGE: 9 of ~42 scored (21%); screen (1 seed) |
 
-| metric | `mace-h` | `mace-polar` | `maceles-off` |
-|---|---|---|---|
-| all dE slope / MAE (meV) | -0.000 [-0.000, 0.000] / 4.6 [2.3, 7.2] | 0.836 [0.264, 1.027] / 2.3 [1.0, 4.4] | – |
-| E3 MAE (meV) | 8.12 [2.91, 36.89] | 25.01 [4.14, 99.77] | – |
-| dE3 vs far geometry MAE (meV) | 4.56 [2.32, 7.71] | 2.31 [0.96, 5.21] | – |
-| force MAE (meV/A) | 72.2 | 38.1 | 470.3 |
-| normalised dE3 vs far, (model - DFT)/\|DFT\| | 0.000 [-1.000, 1.000] | 0.099 [-4.238, 0.572] | – |
+| metric | `mace-h` | `mace-omol` | `mace-polar` | `mace-polar-l` | `maceles-off` | `so3lr` |
+|---|---|---|---|---|---|---|
+| all dE slope / MAE (meV) | -0.000 [-0.000, 0.000] / 4.6 [2.3, 7.2] | 0.000 [-0.000, 0.000] / 4.6 [2.3, 7.2] | 0.836 [0.264, 1.027] / 2.3 [1.0, 4.4] | 1.348 [0.402, 1.691] / 4.4 [1.6, 8.0] | – | – |
+| E3 MAE (meV) | 8.12 [2.91, 36.89] | 268.92 [118.36, 620.07] | 25.01 [4.14, 99.77] | 31.89 [20.69, 51.68] | – | – |
+| dE3 vs far geometry MAE (meV) | 4.56 [2.32, 7.71] | 4.56 [2.32, 7.71] | 2.31 [0.96, 5.21] | 4.38 [1.72, 8.77] | – | – |
+| force MAE (meV/A) | 72.2 | 29.3 | 38.1 | 46.5 | 470.3 | 182.3 |
+| normalised dE3 vs far, (model - DFT)/\|DFT\| | 0.000 [-1.000, 1.000] | 0.000 [-1.000, 1.000] | 0.099 [-4.238, 0.572] | -0.122 [-7.143, 0.929] | – | – |
 

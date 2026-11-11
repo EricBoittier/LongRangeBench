@@ -177,10 +177,11 @@ Numbers with provenance live in [results/](../results/SUMMARY.md), one validated
 <!-- BEGIN lrbench results render: results -->
 Committed result rows ([results/SUMMARY.md](../results/SUMMARY.md)):
 
-- **dimers:** `caceles-water` (screen), `mace-h` (screen), `mace-polar` (screen), `maceles-off` (screen)
-- **ext_gscdb_nc:** `caceles-water` (screen), `maceles-off` (screen)
-- **families_fixedq:** `mace-h` (screen), `mace-polar` (screen), `maceles-off` (screen)
-- **trimers:** `mace-h` (screen), `mace-polar` (screen), `maceles-off` (screen)
+- **dimers:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
+- **ext_biodimers_wb97mv:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen)
+- **ext_gscdb_nc:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen)
+- **families_fixedq:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
+- **trimers:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
 <!-- END lrbench results render: results -->
 
 The `orbmol-v1` / `orbmol` pair is the most informative comparison in the table: one architecture, trained on the

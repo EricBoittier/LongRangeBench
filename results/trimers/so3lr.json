@@ -1,0 +1,69 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "so3lr",
+  "--label",
+  "so3lr",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/so3lr.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "56b71d6c7a5790f85997ab4a2e913f904de0cd6cedea44a81376834dc264c3f3",
+  "jsonl_sha256": "e2618c45e769dff2aecb1e74398fac67cf6a44227e3c5022a29bbdb6fed97589",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "so3lr",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "so3lr",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:so3lr?model='so3lr'",
+   "version": "0.2.0"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "8",
+   "note": "absolute; same-level models only",
+   "value": "182.3"
+  }
+ ],
+ "model": "so3lr",
+ "model_level": "PBE0+MBD",
+ "n_failed": 33,
+ "n_scored": 9,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model PBE0+MBD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:so3lr?model='so3lr': 1003 of 3762 predictions failed on dimers (27%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:so3lr?model='so3lr': first error on dimers: ValueError: AseCalculatorSparse.calculate: unsupported element(s) for this model: K (Z=19). This model supports only H, C, N, O, F, P, S, Cl; outside that the network was never trained and would silently return values gathered from the wrong element rather than fail. Remove those atoms or use a model that covers them.",
+  "ase:lrbench.adapters:so3lr?model='so3lr': 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:so3lr?model='so3lr': first error on trimers: ValueError: AseCalculatorSparse.calculate: unsupported element(s) for this model: Li (Z=3). This model supports only H, C, N, O, F, P, S, Cl; outside that the network was never trained and would silently return values gathered from the wrong element rather than fail. Remove those atoms or use a model that covers them.",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "trimers"
+}

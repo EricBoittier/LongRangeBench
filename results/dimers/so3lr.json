@@ -1,0 +1,141 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "so3lr",
+  "--label",
+  "so3lr",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/so3lr.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "so3lr",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "so3lr",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:so3lr?model='so3lr'",
+   "version": "0.2.0"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.394 [0.277, 0.494]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "60 pts / 10 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.000 [0.991, 1.008]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.577 [0.121, 1.017]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "54 pts / 9 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "-0.113 [-1.804, 1.429]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.954 [0.919, 0.984]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "15",
+   "note": "flat model 940.6 meV",
+   "value": "584.2 [501.1, 670.0]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "60",
+   "note": "DFT mean |E_int| 774.4 meV",
+   "value": "2123.6 [1604.2, 2695.3]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "10",
+   "note": "flat model 938.8 meV",
+   "value": "12.2 [7.7, 16.5]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "40",
+   "note": "DFT mean |E_int| 779.1 meV",
+   "value": "414.8 [197.1, 621.1]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "329 / 23 groups",
+   "note": "zero model MAE 215.6 meV",
+   "value": "0.634 [0.419, 0.845] / 88.5 [37.0, 149.8]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "798",
+   "note": "absolute; same-level models only",
+   "value": "123.8"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "75",
+   "note": "median; 0 exact, -1 tail missing; tail error 10.76 k_BT (300 K)",
+   "value": "-0.592 [-0.878, -0.470]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "50",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.14 k_BT (300 K)",
+   "value": "0.003 [-0.023, 0.007]"
+  }
+ ],
+ "model": "so3lr",
+ "model_level": "PBE0+MBD",
+ "n_failed": 1003,
+ "n_scored": 1254,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model PBE0+MBD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:so3lr?model='so3lr': 1003 of 3762 predictions failed on dimers (27%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:so3lr?model='so3lr': first error on dimers: ValueError: AseCalculatorSparse.calculate: unsupported element(s) for this model: K (Z=19). This model supports only H, C, N, O, F, P, S, Cl; outside that the network was never trained and would silently return values gathered from the wrong element rather than fail. Remove those atoms or use a model that covers them.",
+  "ase:lrbench.adapters:so3lr?model='so3lr': 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:so3lr?model='so3lr': first error on trimers: ValueError: AseCalculatorSparse.calculate: unsupported element(s) for this model: Li (Z=3). This model supports only H, C, N, O, F, P, S, Cl; outside that the network was never trained and would silently return values gathered from the wrong element rather than fail. Remove those atoms or use a model that covers them.",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

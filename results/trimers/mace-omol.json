@@ -1,0 +1,88 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "mace-omol",
+  "--label",
+  "mace-omol",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/mace-omol.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "56b71d6c7a5790f85997ab4a2e913f904de0cd6cedea44a81376834dc264c3f3",
+  "jsonl_sha256": "e2618c45e769dff2aecb1e74398fac67cf6a44227e3c5022a29bbdb6fed97589",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "mace-omol",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "mace-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:mace_omol",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "6 / 6 groups",
+   "note": "zero model MAE 4.6 meV",
+   "value": "0.000 [-0.000, 0.000] / 4.6 [2.3, 7.2]"
+  },
+  {
+   "metric": "E3 MAE (meV)",
+   "n": "9",
+   "note": "zero model 8.12",
+   "value": "268.92 [118.36, 620.07]"
+  },
+  {
+   "metric": "dE3 vs far geometry MAE (meV)",
+   "n": "6",
+   "note": "zero model 4.56; slope 0.000",
+   "value": "4.56 [2.32, 7.71]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "41",
+   "note": "absolute; same-level models only",
+   "value": "29.3"
+  },
+  {
+   "metric": "normalised dE3 vs far, (model - DFT)/|DFT|",
+   "n": "6",
+   "note": "median",
+   "value": "0.000 [-1.000, 1.000]"
+  }
+ ],
+ "model": "mace-omol",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 9,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "trimers"
+}
