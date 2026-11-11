@@ -6,12 +6,30 @@ Notable changes to LongRangeBench. Newest first.
 
 ### Added
 
+- `results/`: committed result rows (`results/<set>/<model>.json`, schema `lrbench-row/1`). Each row carries:
+  - the model's registry name;
+  - the weights sha256, or the package version;
+  - the model and reference levels, plus a mismatch flag;
+  - seeds, giving screen or claim;
+  - `n_failed`;
+  - the date, the code commit and the data sha256;
+  - the headline metrics.
+
+  Each row has its directories stripped. `results/sets.json` holds the set cards, with a licence, a public or private
+  flag and every scored data revision. `results/private/` is git-ignored and holds rows for unreleased models and
+  internal-only data. See [docs/results.md](docs/results.md).
+- `lrbench results add | add-set | check | render`, plus `lrbench validate` as an alias of `check`.
+  - `render` regenerates `results/SUMMARY.md` and the generated blocks of `docs/models.md`, including the
+    named-model table, which had fallen behind the registry.
+  - A test fails if any of them is stale.
+- `lrbench eval` records `code_commit`, and hashes the checkpoint an `ase:` adapter spec names (`path=` / `model=`).
 - `lrbench.gguf_registry` and `configs/gguf_models.json`: named mlip.cpp GGUF models, each bound to the mlip.cpp
   commit it was trained with, with the sha256 of its weights and its companion GGUFs (`q.gguf`, ...). A registered
   name runs with its own build. A binary from another commit, a binary missing a metadata key the build of record
   reads, or a missing or changed companion is refused (`LRBENCH_ALLOW_BINARY_MISMATCH=1` records it instead). The
   helpers are `check`, `smoke` and `add`.
-- Result JSON: `failures` (per set: structures, failed) and `complete`.
+- Result JSON: `failures` (per set: structures, failed), `sets.<set>.failures` (the failed count, read by
+  `results`) and `complete`.
 
 ### Fixed
 

@@ -59,6 +59,13 @@ These are not style preferences; the metrics are unsound without them.
 5. **Provenance.** The protocol, software versions and settings that produced the references. For QM data: program,
    version, functional, basis, SCF and grid settings, and how counterpoise or fragment energies were computed.
 
+## Publishing rows on it
+
+A set gets a **card** before its first committed result row: `lrbench results add-set <set> --data <dir> --licence
+... --public` (or `--private` for data that may not be redistributed). Adding curves later changes the set's hashes.
+Run the same command again with `--note` to record a new revision. Older rows are then shown as stale rather than
+being silently compared with new ones. See [results.md](results.md#adding-a-set).
+
 ## Distances and classes
 
 - `distance` is the canonical separation of the point, used for the distance bins (0–4, 4–8, 8–12, ≥ 12 Å) and as the

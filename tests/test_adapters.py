@@ -202,13 +202,24 @@ def test_metatomic_fails_safe_when_the_model_cannot_be_asked(monkeypatch):
 
 
 def test_metatomic_records_the_package_version(monkeypatch):
-    """The distribution is ``metatomic-torch``; asking for ``metatomic`` records the version as '?'."""
+    """The distribution is ``metatomic-torch``; asking for ``metatomic`` records the version as '?'.
+
+    The package name is checked everywhere; the version only where the distribution is installed, since without it
+    '?' is the honest answer (the calculator is faked here, so CI need not carry torch).
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
     import lrbench.backends as B
     from lrbench.adapters import metatomic
 
     monkeypatch.setattr(B, "metatomic_calculator", lambda path, device: _FakeMetatomicCalc(["charge"]))
     meta = metatomic("pet-omol-s.pt", device="cpu").lrbench_meta
-    assert meta["package"] == "metatomic-torch" and meta["version"] != "?"
+    assert meta["package"] == "metatomic-torch"
+    try:
+        installed = version("metatomic-torch")
+    except PackageNotFoundError:
+        pytest.skip("metatomic-torch not installed: the version is correctly recorded as '?'")
+    assert meta["version"] == installed != "?"
 
 
 def test_partial_prediction_failure_is_announced(datadir, tmp_path, monkeypatch):
@@ -242,12 +253,10 @@ def test_partial_prediction_failure_is_announced(datadir, tmp_path, monkeypatch)
 def test_metatomic_disables_the_torchscript_fuser(monkeypatch):
     """The fuser is a correctness setting for these exports, so the guard must actually fire -- and must be
     overridable for a future torch that no longer needs it."""
+    torch = pytest.importorskip("torch")
     import lrbench.backends as B
 
     called = []
-    monkeypatch.setattr(B, "MetatomicCalculator", _FakeMetatomicCalc([]), raising=False)
-
-    import torch
     for fn in ("_jit_set_profiling_executor", "_jit_set_profiling_mode"):
         monkeypatch.setattr(torch._C, fn, lambda v, _f=fn: called.append((_f, v)))
 

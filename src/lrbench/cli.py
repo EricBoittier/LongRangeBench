@@ -193,7 +193,8 @@ def cmd_eval(args):
     t0 = time.time()
     data = {s: subsample(load_set(s, args.data, args.revision), args.max_per_set, args.seed) for s in sets}
     lvc = level_check(data, members, args.model_level, args.allow_level_mismatch)
-    out = {"lrbench_version": __version__, "level": lvc, "created": datetime.datetime.now().isoformat(timespec="seconds"),
+    from .results import code_commit, spec_weights_file
+    out = {"lrbench_version": __version__, "code_commit": code_commit(), "level": lvc, "created": datetime.datetime.now().isoformat(timespec="seconds"),
            "host": platform.node(), "argv": sys.argv[1:], "label": args.label or os.path.basename(members[0]),
            "members": [], "sets": {}, "notes": []}
     preds: List[Dict[str, Dict[str, dict]]] = []  # member -> set -> term -> pred
@@ -211,7 +212,7 @@ def cmd_eval(args):
         preds.append(per)
         p = _model_path(spec)
         out["members"].append({"spec": spec, "path": os.path.abspath(p) if os.path.exists(p) else p,
-                               "sha256": _file_sha256(p) if not args.no_hash else None,
+                               "sha256": _file_sha256(spec_weights_file(p)) if not args.no_hash else None,
                                "formal_charges": formal, **be.info()})
         if not be.passes_charge_spin:
             out["notes"].append(f"{spec}: backend passes no charge/spin; charged structures are evaluated neutral")
@@ -232,8 +233,8 @@ def cmd_eval(args):
                 err = next((p_.get("error") for p_ in per_set.values() if p_.get("error")), None)
                 if err:
                     out["notes"].append(f"{spec}: first error on {s_}: {err}")
-    # A run with failed structures is not a result: it is marked incomplete here, and tools that collect results
-    # (tools/collect_result.py) refuse it.
+    # A run with failed structures is marked incomplete; each set block also carries its failed count
+    # (sets.<set>.failures), which `lrbench results` turns into the row's n_failed.
     out["complete"] = not any(v["n_failed"] for v in out.get("failures", {}).values())
     off = element_offsets(data, preds, args.element_offsets)
     if off:
@@ -258,6 +259,8 @@ def cmd_eval(args):
             out["sets"][s] = props_score(ds, P)
         else:
             out["sets"][s] = SetScorer(ds, P, n_boot=args.n_boot, conformal_on=args.conformal, normalise=norm).run()
+        if s in out.get("failures", {}):
+            out["sets"][s]["failures"] = out["failures"][s]["n_failed"]
         if args.save_predictions:
             out["sets"][s]["predictions"] = {t: [None if m[s][t].get("energy") is None else m[s][t]["energy"]
                                                  for m in preds] for t in preds[0][s]}
@@ -637,6 +640,9 @@ def main(argv=None):
 
     from .priors.run import add_parser as _priors_parser
     _priors_parser(sub, _common)
+
+    from .results import add_parser as _results_parser
+    _results_parser(sub)
 
     p = sub.add_parser("toy", help="write the self-contained Lennard-Jones toy set (no download, for the quickstart)")
     p.add_argument("outdir")
