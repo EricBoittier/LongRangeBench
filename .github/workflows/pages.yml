@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install "marimo>=0.25" markdown
+        run: pip install "marimo>=0.25" markdown uv
       - name: Results page
         run: python tools/build_pages.py -o site
       - name: Notebook (WebAssembly)
