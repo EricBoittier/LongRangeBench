@@ -227,17 +227,36 @@ def points(J: dict, setname: str, data: Optional[str] = None, base: Optional[str
     return {"cols": COLS, "rows": rows} if rows else None
 
 
+def private_sets(J: dict, private: Optional[str], base: Optional[str] = None) -> set:
+    """Names of the sets in a result whose recorded data (jsonl or groups) lie under ``private``."""
+    if not private:
+        return set()
+    root = os.path.realpath(private) + os.sep
+    out = set()
+    for s, rec in (J.get("data") or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        for k in ("jsonl", "groups", "data"):
+            p = rec.get(k)
+            if not isinstance(p, str) or not p:
+                continue
+            p = p if os.path.isabs(p) else os.path.join(base or "", p)
+            if (os.path.realpath(p) + os.sep).startswith(root):
+                out.add(s)
+    return out
+
+
 def has_charges(J: dict) -> bool:
     """Whether a result carries model fragment charges anywhere (``qfrag``): decided per model, not per set."""
     return any((S or {}).get("qfrag") for S in (J.get("sets") or {}).values())
 
 
-def private_points(path: str, runs: Optional[str] = None) -> dict:
+def private_points(path: str) -> dict:
     """Internal-only sets at a user-supplied local path, read live and never embedded.
 
     ``path`` holds canonical-schema ``<set>.jsonl`` + ``<set>.groups.json`` (directly or under ``canonical/``);
-    model predictions come from ``lrbench eval --save-predictions`` results in ``<path>/runs/*.json`` and in ``runs``
-    whose sets have the same names. Returns ``{"cols": COLS, "sets": [...], "models": {label: {set: rows}}, "ref": {set: rows}}``.
+    model predictions come only from ``lrbench eval --save-predictions`` results in ``<path>/runs/*.json``, so nothing
+    scored on internal data has to sit in the public run directory. Returns ``{"cols": COLS, "sets": [...], "models": {label: {set: rows}}, "ref": {set: rows}}``.
     """
     names = sorted({os.path.basename(p)[: -len(".jsonl")]
                     for p in glob.glob(os.path.join(path, "*.jsonl")) + glob.glob(os.path.join(path, "canonical",
@@ -252,10 +271,7 @@ def private_points(path: str, runs: Optional[str] = None) -> dict:
         if rows:
             out["sets"].append(s)
             out["ref"][s] = rows
-    files = sorted(glob.glob(os.path.join(path, "runs", "*.json")))
-    if runs:
-        files += sorted(glob.glob(os.path.join(runs, "*.json")))
-    for p in files:
+    for p in sorted(glob.glob(os.path.join(path, "runs", "*.json"))):
         try:
             with open(p) as f:
                 J = json.load(f)

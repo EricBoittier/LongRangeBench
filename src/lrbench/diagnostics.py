@@ -218,7 +218,15 @@ def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200
         if "sets" not in J:
             continue
         name = os.path.basename(p)[:-5]
+        # a set scored on internal-only data (anything under $LRBENCH_PRIVATE_IONS) is dropped whole: not its
+        # summary numbers, not its DFT class means, not its parity points -- nothing of it may reach a frozen site
+        hidden = ionct.private_sets(J, private, base)
+        if hidden:
+            J = dict(J, sets={k: v for k, v in (J.get("sets") or {}).items() if k not in hidden},
+                     data={k: v for k, v in (J.get("data") or {}).items() if k not in hidden})
         d = distil(name, J)
+        if hidden:
+            d["private_sets_dropped"] = len(hidden)
         if with_points:
             for s in d["sets"]:
                 d["sets"][s]["scans"] = scans(J, s)

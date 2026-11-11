@@ -14,6 +14,7 @@ from lrbench.diagnostics import collect
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NOTEBOOK = ROOT / "notebooks" / "long_range_diagnostics.py"
 LEVEL = "wB97M-V/def2-TZVPD"
+SECRET = 987.654321   # a reference value of the internal fixture set: must never appear in anything frozen
 
 
 def _rec(rid, species, pos, fid, fq, cls, d, flags=(), lowdin=None, spin=1, energy=-1.0, **refs):
@@ -82,9 +83,16 @@ def world(tmp_path):
     (runs / "charged.json").write_text(json.dumps(J))
     J2 = _result("ions", *pub, path=str(data / "ions.jsonl"), charges=False, label="local model")
     (runs / "local.json").write_text(json.dumps(J2))
-    # a result scored on the internal set, left in runs/ with the internal path recorded
+    # a result scored on the internal set, left in the public runs/ with the internal paths recorded and the summary
+    # blocks the distiller copies (DFT class means, spans), each carrying a value that must never leave
     J3 = _result("w18x", *internal, path=str(priv / "w18x.jsonl"), label="internal run")
+    J3["data"]["w18x"]["groups"] = str(priv / "w18x.groups.json")
+    J3["sets"]["w18x"]["E_int"] = {"by_distance": [{"cls": "ion_polar", "d": 9.0, "n": 1, "dft": SECRET,
+                                                    "model": SECRET, "mae": 0.0}],
+                                   "tail": {"ion_polar": {"slope": [0.5], "dft_span_meV": SECRET}}}
     (runs / "internal.json").write_text(json.dumps(J3))
+    (priv / "runs").mkdir()
+    (priv / "runs" / "internal.json").write_text(json.dumps(J3))
     return {"data": data, "runs": runs, "priv": priv, "pub": pub, "J": J}
 
 
@@ -112,19 +120,20 @@ def test_collect_attaches_points_and_charge_flags(world, monkeypatch):
     R = d["results"]
     assert R["charged"]["charges"] is True and R["local"]["charges"] is False      # per model, not per set
     assert len(R["charged"]["sets"]["ions"]["ionct"]["rows"]) == 9
-    # the internal set is never read through collect(), so it cannot be frozen into a site
-    assert "ionct" not in R["internal"]["sets"]["w18x"]
-    assert "Zn_H2O" not in json.dumps(d)
+    # a set whose recorded data lie under the internal path is dropped whole, summary numbers included
+    assert "w18x" not in R["internal"]["sets"] and R["internal"]["private_sets_dropped"] == 1
+    dump = json.dumps(d)
+    assert "Zn_H2O" not in dump and str(SECRET) not in dump and "w18x" not in dump
 
 
 def test_private_path_is_refused_even_as_the_data_dir(world, monkeypatch):
     monkeypatch.setenv("LRBENCH_PRIVATE_IONS", str(world["priv"]))
     d = collect(str(world["runs"]), data=str(world["priv"]))
-    assert "Zn_H2O" not in json.dumps(d)
+    assert "Zn_H2O" not in json.dumps(d) and str(SECRET) not in json.dumps(d)
 
 
 def test_private_points_reads_the_local_path(world):
-    p = ionct.private_points(str(world["priv"]), str(world["runs"]))
+    p = ionct.private_points(str(world["priv"]))
     assert p["sets"] == ["w18x"] and len(p["ref"]["w18x"]) == 2
     assert "internal run" in p["models"]
 
@@ -143,7 +152,7 @@ def test_frozen_notebook_has_no_live_only_code(world, tmp_path, monkeypatch):
     src = out.read_text()
     assert "LIVE ONLY" not in src and "private_points" not in src
     assert not [line for line in src.splitlines() if "lrbench" in line.lower()]
-    assert "Zn_H2O" not in src and "Mg_Cl" in src
+    assert "Zn_H2O" not in src and str(SECRET) not in src and "Mg_Cl" in src
 
 
 def _run_notebook(path, monkeypatch, runs=None, data=None):

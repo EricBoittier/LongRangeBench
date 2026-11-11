@@ -1029,9 +1029,10 @@ def _(EMBEDDED, ion_frame, mo, mv_curves, priv_path):
 
         if _os.path.isdir(priv_path.value.strip()):
             try:
-                PRIV = _il.import_module("lrbench.ionct").private_points(
-                    priv_path.value.strip(), _os.environ.get("LRBENCH_RUNS", "runs"))
-                PRIV_NOTE = f"{len(PRIV.get('sets', []))} internal set(s) read from the local path."
+                PRIV = _il.import_module("lrbench.ionct").private_points(priv_path.value.strip())
+                PRIV_NOTE = (f"{len(PRIV.get('sets', []))} internal set(s) read from the local path, with model "
+                             f"predictions from its own `runs/` ({len(PRIV.get('models', {}))} result(s)). Keep "
+                             "results scored on these sets there, not in the public run directory.")
             except Exception as _e:
                 PRIV_NOTE = f"could not read the internal sets ({type(_e).__name__})."
         else:
@@ -1055,7 +1056,7 @@ def _(EMBEDDED, ion_frame, mo, mv_curves, priv_path):
 
 
 @app.cell
-def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, VERM, VIK, frame, heading, logx, mo, np, pd, plt, svg):
+def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, R, VERM, VIK, frame, heading, logx, mo, np, pd, plt, svg):
     _FRAC = 0.02      # the dataset's label rule: a fragment within 0.02 e of its formal charge is integer-like
     _FLOOR = 1e-4     # Löwdin sums are stored to 4 decimals; anything smaller is drawn on the floor
 
@@ -1212,7 +1213,7 @@ def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, VERM, VIK, frame, heading, logx
 
     _ctfig, _tiernote = ct_figure(ION_REF) if not ION_REF.empty else (None, "")
     _with = ION[ION["charges"]] if not ION.empty else ION
-    _without = (sorted(set(ION.loc[~ION["charges"], "label"])) if not ION.empty else [])
+    _without = sorted({r["label"][:28] for r in R.values() if not r.get("charges")})
     mo.vstack([
         mo.md(r"""<a id="ct"></a>
 ## Charge transfer and leakage
