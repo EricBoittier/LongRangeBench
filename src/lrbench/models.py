@@ -32,7 +32,9 @@ ENVS: Dict[str, dict] = {
     SO3LR_ENV: {
         "probe": "so3lr",  # module whose import tells whether the environment can run these models
         "python": ">=3.12,<3.14",
-        "install": ['uv pip install "so3lr[cuda12] @ git+https://github.com/general-molecular-simulations/so3lr@v0.2.0"',
+        # There is no v0.2.0 *tag* upstream, only a release/v0.2.0 branch: install the pinned commit, not the tag.
+        "install": ['uv pip install "so3lr[cuda12] @ git+https://github.com/general-molecular-simulations/so3lr'
+                    '@2a7480cb38cb0c75bc89784f32f8e253c1a70153"',
                     'uv pip install -e ".[test]"'],
         "notes": "JAX < 0.11 with CUDA 12 (jaxlib 0.11.1 hangs in the PME scatter on CPU). Checkpoints ship inside "
                  "the package (no download). x64 is switched on by the adapter (float64).",
