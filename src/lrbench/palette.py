@@ -61,6 +61,35 @@ DIVERGING = {
     "roma": ["#7E1700", "#A5681F", "#C8B455", "#C0EAC3", "#5DC1D3", "#287AB8", "#033198"],       # crameri:roma
 }
 
+#: The ramps the chemiscope views are *actually* drawn with, applied to Plotly's marker colorscale directly rather
+#: than chosen from chemiscope's own fixed list. CMasher's maps are perceptually uniform and colour-vision safe,
+#: and these two are taken from it -- but neither is used as published, for reasons that are about this page rather
+#: than about the maps:
+#:
+#: ``magnitude`` — ``cmasher:rainforest`` sampled over **0.04-0.88** instead of 0-1. The full map runs from pure
+#: black to pure white, and a ramp that ends at the page colour hides its own extreme: the largest values would be
+#: white markers on a white background. Truncated, lightness still rises monotonically (0.01 -> 0.83), so it reads
+#: correctly in greyscale.
+#:
+#: ``signed`` — ``cmasher:fusion`` sampled over **0.10-0.90**, with the neutral nudged 10 % toward ink. Two separate
+#: problems: at the extremes fusion converges on nearly the same dark purple, so maximum positive and maximum
+#: negative looked alike, which is fatal for a signed quantity; truncating leaves dark red against indigo at
+#: matched lightness (L 0.13 vs 0.14). And its middle is pure white, so a *zero* error -- the thing a diverging map
+#: exists to make visible -- would have disappeared into the page. #e6e7e7 reads as neutral instead of as absent,
+#: which is what crameri:vik does with #ECE5E0 and why that map has been the project's diverging default.
+#:
+#: CMasher's diverging maps are otherwise mostly dark-middled (``redshift``, ``iceburn``: black at zero), which
+#: suits a black background and not this one. That is a question of destination, not quality.
+CMASHER = {
+    "magnitude": ["#080206", "#2A0535", "#3E057A", "#2C3893", "#055C86", "#06767B", "#1A916B", "#49A74A",
+                  "#96B605", "#D4BE46", "#F7D09C"],
+    "signed": ["#720633", "#A32E28", "#C36021", "#D09B52", "#DCCFA8", "#e6e7e7", "#AFD9E1", "#60B5DC",
+               "#4785DD", "#574CD0", "#550B98"],
+    # Qualitative stays Tableau, which is what the project already uses for model families and what chemiscope's
+    # own "tab10" is (the classic Tableau 10). A ramp has no business carrying an identity.
+    "identity": QUALITATIVE["tableau10"],
+}
+
 #: What chemiscope can be asked for, by the same three jobs. Its palettes are fixed by its own build, so these are
 #: the best available members of each kind rather than the maps above — named here so a view never picks a
 #: sequential ramp for a signed quantity just because it looked nice.

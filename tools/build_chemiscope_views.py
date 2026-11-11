@@ -336,6 +336,8 @@ const DATA = {data};
 const VIEWS = {views};
 const RANK = {rank};
 const PAL = {palette};
+const CMR = {cmr};
+{menu_js}
 {scan_js}
 /* chemiscope's palettes, as it reports them itself: a categorical property gets a categorical palette, a signed
    quantity a diverging one centred on zero, a magnitude a perceptually uniform sequential ramp. */
@@ -480,6 +482,28 @@ function setShared(st) {{
   }} catch (e) {{ console.warn("shared axis:", e); }}
 }}
 
+/* Chemiscope's colour maps are module-private -- the bundle exports only classes, so there is no registry to add
+   to and no way to "preload" a map through its API. Its map is Plotly underneath, though, and Plotly takes a
+   colorscale as [fraction, colour] pairs, so the ramp is applied to the markers directly through the same private
+   hook the y = x line already uses. Chemiscope rewrites the scale whenever a setting changes, so this re-applies
+   on every change rather than once at load. If the hook ever disappears the page still works: chemiscope's own
+   nearest-equivalent palette is set alongside, and that is what would show. */
+function cmrScale(stops) {{
+  return stops.map((c, i) => [i / (stops.length - 1), c]);
+}}
+function applyRamp(st) {{
+  try {{
+    const kind = paletteKind(st.ds, st.viz.saveSettings().map.color.property);
+    const stops = CMR[kind === "diverging" ? "signed" : kind === "sequential" ? "magnitude" : null];
+    if (!stops || !st.viz.map || !st.viz.map._restyle) return;
+    st.viz.map._restyle({{ "marker.colorscale": cmrScale(stops) }}, [0, 1]);
+    /* The signed ramp's neutral is a pale grey so that zero reads as neutral rather than as nothing -- but a pale
+       marker on a pale page still needs an edge to be seen at all. */
+    if (kind === "diverging")
+      st.viz.map._restyle({{ "marker.line.width": 0.6, "marker.line.color": "#6e7073" }}, [0, 1]);
+  }} catch (e) {{ console.warn("ramp:", e); }}
+}}
+
 /* a diverging scale is only honest when it is centred on zero */
 function centreColour(st) {{
   try {{
@@ -589,17 +613,31 @@ function buildBar(st, v) {{
       }});
     }}
     const shown = p => {{ const i = p.indexOf("/"); return i < 0 || !HIDDEN.has(p.slice(i + 1)); }};
-    const colours = ["separation", "class", "total charge", "atoms", "fragment", "q_lowdin"]
-      .filter(c => props.includes(c))
-      .concat(props.filter(p => (p.startsWith("abserr/") || p.startsWith("err/")) && shown(p)).slice(0, 2));
-    /* The palette is a consequence of what the property *is*, so it is applied, not offered: the swatch on each
-       button is the ramp that choosing it will bring. */
-    group(bar, "colour", colours.map(c => ({{ label: c, c, swatch: rampOf(st.ds, c) }})),
-          it => it.c === s.color.property, it => {{
-      const kind = paletteKind(st.ds, it.c);
-      st.viz.applySettings({{ map: {{ color: {{ property: it.c, palette: PALETTES[kind][0] }} }} }});
-      if (kind === "diverging") centreColour(st);
+    /* Colouring by a per-model error used to show the first two of these in alphabetical order, which meant the
+       bar advertised "err/aimnet2" and silently withheld the other twenty -- an arbitrary model promoted by its
+       name. All of them belong in one menu instead: the structural properties first, then every visible model's
+       signed and absolute error, so choosing between models is a choice and not a coincidence of sorting. */
+    const structural = ["separation", "class", "total charge", "atoms", "fragment", "q_lowdin"]
+      .filter(c => props.includes(c));
+    const perModel = p => p.startsWith("err/") || p.startsWith("abserr/");
+    const errs = props.filter(p => perModel(p) && shown(p)).sort((a, b) => {{
+      const ka = a.split("/")[0], kb = b.split("/")[0];
+      return ka === kb ? a.localeCompare(b) : (ka === "err" ? -1 : 1);
     }});
+    /* The palette is a consequence of what the property *is*, so it is applied, not offered: the swatch on each
+       entry is the ramp that choosing it will bring. */
+    const choose = c => {{
+      const kind = paletteKind(st.ds, c);
+      st.viz.applySettings({{ map: {{ color: {{ property: c, palette: PALETTES[kind][0] }} }} }});
+      if (kind === "diverging") centreColour(st);
+      applyRamp(st);
+    }};
+    menu(bar, "colour", s.color.property,
+         [{{ head: "structure", items: structural }}, {{ head: "per model", items: errs }}]
+           .filter(g => g.items.length)
+           .map(g => ({{ head: g.head, items: g.items.map(c => ({{
+               label: c, c, swatch: rampOf(st.ds, c), dot: MODELCOL[(c.split("/")[1] || "")] }})) }})),
+         it => it.c === s.color.property, it => choose(it.c));
     scaleGroup(bar, st, "x", s.x.property);
     scaleGroup(bar, st, "y", s.y.property);
     group(bar, "", [{{ label: "shared axis", v: 1 }}], () => !!st.shared,
@@ -685,8 +723,9 @@ function scoreBars(r) {{
                    shared: !!v.parity }};   // a parity plot is wrong by default without it
       STATES.push(st);
       buildBar(st, v);
-      viz.onSettingChange(() => redraw(document.getElementById(v.id + "-bar")));
-      setTimeout(() => {{ if (v.center0) centreColour(st); if (st.shared) setShared(st); setDiagonal(st); }}, 450);
+      viz.onSettingChange(() => {{ redraw(document.getElementById(v.id + "-bar")); applyRamp(st); }});
+      setTimeout(() => {{ if (v.center0) centreColour(st); if (st.shared) setShared(st);
+                          applyRamp(st); setDiagonal(st); }}, 450);
     }} catch (e) {{
       document.getElementById(v.id + "-view").innerHTML =
         '<p class="err">chemiscope could not load this view: ' + e + '</p>';
@@ -1214,6 +1253,24 @@ table.idx td.feeds { font-family:var(--sans); font-size:11px; }
 .cchip.off { background:#b9b9b9 !important; text-decoration:line-through; }
 .cnone { color:var(--mut); font-style:italic; }
 
+/* the colour dropdown: a button that states the current choice, and the alternatives only when asked */
+.menuwrap { position:relative; display:inline-block; }
+.menubtn { display:inline-flex; align-items:center; gap:6px; }
+.menubtn .caret { width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent;
+  border-top:5px solid currentColor; opacity:.55; margin-left:2px; flex:none; }
+.pop { display:none; position:absolute; z-index:40; top:calc(100% + 4px); left:0; min-width:188px;
+  max-height:320px; overflow-y:auto; background:var(--card); border:1px solid var(--rule); border-radius:5px;
+  box-shadow:0 6px 22px rgba(0,0,0,.13); padding:4px; }
+.menuwrap.open .pop { display:block; }
+.pophead { font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--faint); padding:7px 8px 3px; }
+.poprow { display:flex; align-items:center; gap:7px; width:100%; text-align:left; border:none; background:none;
+  font-family:var(--mono); font-size:12px; color:var(--fg); padding:5px 8px; border-radius:3px; cursor:pointer; }
+.poprow:hover { background:color-mix(in srgb, var(--fg) 6%, transparent); }
+.poprow.sel { background:color-mix(in srgb, var(--fg) 9%, transparent); font-weight:600; }
+.poprow .swatch { width:26px; height:10px; border-radius:2px; border:1px solid var(--rule); flex:none; }
+.poprow .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+
 /* a level-of-theory mismatch: a pale wash no family hue can imitate, plus the glyph it already had */
 table.rank td.lotbad { background:rgba(176,124,42,.13); box-shadow:inset 2px 0 0 rgba(176,124,42,.75); }
 table.rank tr.off td.lotbad { background:none; box-shadow:none; }
@@ -1386,6 +1443,99 @@ EXTRA_JS = r"""
   drawNumKey();
   refresh();
 })();
+"""
+
+#: A dropdown. Injected unformatted, so its braces are literal.
+#:
+#: The bar's other controls are buttons because their options are few and worth showing at once. Colour is not: with
+#: twenty-three models there are forty-odd per-model error properties, and the previous version showed the first two
+#: in alphabetical order -- which advertised "err/aimnet2" and hid the rest behind nothing at all. A menu shows the
+#: current choice, and the alternatives on request, grouped so that "structure" and "per model" are not one flat list.
+MENU_JS = """
+function menu(bar, label, current, groups, isOn, choose) {
+  if (!groups.length) return;
+  if (bar.childElementCount) bar.appendChild(Object.assign(document.createElement("span"), { className: "sep" }));
+  if (label) {
+    const l = document.createElement("span");
+    l.className = "lbl"; l.textContent = label;
+    bar.appendChild(l);
+  }
+  const wrap = document.createElement("span");
+  wrap.className = "menuwrap";
+  const flat = groups.flatMap(g => g.items);
+  const cur = flat.find(it => isOn(it));
+  const btn = document.createElement("button");
+  btn.className = "menubtn on";
+  btn.setAttribute("aria-haspopup", "listbox");
+  btn.setAttribute("aria-expanded", "false");
+  if (cur && cur.swatch) {
+    const sw = document.createElement("i");
+    sw.className = "swatch";
+    sw.style.background = cur.swatch;
+    btn.appendChild(sw);
+  }
+  btn.appendChild(document.createTextNode(cur ? cur.label : (current || "choose")));
+  const caret = document.createElement("i");
+  caret.className = "caret";
+  btn.appendChild(caret);
+  const pop = document.createElement("div");
+  pop.className = "pop";
+  pop.setAttribute("role", "listbox");
+  groups.forEach(g => {
+    if (g.head) {
+      const h = document.createElement("div");
+      h.className = "pophead";
+      h.textContent = g.head;
+      pop.appendChild(h);
+    }
+    g.items.forEach(it => {
+      const row = document.createElement("button");
+      row.className = "poprow" + (isOn(it) ? " sel" : "");
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(!!isOn(it)));
+      if (it.swatch) {
+        const sw = document.createElement("i");
+        sw.className = "swatch";
+        sw.style.background = it.swatch;
+        row.appendChild(sw);
+      } else if (it.dot) {
+        const d = document.createElement("i");
+        d.className = "dot";
+        d.style.background = it.dot;
+        row.appendChild(d);
+      }
+      row.appendChild(document.createTextNode(it.label));
+      row.onclick = ev => { ev.stopPropagation(); close(); choose(it); redraw(bar); };
+      pop.appendChild(row);
+    });
+  });
+  let open = false;
+  const onDoc = ev => { if (!wrap.contains(ev.target)) close(); };
+  const onKey = ev => { if (ev.key === "Escape") { close(); btn.focus(); } };
+  function close() {
+    open = false;
+    wrap.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onDoc, true);
+    document.removeEventListener("keydown", onKey);
+  }
+  btn.onclick = ev => {
+    ev.stopPropagation();
+    if (open) { close(); return; }
+    /* One menu at a time, so two open popups cannot overlap each other. */
+    document.querySelectorAll(".menuwrap.open").forEach(w => w.classList.remove("open"));
+    open = true;
+    wrap.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    document.addEventListener("click", onDoc, true);
+    document.addEventListener("keydown", onKey);
+    const sel = pop.querySelector(".poprow.sel");
+    if (sel) sel.scrollIntoView({ block: "nearest" });
+  };
+  wrap.appendChild(btn);
+  wrap.appendChild(pop);
+  bar.appendChild(wrap);
+}
 """
 
 KATEX_VERSION = "0.16.9"
@@ -1814,6 +1964,8 @@ def main(argv=None) -> int:
         katex_css=katex_css,
         body="\n".join(body),
         scan_css=SCAN_CSS.format(),
+        cmr=json.dumps(pal.CMASHER),
+        menu_js=MENU_JS,
         palette=json.dumps({"seq": pal.SEQUENTIAL["batlow"], "div": pal.DIVERGING["vik"],
                             "groups": {k: v["colour"] for k, v in pal.GROUPS.items()}}),
         extra_css=EXTRA_CSS,
