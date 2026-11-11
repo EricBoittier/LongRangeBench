@@ -29,6 +29,11 @@
    "repo": "github.com/EricBoittier/mlip.cpp",
    "branch": "feat/pet-lr-port",
    "note": "PET-LR (iris) architecture port; extra ggml precision patches"
+  },
+  "cf878fd": {
+   "repo": "github.com/EricBoittier/mlip.cpp",
+   "branch": "fix/pet-lr-index-rank",
+   "note": "6e2ead3 + graph INDEX rank fix: single-atom structures (bare ions) failed on 6e2ead3"
   }
  },
  "models": {
@@ -664,7 +669,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-control/model.gguf",
    "sha256": "4574e683fba18c7564173f8b8fd9181fc7b81772ea08aae04d427efbbca9ea14",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
@@ -681,7 +686,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-readout/model.gguf",
    "sha256": "aaf87767672fc9b34fe82d09cf99437d57bc59a7e0559cebbb8f9325f59f4f13",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
@@ -698,7 +703,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-readout-pol/model.gguf",
    "sha256": "838820b0abf484310df3849dd4da80bf4acb4e0f26d71773f2072ee98c0cee3c",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
@@ -715,7 +720,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-readout-1m/model.gguf",
    "sha256": "3d48c1cc9519aefdc73931b2218cbc626159e5652d9ac083d1d46c448f05d7f1",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
@@ -732,7 +737,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-readout-2m/model.gguf",
    "sha256": "3dedb9bcee4cd4aac5b3218e56c5a78ee2c099e69549d4ace2aa29298e8412aa",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
@@ -749,7 +754,7 @@
    "gguf": "${LRBENCH_GGUF_ROOT}/pet-lr-readout-4m/model.gguf",
    "sha256": "4f2a1a97499b890c93cb2a8c12da4f5d4ced5c429c08c1def7ab9f4bfa07de8e",
    "companions": {},
-   "build": "6e2ead3",
+   "build": "cf878fd",
    "keys_not_literal": [
     "pet.d_pet",
     "pet.iris_lr.dipole_origin",
