@@ -101,17 +101,102 @@ def distil_priors(name: str, J: dict) -> dict:
     }
 
 
-def collect(runs: str = "runs") -> dict:
+def scans(J: dict, setname: str) -> list:
+    """Class-mean E_int against distance, as the harness already binned it: the material for a distance scan.
+
+    ``[{cls, d, n, dft, model, mae}]``, meV. These are means over the scans of a class at that distance, so the
+    curve is the class's behaviour rather than one pair's.
+    """
+    rows = (((J.get("sets") or {}).get(setname) or {}).get("E_int") or {}).get("by_distance") or []
+    out = []
+    for r in rows:
+        if r.get("d") is None or r.get("dft") is None or r.get("model") is None:
+            continue
+        out.append({"cls": r.get("cls", "?"), "d": float(r["d"]), "n": r.get("n"),
+                    "dft": float(r["dft"]), "model": float(r["model"]),
+                    "mae": None if r.get("mae") is None else float(r["mae"])})
+    return out
+
+
+def _find(path: str, base: Optional[str]) -> Optional[str]:
+    """A result records the data paths as the eval saw them, which is usually relative to where it ran."""
+    for cand in (path, os.path.join(base or "", path), os.path.join(base or "", os.path.basename(path))):
+        if cand and os.path.exists(cand):
+            return cand
+    return None
+
+
+def parity(J: dict, setname: str, groups: Optional[list] = None, kind: str = "E_int",
+           base: Optional[str] = None) -> list:
+    """Per-group model value against its reference, rebuilt from the saved predictions.
+
+    ``lrbench eval --save-predictions`` stores one energy per evaluated term; a group's value is the same linear
+    combination of those terms that defines the reference, so model and reference are formed identically and a
+    parity plot compares like with like. ``[{cls, d, ref, model}]`` in meV. Groups that touch a DFT pathology, or
+    any term the model failed, are left out -- never plotted as zero.
+
+    ``groups`` defaults to the groups file the result itself records (``data.<set>.groups``), so a result carries
+    everything needed to rebuild this.
+    """
+    S = (J.get("sets") or {}).get(setname) or {}
+    P = S.get("predictions") or {}
+    if not P:
+        return []
+    if groups is None:
+        gp = ((J.get("data") or {}).get(setname) or {}).get("groups")
+        gp = _find(gp, base) if gp else None
+        if not gp:
+            return []
+        with open(gp) as f:
+            groups = json.load(f)
+    out = []
+    for g in groups or []:
+        if g.get("kind") != kind or g.get("ref") is None:
+            continue
+        meta = g.get("meta") or {}
+        if any("pathology" in str(x) for x in (meta.get("flags") or [])):
+            continue
+        v, ok = 0.0, True
+        for term, coef in g.get("terms") or []:
+            vals = P.get(term)
+            if not vals or vals[0] is None:
+                ok = False
+                break
+            good = [x for x in vals if isinstance(x, (int, float))]
+            if not good:
+                ok = False
+                break
+            v += float(coef) * (sum(good) / len(good))      # ensemble members are averaged, as in scoring
+        if ok:
+            out.append({"cls": meta.get("cls", "?"), "d": meta.get("dmin"),
+                        "ref": round(1e3 * float(g["ref"]), 4), "model": round(1e3 * v, 4)})
+    return out
+
+
+def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200,
+            base: Optional[str] = None) -> dict:
     """Every result in ``runs/*.json`` and every prior suite in ``runs/priors/*.json``, distilled."""
     results, priors = {}, {}
+    base = base or os.path.dirname(os.path.abspath(runs))   # where the evals ran, for the recorded data paths
     for p in sorted(glob.glob(os.path.join(runs, "*.json"))):
         try:
             with open(p) as f:
                 J = json.load(f)
         except Exception:
             continue  # a file still being written
-        if "sets" in J:
-            results[os.path.basename(p)[:-5]] = distil(os.path.basename(p)[:-5], J)
+        if "sets" not in J:
+            continue
+        name = os.path.basename(p)[:-5]
+        d = distil(name, J)
+        if with_points:
+            for s in d["sets"]:
+                d["sets"][s]["scans"] = scans(J, s)
+                pts = parity(J, s, base=base)
+                if len(pts) > max_points:        # thin evenly; a parity cloud does not need every point
+                    step = len(pts) / max_points
+                    pts = [pts[int(i * step)] for i in range(max_points)]
+                d["sets"][s]["parity"] = pts
+        results[name] = d
     for p in sorted(glob.glob(os.path.join(runs, "priors", "*.json"))):
         try:
             with open(p) as f:

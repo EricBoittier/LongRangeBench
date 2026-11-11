@@ -38,26 +38,6 @@ def freeze(notebook: pathlib.Path, data: dict, out: pathlib.Path) -> pathlib.Pat
     return out
 
 
-ROUTES_CELL = "    mo.routes({"
-ALL_PAGES = """    mo.vstack([page_overview(), page_tails(), page_distance(), page_table(),
-               page_priors(), page_models(), page_data()])
-"""
-
-
-def flatten(frozen: pathlib.Path, out: pathlib.Path) -> pathlib.Path:
-    """A copy whose last cell renders every page in one column instead of routing between them.
-
-    `mo.routes` navigates by running Python, so a *static* export of the routed notebook contains no page at all.
-    This flattened copy exports as ordinary HTML -- one long scroll, every figure baked in -- which needs no runtime
-    and is the version to fall back on when the WebAssembly page cannot reach its CDN.
-    """
-    t = frozen.read_text()
-    i = t.index(ROUTES_CELL)
-    j = t.index("    return\n\n\nif __name__")
-    out.write_text(t[:i] + ALL_PAGES + t[j:])
-    return out
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("runs", nargs="?", default=os.environ.get("LRBENCH_RUNS", "runs"))
@@ -67,6 +47,8 @@ def main(argv=None) -> int:
     ap.add_argument("--open", action="store_true", help="open the result in a browser when it is built")
     ap.add_argument("--also-static", action="store_true",
                     help="additionally write <out>-static.html: one scroll, no runtime needed")
+    ap.add_argument("--data", default=None, help="dataset dir for the chemiscope views (default: RUNS/../lr-sets)")
+    ap.add_argument("--no-chemiscope", action="store_true", help="skip the embedded chemiscope datasets")
     a = ap.parse_args(argv)
 
     sys.path.insert(0, str(HERE / "src"))
@@ -75,12 +57,27 @@ def main(argv=None) -> int:
     data = collect(a.runs)
     if not data["results"]:
         sys.exit(f"no results in {a.runs!r}: nothing to build")
+
+    # chemiscope datasets travel with the notebook: Pyodide has no run directory, and the views are the point
+    if not a.no_chemiscope:
+        sys.path.insert(0, str(HERE / "tools"))
+        try:
+            from build_chemiscope_views import payloads, view_specs
+
+            built = payloads(a.runs, a.data, verbose=True)
+            data["chemiscope"] = {k: v["blob"] for k, v in built.items()}
+            data["views"] = view_specs(built)
+            print(f"[site] {len(data['chemiscope'])} chemiscope datasets, {len(data['views'])} views")
+        except Exception as e:                       # chemiscope missing, or no saved predictions
+            print(f"[site] no chemiscope views ({type(e).__name__}: {e})")
+            data["chemiscope"], data["views"] = {}, []
+
     size = len(json.dumps(data)) / 1024
     print(f"[site] {len(data['results'])} results, {len(data['priors'])} prior suites, {size:.0f} KB frozen")
 
     marimo = shutil.which("marimo") or str(pathlib.Path(sys.executable).parent / "marimo")
     out = pathlib.Path(a.out).resolve()
-    tmp = out.parent / "_diagnostics_site.py"
+    tmp = out.parent / "diagnostics-frozen.py"
     freeze(NOTEBOOK, data, tmp)
     cmd = [marimo, "export", "html-wasm", str(tmp), "-o", str(out), "--single-file", "--mode", a.mode, "-f",
            "--show-code" if a.show_code else "--no-show-code"]
@@ -93,16 +90,19 @@ def main(argv=None) -> int:
     print("[site] self-contained: no server, no Python; the runtime loads from a CDN on first open")
 
     if a.also_static:
-        flat = flatten(tmp, out.parent / "_diagnostics_flat.py")
+        # The notebook is one scroll, so a plain static export carries every section. It needs no Python runtime
+        # at all: the figures are baked in and chemiscope runs as ordinary JS inside its iframe. What it loses is
+        # the sliders, which need Python — that is what the WebAssembly build is for.
         static = out.with_name(out.stem + "-static" + out.suffix)
-        r2 = subprocess.run([marimo, "export", "html", str(flat), "-o", str(static), "-f"],
+        r2 = subprocess.run([marimo, "export", "html", str(tmp), "-o", str(static), "-f"],
                             capture_output=True, text=True)
-        flat.unlink(missing_ok=True)
         if r2.returncode:
             sys.stderr.write(r2.stdout + r2.stderr)
         else:
             print(f"[site] wrote {static}  ({static.stat().st_size / 1024:.0f} KB, every page in one scroll)")
-    tmp.unlink(missing_ok=True)
+    # The frozen notebook is kept, not deleted: it is a self-contained marimo notebook with the data inside, which
+    # is exactly what molab wants (open it from a GitHub URL, or upload it) and what `marimo edit` can reopen.
+    print(f"[site] frozen notebook: {tmp}  ({tmp.stat().st_size / 1024:.0f} KB) — upload this to molab")
     if a.open:
         webbrowser.open(out.as_uri())
     return 0
