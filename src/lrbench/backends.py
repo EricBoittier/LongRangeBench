@@ -119,6 +119,7 @@ class MlipcppEval(Backend):
         self.launcher = shlex.split(launcher or os.environ.get("LRBENCH_LAUNCHER", ""))
         self.workdir = workdir
         self.last_header: dict = {}
+        self.keep_sqe = False  # lrbench priors: also return the projected (physical) charges as "charges_phys"
 
     def _run(self, structs):
         d = tempfile.mkdtemp(prefix="lrbench-", dir=self.workdir)
@@ -142,6 +143,8 @@ class MlipcppEval(Backend):
             res.append({"energy": float(f["energy"]), "forces": np.asarray(f["forces"], float).reshape(-1, 3),
                         "charges": None if lq is None else np.asarray(lq, float).reshape(len(s.species), -1)[:, 0],
                         "error": None})
+            if self.keep_sqe and f.get("sqe_charges"):
+                res[-1]["charges_phys"] = np.asarray(f["sqe_charges"], float)
         return res
 
     def predict(self, structs):

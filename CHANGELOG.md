@@ -35,6 +35,22 @@ point; this is the extraction, not the beginning of the work.
 - Documentation: metrics, datasets, models, output schema, timing, properties, and guides for adding a model or a
   dataset.
 
+### Added (folded in from the development workspace, 2026-11-11)
+
+- **`lrbench priors`** (`lrbench.priors`): twenty pass/fail checks of physical priors and of model and data
+  assumptions — far-field exponent, ε, seams, size consistency, work-energy consistency, bare-ion NVE, invariance,
+  IP/EA convexity, separated-charge offset by Q, fragment charges, periodic↔open consistency, locality, charge
+  conditioning and caching, determinism, precision, contamination, level of theory, CT/unbound labelling,
+  offset-free degeneracy and distribution shift. `eval` output is unchanged. `--list` prints the checks and their
+  rules. Validated by thirteen synthetic planted-defect models, one check each, in `tests/test_priors.py`.
+- **External public QM set converters** (`tools/ext_*.py`): GSCDB137 noncovalent (45 subsets, 5,711 records), NCI
+  Atlas (19,565), the BFDB biodimers (29,783, with the 30 Å reference cell's r² term handled and like-charge curves
+  corrected), and the tier-A open-boundary relabel `ext_biodimers_wb97mv` (976 E_int on 121 curves). No benchmark
+  data is redistributed: the converters read your own download and record its checksums.
+- Probe builders for the priors suite (`tools/priors_ipea.py`, `tools/priors_sepframes.py`) and a check × model
+  table (`tools/priors_table.py`); `ext_summary.py` and `ext_biodimer_score.py` for the external sets.
+- `MlipcppEval` can return the projected physical charges alongside the latent ones (`charges_phys`).
+
 ### Known limitations
 
 - The canonical reference sets are not yet public ([docs/datasets.md](docs/datasets.md)); the toy set and the
@@ -43,5 +59,13 @@ point; this is the extraction, not the beginning of the work.
   exists ([ROADMAP.md](ROADMAP.md) Phase 1). Pin a commit if you publish numbers.
 - GSCDB137: the 3BHET, IHB100x2 and NBC10 scoring paths are untested, and conformal calibration is not implemented
   for that set.
+- The `ext_*` sets do not trigger the level-of-theory refusal, because set levels are inferred from records that
+  carry an `energy` and theirs live on the groups. Pass `--allow-level-mismatch` deliberately and state the
+  mismatch. The fix is to count records referenced by groups.
+- The `ext_*` converters are smoke-run only: no unit tests and no `--help`.
+- Conformal calibration needs cells of roughly 19 points or more; some GSCDB ion-pair cells (n = 16) are too small.
+- `seen_by` contamination flags are not yet written into the `ext_*` records, though the overlap tables exist.
+- Third-party slab/interface and multivalent-ion references are pointers only, with no loader: they are not ours to
+  redistribute.
 - `tools/` contains study-specific scripts that reference campaign output not included here (see
   [tools/README.md](tools/README.md)).

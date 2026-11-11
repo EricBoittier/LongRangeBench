@@ -615,6 +615,9 @@ def main(argv=None):
     p.add_argument("--md", action="store_true", help="markdown requirements table")
     p.set_defaults(func=cmd_models)
 
+    from .priors.run import add_parser as _priors_parser
+    _priors_parser(sub, _common)
+
     p = sub.add_parser("toy", help="write the self-contained Lennard-Jones toy set (no download, for the quickstart)")
     p.add_argument("outdir")
     p.set_defaults(func=cmd_toy)
