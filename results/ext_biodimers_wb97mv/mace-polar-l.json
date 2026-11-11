@@ -1,0 +1,69 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "mace-polar-l",
+  "--label",
+  "mace-polar-l",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/ext/mace-polar-l.json",
+  "--sets",
+  "ext_gscdb_nc,ext_biodimers_wb97mv"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "1d0a75c84284093e069184f66805520c3020507af00b64c21dead9647fab1810",
+  "jsonl_sha256": "a810abb301190266e52819689e5daeeb8bc547dd5086e51c0f3e6a587e45a1e7",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "mace-polar-l",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "mace-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:mace_polar?model='polar-1-l'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "160 pts / 40 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.927 [0.925, 0.929]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "34",
+   "note": "DFT mean |E_int| 1003.4 meV",
+   "value": "154.3 [151.9, 156.2]"
+  }
+ ],
+ "model": "mace-polar-l",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 976,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-V/def2-TZVPD vs labels {'ext_gscdb_nc': ['CCSD(T)/CBS (GSCDB137 ref)']}; energy metrics compare different levels of theory",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "ext_biodimers_wb97mv"
+}

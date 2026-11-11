@@ -1,0 +1,136 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "mace-polar-l",
+  "--label",
+  "mace-polar-l",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/mace-polar-l.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "mace-polar-l",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "mace-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:mace_polar?model='polar-1-l'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "216 pts / 36 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.952 [0.945, 0.958]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "66 pts / 11 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.015 [1.010, 1.021]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "126 pts / 21 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.742 [0.567, 0.970]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.194 [-0.509, 1.073]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.077 [1.041, 1.089]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "36",
+   "note": "flat model 979.1 meV",
+   "value": "46.3 [40.6, 52.2]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "144",
+   "note": "DFT mean |E_int| 786.6 meV",
+   "value": "87.2 [69.5, 107.0]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "11",
+   "note": "flat model 964.6 meV",
+   "value": "16.1 [10.8, 22.6]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "44",
+   "note": "DFT mean |E_int| 786.8 meV",
+   "value": "9.1 [5.5, 12.8]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "501 / 36 groups",
+   "note": "zero model MAE 266.2 meV",
+   "value": "0.963 [0.948, 0.979] / 18.0 [14.0, 22.2]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "1254",
+   "note": "absolute; same-level models only",
+   "value": "3.1"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "180",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.91 k_BT (300 K)",
+   "value": "-0.045 [-0.069, -0.038]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "55",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.19 k_BT (300 K)",
+   "value": "0.011 [0.005, 0.021]"
+  }
+ ],
+ "model": "mace-polar-l",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 1254,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

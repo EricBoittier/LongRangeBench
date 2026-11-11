@@ -1,0 +1,94 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "mace-polar-l",
+  "--label",
+  "mace-polar-l",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/mace-polar-l.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "62463d247980aa7a2e2a0c650f6137a404eb5e38f209bf60d250d60d41c118d0",
+  "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "mace-polar-l",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "mace-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:mace_polar?model='polar-1-l'",
+   "version": "0.3.17"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "90 ddE / 9 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "0.8488 [0.8120, 0.8962]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "90",
+   "note": "zero model 89.0 meV",
+   "value": "13.5 [9.0, 17.3]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "5.2"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "34.3"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "131",
+   "note": "absolute; same-level models only",
+   "value": "12.0"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "90",
+   "note": "median; -1 = flat model",
+   "value": "-0.175"
+  }
+ ],
+ "model": "mace-polar-l",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 120,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}
