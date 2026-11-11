@@ -185,7 +185,11 @@ def cmd_eval(args):
     members = ([args.model] if args.model else []) + [m for m in (args.ensemble or "").split(",") if m]
     if not members:
         sys.exit("lrbench eval: give --model and/or --ensemble")
-    sets = ALL_SETS if args.sets == "all" else [s for s in args.sets.split(",") if s]
+    sets, seen = [], set()  # "all" expands in place, so --sets all,pbe0mbd_subset works
+    for s in args.sets.split(","):
+        for x in (ALL_SETS if s == "all" else [s] if s else []):
+            if x not in seen:
+                seen.add(x); sets.append(x)
     t0 = time.time()
     data = {s: subsample(load_set(s, args.data, args.revision), args.max_per_set, args.seed) for s in sets}
     lvc = level_check(data, members, args.model_level, args.allow_level_mismatch)

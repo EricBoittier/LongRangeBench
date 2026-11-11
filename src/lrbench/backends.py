@@ -251,6 +251,24 @@ class MlipcppCAPI(Backend):
                     precision="TF32 (MLIPCPP_TF32=1)" if self.tf32 else "fp32")
 
 
+def drop_ase_cache(calc) -> None:
+    """Invalidate an ASE calculator's cached result.
+
+    ``Calculator.check_state`` compares positions, numbers, cell and pbc only -- **not** ``atoms.info`` -- so two
+    structures that differ only in total charge or spin multiplicity look identical to it and the second one is
+    served the first one's energy. Our sets contain exactly such pairs (charge_parity, and every charge state of one
+    geometry), and :meth:`ASEBackend.predict` groups structures by atom count, which puts them next to each other.
+    So the cache is dropped before every structure. Calculators that cache internally on their own keys are
+    unaffected, and energy/forces of one structure still come from a single evaluation.
+    """
+    for attr, empty in (("atoms", None), ("results", {})):
+        if hasattr(calc, attr):
+            try:
+                setattr(calc, attr, dict(empty) if isinstance(empty, dict) else empty)
+            except Exception:  # a calculator with a read-only property: nothing we can do, and nothing we break
+                pass
+
+
 class ASEBackend(Backend):
     """Any ASE calculator; charge/spin go through atoms.info (charge, spin_multiplicity, spin)."""
     name = "ase"
@@ -273,6 +291,7 @@ class ASEBackend(Backend):
         out = []
         for s in structs:
             a = s.atoms(formal=self.formal)
+            drop_ase_cache(self.calc)  # charge/spin live in atoms.info, which ASE's check_state ignores
             a.calc = self.calc
             try:
                 e = float(a.get_potential_energy())

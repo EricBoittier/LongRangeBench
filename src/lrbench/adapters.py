@@ -30,7 +30,10 @@ PBE0MBD_V1 = "PBE0+MBD"  # the original SO3LR (registry name 'so3lr') was traine
 
 SPICE = "wB97M-D3(BJ)/def2-TZVPPD"
 RPBE_D3 = "RPBE-D3 (water, CACE-LES training set)"
+WB97M_D3_TZVPP = "wB97M-D3/def2-TZVPPD"
 LEVELS = {"maceles": SPICE, "cace": RPBE_D3, "so3lr": PBE0MBD, "mace_polar": OMOL, "mace_omol": OMOL, "kernel_lr": OMOL,
+          # OrbMol (OMol25; v2 adds OPoly26) and the released DPA4 checkpoints (OMol25 100M split)
+          "orbmol": OMOL, "deepmd": OMOL, "aimnet2": WB97M_D3_TZVPP,
           # MACE-MH-1 heads (mace-foundations model card / arXiv 2510.25380). The omol head is listed there as
           # wB97M-VV10, i.e. OMol25's wB97M-V/def2-TZVPD labels (1 % subset).
           "mace_mh:omol": OMOL, "mace_mh:omat_pbe": "PBE/PAW (OMat24)", "mace_mh:spice_wB97M": "wB97M-D3(BJ)/def2-TZVPPD",
@@ -75,8 +78,34 @@ class Adapter(Calculator):
         self._charges, self._dipole = charges, dipole  # callables(results dict) -> array | None
         self._before = before  # callable(inner, atoms) run before each call (e.g. cache resets)
 
+    #: the charge/spin inputs that live in ``atoms.info`` and that ASE's own ``check_state`` does not look at
+    INFO_KEYS = ("charge", "spin", "spin_multiplicity", "multiplicity", "charge_spin", "external_field")
+
+    @classmethod
+    def _info_state(cls, atoms):
+        out = []
+        for k in cls.INFO_KEYS:
+            v = None if atoms is None else atoms.info.get(k)
+            try:
+                v = tuple(np.ravel(np.asarray(v, float)).tolist()) if hasattr(v, "__len__") else v
+            except Exception:
+                v = repr(v)
+            out.append((k, v))
+        return tuple(out)
+
+    def check_state(self, atoms, tol=1e-15):
+        """ASE's version compares geometry only, so a structure that differs from the last one *just* in total charge
+        would be served the cached result. See :func:`lrbench.backends.drop_ase_cache`."""
+        changes = super().check_state(atoms, tol)
+        if not changes and self._info_state(atoms) != getattr(self, "_last_info", None):
+            changes = ["info"]
+        return changes
+
     def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
         super().calculate(atoms, properties, system_changes)
+        self._last_info = self._info_state(atoms if atoms is not None else self.atoms)
+        from .backends import drop_ase_cache
+        drop_ase_cache(self.inner)  # the wrapped calculator caches on geometry too
         a = self.atoms.copy()
         a.info = {k: v for k, v in atoms.info.items()}
         for src, dst in self.info_map.items():
@@ -151,6 +180,15 @@ def _mace_meta(name, extra):
     except Exception:
         v = "?"
     return dict({"model": name, "package": "mace-torch", "version": v}, **extra)
+
+
+def _pkg_meta(package: str, name: str, extra: dict) -> dict:
+    try:
+        from importlib.metadata import version
+        v = version(package)
+    except Exception:
+        v = "?"
+    return dict({"model": name, "package": package, "version": v}, **extra)
 
 
 def _has_charge_spin_embedding(calc) -> bool:
@@ -303,3 +341,94 @@ def kernel_lr(path: str, scripts: str = ""):
     meta = {"model": model.label, "package": "kernel-lr", "charge_spin": "total charge Q and spin multiplicity",
             "long_range": "none" if model.cm is None else f"frozen charges, {model.lr}", "forces": "not computed"}
     return Adapter(_KernelCalc(model), OMOL, meta, charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))
+
+
+# ------------------------------------------------------------------------------------------- OrbMol (Orbital Materials)
+ORBMOL = {"orbmol-v2": "orbmol_v2", "orbmol-v1": "orbmol_v1_conservative", "orbmol-v1-direct": "orbmol_v1_direct"}
+
+
+def orbmol(model: str = "orbmol-v2", device: str = "cuda", precision: str = "float32-high"):
+    """OrbMol (Orbital Materials, orb-models >= 0.7, Apache-2.0), trained on OMol25 (wB97M-V/def2-TZVPD; v2 also on
+    OPoly26). ``atoms.info['charge']`` and ``atoms.info['spin']`` (multiplicity) are required inputs.
+
+    v2 carries an explicit long-range term: a latent-charge head whose per-atom charges sum to the total charge, and
+    a Coulomb module (bare 1/r in vacuum, PME in a cell). v1 is local -- 6 A cutoff, no electrostatic term -- so the
+    pair is a controlled comparison of the same architecture with and without long range. Orbital Materials note
+    that the v2 charges are not trained on, so they are scored as given, like other latent charges.
+    """
+    from orb_models.forcefield import pretrained
+    from orb_models.forcefield.inference.calculator import ORBCalculator
+    fn = ORBMOL.get(model, model)
+    orbff, atoms_adapter = getattr(pretrained, fn)(device=device, precision=precision)
+    v2 = "v2" in fn
+    meta = _pkg_meta("orb-models", f"OrbMol ({model})", {
+        "licence": "Apache-2.0", "charge_spin": "atoms.info charge / spin (2S+1)",
+        "precision": precision,
+        "long_range": ("latent charges constrained to the total charge + Coulomb (bare 1/r in vacuum, PME in a "
+                       "cell); charges not trained on" if v2 else "none (local message passing, 6 A cutoff)")})
+    return Adapter(ORBCalculator(orbff, atoms_adapter, device=device), OMOL, meta,
+                   info_map={"spin_multiplicity": "spin"},
+                   charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))
+
+
+# ----------------------------------------------------------------------------------------------- DeePMD-kit (DPA4)
+def deepmd(model: str, level: str = OMOL, name: str = "", licence: str = "CC BY-NC 4.0"):
+    """A DeePMD-kit (>= 3.2) checkpoint through its ASE calculator. Written for the released
+    ``DPA4-<size>-OMol25-100M`` models: OMol25 100M split (wB97M-V/def2-TZVPD), CC BY-NC 4.0.
+
+    Total charge and spin multiplicity are passed as ``atoms.info['charge_spin'] = [Q, 2S+1]``, which conditions the
+    descriptor through FiLM. That is global conditioning on the charge, **not** an electrostatic term: the model is
+    local (6 A cutoff) and returns no per-atom charges, so the charge-parity and dipole blocks are skipped.
+    """
+    import os
+    from deepmd.calculator import DP
+    calc = DP(model=model)
+
+    def _charge_spin(inner, a):
+        a.info["charge_spin"] = np.array([int(a.info.get("charge", 0) or 0),
+                                          int(a.info.get("spin_multiplicity", 1) or 1)])
+
+    meta = _pkg_meta("deepmd-kit", name or f"DeePMD {os.path.basename(model)}", {
+        "checkpoint": model, "licence": licence,
+        "charge_spin": "atoms.info charge_spin = [Q, 2S+1], FiLM-conditioned descriptor",
+        "long_range": "none (local, 6 A cutoff); total charge enters only as descriptor conditioning"})
+    return Adapter(calc, level, meta, before=_charge_spin)
+
+
+# ---------------------------------------------------------------------------------------------- AIMNet2 (Isayev lab)
+def aimnet2(model: str = "aimnet2", lrcoulomb: str = "simple", cutoff: float = 15.0, dsf_alpha: float = 0.2,
+            level: str = WB97M_D3_TZVPP, device: str = "cuda"):
+    """AIMNet2 (``aimnet[ase]``, Isayev lab): charge-aware with an explicit Coulomb term over predicted partial
+    charges, which are constrained to sum to the total charge.
+
+    The total charge is **not** read from ``atoms.info``: it is set on the calculator (``set_charge`` / ``set_mult``),
+    which this adapter does before every structure. The docs warn that a wrong charge gives wrong answers silently,
+    so getting that plumbing right is the point of the adapter.
+
+    ``lrcoulomb='simple'`` (the default here) sums Coulomb over every pair with no cutoff -- the right choice for
+    vacuum dimer tails. ``'dsf'`` is the damped-shifted-force form AIMNet2 recommends for periodic systems; with its
+    15 A cutoff it truncates exactly the tails this benchmark measures, so it is reported as a separate model rather
+    than silently substituted.
+    """
+    from aimnet.calculators import AIMNet2ASE
+    calc = AIMNet2ASE(model, charge=0, mult=1)
+    if lrcoulomb and lrcoulomb != "simple":
+        calc.set_lrcoulomb_method(lrcoulomb, cutoff=cutoff, dsf_alpha=dsf_alpha)
+    if device and hasattr(calc, "to"):
+        try:
+            calc.to(device)
+        except Exception:
+            pass
+
+    def _set_charge(inner, a):
+        inner.set_charge(int(a.info.get("charge", 0) or 0))
+        if hasattr(inner, "set_mult"):
+            inner.set_mult(int(a.info.get("spin_multiplicity", 1) or 1))
+
+    meta = _pkg_meta("aimnet", f"AIMNet2 ({model})", {
+        "licence": "MIT (code); see the model card for the weights",
+        "charge_spin": "set_charge / set_mult on the calculator (not atoms.info); charges sum to the total charge",
+        "long_range": ("predicted partial charges + Coulomb over all pairs, no cutoff (vacuum)" if lrcoulomb ==
+                       "simple" else f"predicted partial charges + {lrcoulomb.upper()} Coulomb, cutoff {cutoff} A")})
+    return Adapter(calc, level, meta, before=_set_charge,
+                   charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))

@@ -22,6 +22,8 @@ from typing import Dict, List, Optional
 OMOL = "wB97M-V/def2-TZVPD"
 SO3LR_ENV = "so3lr"
 MACE_ENV = "mace"
+ORB_ENV = "orb"
+DEEPMD_ENV = "deepmd"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
@@ -40,6 +42,20 @@ ENVS: Dict[str, dict] = {
         "notes": "torch with CUDA matching the node. Checkpoints are downloaded by mace-torch on first use to "
                  "~/.cache/mace: pre-fetch on a login node (compute nodes may have no internet), or set "
                  "XDG_CACHE_HOME to shared storage.",
+    },
+    ORB_ENV: {
+        "probe": "orb_models.forcefield.pretrained",
+        "python": ">=3.10",
+        "install": ['uv pip install orb-models', 'uv pip install -e ".[test]"'],
+        "notes": "torch with CUDA matching the node. Checkpoints are downloaded from Orbital Materials' public S3 "
+                 "bucket on first use (~100 MB each) and cached by orb-models.",
+    },
+    DEEPMD_ENV: {
+        "probe": "deepmd.calculator",
+        "python": ">=3.10",
+        "install": ['uv pip install "deepmd-kit[torch]" ase', 'uv pip install -e ".[test]"'],
+        "notes": "torch with CUDA matching the node. The DPA4 OMol25 checkpoints are downloaded separately from "
+                 "huggingface.co/deepmodelingcommunity/DPA4-OMol; set LRBENCH_DPA4_DIR to where they are.",
     },
 }
 
@@ -108,6 +124,32 @@ MODELS.update({m.name: m for m in [
                "CACE-LES water (Cheng group)", "RPBE-D3 (water, CACE-LES training set)", LES_ENV,
                "MLIPs/CACE-LES/water/caceles-r-4.5-nl-1-nu-2/best_model.pth, " + _LESFIT, "CC BY-NC 4.0",
                "none: neutral only; H and O only", "Latent Ewald Summation", aliases=["cace-les", "caceles"]),
+]})
+
+# OrbMol (Orbital Materials) and the released DeePMD DPA4 checkpoints: both trained on OMol25, i.e. the same level
+# as our sets, and both take a total charge. OrbMol v1 -> v2 is the cleanest control we have: one architecture with
+# and without an explicit Coulomb term.
+_DPA4 = _os.environ.get("LRBENCH_DPA4_DIR", _os.path.expanduser("~/.cache/lrbench/dpa4"))
+MODELS.update({m.name: m for m in [
+    NamedModel("orbmol", "ase:lrbench.adapters:orbmol?model='orbmol-v2'", "OrbMol-v2 (learnable electrostatics)",
+               OMOL, ORB_ENV, "orb-models download (orbmol-v2-*.ckpt, Orbital Materials S3)", "Apache-2.0",
+               "atoms.info charge + spin (2S+1)",
+               "latent charges constrained to the total charge + Coulomb (bare 1/r in vacuum, PME in a cell)",
+               aliases=["orbmol-v2", "orb-mol", "orbmol2"]),
+    NamedModel("orbmol-v1", "ase:lrbench.adapters:orbmol?model='orbmol-v1'", "OrbMol v1 conservative",
+               OMOL, ORB_ENV, "orb-models download (orb-v3-conservative-omol-*.ckpt)", "Apache-2.0",
+               "atoms.info charge + spin (2S+1)", "none (local message passing, 6 A cutoff)",
+               aliases=["orbmol1", "orb-v3-omol"]),
+    NamedModel("dpa4-plus", f"ase:lrbench.adapters:deepmd?model='{_DPA4}/DPA4-Plus-OMol25-100M-v20260820.pt'"
+               "&name='DPA4-Plus-OMol25-100M'", "DPA4-Plus, OMol25 100M (8.8 M params)", OMOL, DEEPMD_ENV,
+               "huggingface.co/deepmodelingcommunity/DPA4-OMol", "CC BY-NC 4.0",
+               "atoms.info charge_spin = [Q, 2S+1], FiLM-conditioned descriptor",
+               "none (local, 6 A cutoff); the total charge only conditions the descriptor",
+               aliases=["dpa4", "deepmd", "dpa4-omol"]),
+    NamedModel("dpa4-air", f"ase:lrbench.adapters:deepmd?model='{_DPA4}/DPA4-Air-OMol25-100M-v20260820.pt'"
+               "&name='DPA4-Air-OMol25-100M'", "DPA4-Air, OMol25 100M (5.1 M params)", OMOL, DEEPMD_ENV,
+               "huggingface.co/deepmodelingcommunity/DPA4-OMol", "CC BY-NC 4.0",
+               "as dpa4-plus", "as dpa4-plus"),
 ]})
 
 # The four models of the external comparison, in table order.

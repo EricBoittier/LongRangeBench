@@ -64,3 +64,51 @@ def test_predict_writes_eval_json(tmp_path):
           str(tmp_path / "in.xyz"), str(out)])
     J = json.load(open(out))
     assert J["n_frames"] == 2 and J["n_errors"] == 0 and len(J["frames"][0]["forces"]) == 3
+
+
+# ---------------------------------------------------------------- charge/spin must not be served from a stale cache
+class _ChargeSensitive(Calculator):
+    """A calculator whose energy depends only on the total charge, so a cached result is unmistakable."""
+    implemented_properties = ["energy", "free_energy", "forces"]
+
+    def __init__(self):
+        super().__init__()
+        self.n_calls = 0
+
+    def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        super().calculate(atoms, properties, system_changes)
+        self.n_calls += 1
+        q = float(self.atoms.info.get("charge", 0))
+        self.results = {"energy": 7.0 * q, "free_energy": 7.0 * q,
+                        "forces": np.zeros((len(self.atoms), 3))}
+
+
+def _struct(key, charge, spin=1):
+    return Structure(key=key, species=["Ar", "Ar"], positions=np.array([[0.0, 0, 0], [3.0, 0, 0]]),
+                     charge=charge, spin=spin)
+
+
+def test_charge_states_of_one_geometry_are_not_cached():
+    """ASE's check_state ignores atoms.info, so without an explicit cache drop the second structure here would be
+    served the first one's energy. charge_parity is made entirely of such pairs."""
+    calc = _ChargeSensitive()
+    be = ASEBackend(calc, label="charge-sensitive")
+    res = be.predict([_struct("q0", 0), _struct("qm1", -1), _struct("qp1", +1), _struct("q0b", 0)])
+    assert [r["energy"] for r in res] == [0.0, -7.0, 7.0, 0.0]
+    assert calc.n_calls == 4
+
+
+def test_adapter_recomputes_when_only_the_charge_changes():
+    """The same trap one level down: the Adapter must not serve its own cache either, and must invalidate the
+    calculator it wraps."""
+    from ase import Atoms
+
+    inner = _ChargeSensitive()
+    ad = Adapter(inner, "level", {"model": "stub"})
+    seen = []
+    for q in (0, -1, 0, 2):
+        a = Atoms("Ar2", positions=[[0, 0, 0], [3, 0, 0]])
+        a.info.update(charge=q, spin_multiplicity=1)
+        a.calc = ad
+        seen.append(a.get_potential_energy())
+    assert seen == [0.0, -7.0, 0.0, 14.0]
