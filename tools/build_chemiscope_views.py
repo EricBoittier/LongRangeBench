@@ -267,29 +267,51 @@ code {{ font-family:var(--mono); font-size:13.5px;
   background:color-mix(in srgb, var(--rule) 55%, transparent); padding:1px 5px; border-radius:4px; }}
 .err {{ color:var(--verm); font-family:var(--sans); }}
 .fam {{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:7px;
-  vertical-align:-1px; }}{scan_css}
+  vertical-align:-1px; }}
+.eyebrow {{ font-family:var(--sans); font-size:11.5px; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; color:var(--mut); margin:0 0 8px; }}
+h2 .tid {{ display:inline-block; font-family:var(--mono); font-size:13px; font-weight:500; color:#fff;
+  background:var(--fg); border-radius:5px; padding:2px 8px; margin-right:11px; vertical-align:2px;
+  letter-spacing:0.02em; }}
+.chips {{ display:flex; flex-wrap:wrap; gap:7px 18px; margin:-4px 0 14px; font-family:var(--sans);
+  font-size:12.5px; color:var(--mut); }}
+.chips span {{ display:inline-flex; align-items:center; gap:7px; }}
+.chips i {{ width:11px; height:11px; border-radius:3px; display:inline-block; flex:none; }}
+.keywrap {{ display:flex; flex-wrap:wrap; gap:10px 26px; margin:18px 0 6px; font-family:var(--sans);
+  font-size:13px; }}
+.keyfam {{ border-left:3px solid var(--rule); padding-left:12px; min-width:168px; }}
+.keyfam b {{ display:block; font-size:11.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
+  color:var(--mut); margin-bottom:4px; }}
+.keyfam div {{ display:flex; align-items:center; gap:8px; line-height:1.9; }}
+.keyfam svg {{ flex:none; }}{scan_css}
 footer {{ margin:64px 0 72px; color:var(--mut); font-size:15px; }}
 @media (max-width:760px) {{ body {{ font-size:17px; }} h1 {{ font-size:33px; }} .wrap {{ padding:0 17px; }}
   .cs-map {{ height:400px; }} .lede {{ font-size:19px; }} }}
 </style></head><body>
 <nav class="top"><div class="wrap"><b>Long-range explorer</b>
-<a href="#scans">Scans</a><a href="#score">Score</a><a href="#v-decay">Decay</a><a href="#v-parity">Parity</a>
-<a href="#v-residual">Residuals</a><a href="#v-charge">Charges</a><a href="#v-threebody">Three-body</a>
-<a href="#v-response">Response</a><a href="#notes">Method</a></div></nav>
+<a href="#scans">1 Protocol</a><a href="#score">2 Results</a><a href="#key">Models</a>
+<a href="#v-decay">A1</a><a href="#v-residual">A2</a><a href="#v-parity">A3</a><a href="#v-response">B1</a>
+<a href="#v-charge">C1</a><a href="#v-threebody">D1</a><a href="#notes">Method</a></div></nav>
 <div class="wrap">
 <header>
-<h1>Does this model have<br>any long-range physics?</h1>
-<p class="lede">Near equilibrium a potential can reach an excellent force MAE and still be blind past its cutoff.
-Each test below has a value that is right by construction, so one number is interpretable without a baseline.</p>
+<p class="eyebrow">LongRangeBench · diagnostic report</p>
+<h1>Evaluating Long-Range Physics in<br>Machine-Learned Interatomic Potentials</h1>
+<p class="lede">A diagnostic benchmark for the behaviour of interatomic potentials <em>beyond</em> their cutoff.
+Near equilibrium a model can reach an excellent force MAE while reproducing none of the long-range physics; an
+RMSE on a near-equilibrium test set cannot distinguish the two. Each task below is constructed so that the correct
+value is known <em>a priori</em>, which makes a single number interpretable without a baseline for comparison.</p>
 <div class="scorecard">
-  <div><b>decay</b><span><span class="ok">1</span> follows \\(r^{{-1}}\\) · <span class="bad">0</span> flat</span></div>
-  <div><b>scale</b><span><span class="ok">0</span> exact · <span class="bad">−1</span> tail missing</span></div>
-  <div><b>response</b><span><span class="ok">1</span> replies · <span class="bad">0</span> blind</span></div>
+  <div><b>A · asymptotics</b><span>tail fraction <span class="ok">1</span> / <span class="bad">0</span>,
+    ε <span class="ok">0</span> / <span class="bad">−1</span></span></div>
+  <div><b>B · response</b><span>ΔΔE slope <span class="ok">1</span> / <span class="bad">0</span></span></div>
+  <div><b>C · charges</b><span>Σq = Q, parity against Löwdin</span></div>
+  <div><b>D · many-body</b><span>three-body E₃ beyond pairs</span></div>
 </div>
 <p class="sub">{summary}</p>
 </header>
 {scans}
 {ranking}
+{key}
 {sections}
 <section id="notes">
 <h2><span class="num">method</span>How this was made</h2>
@@ -539,8 +561,10 @@ window.addEventListener("load", () => {{
 """
 
 SECTION = """<section id="{id}">
-<h2><span class="num">{num}</span>{title}</h2>
+<p class="eyebrow">{group}</p>
+<h2><span class="tid">{tid}</span>{title}</h2>
 <div class="eq">$${equation}$$</div>
+<div class="chips">{chips}</div>
 <p>{prose}</p>
 <div class="bar" id="{id}-bar"></div>
 <div class="view" id="{id}-view">
@@ -852,6 +876,16 @@ function initScans() {{
 """
 
 
+KEY = """<section id="key">
+<p class="eyebrow">notation</p>
+<h2>Model colour key</h2>
+<p class="sub">Models are grouped by family, which shares a hue; members of a family are told apart by marker.
+The same colours are used wherever a model appears. Hue carries the family and shape carries the member, so
+neither channel is load-bearing on its own.</p>
+<div class="keywrap">{families}</div>
+</section>
+"""
+
 RANKING = """<section id="score">
 <h2><span class="num">score</span>The long-range score</h2>
 <div class="eq">$$\\mathrm{LRS} = 100\\left(\\prod_{j} s_j\\right)^{1/n},\\qquad
@@ -928,97 +962,136 @@ def pick(models, *want):
     return models[0] if models else ""
 
 
-def view_specs(built: dict) -> list:
-    """The views, each named for the physical prior it tests.
+#: The test taxonomy. Each task carries an identifier that is used in the headings, in the ranking table and in
+#: any report generated from a run, so a result can be cited as "A1 on dimers/ion_pair" rather than described.
+TASK_GROUPS = {
+    "A": "Asymptotics — the far field",
+    "B": "Response — the reply to a distant charge",
+    "C": "Electrostatic variables — charges and moments",
+    "D": "Many-body — what pairs cannot reach",
+}
 
-    Encoding follows what the channel is for: a *class* is an identity, so it goes to marker shape, never to a
-    colour ramp (chemiscope's palettes are all continuous, and reading six categories off a continuous bar is the
-    thing good practice forbids). A *signed* error goes to a diverging palette centred on zero, so white means no
-    error and the two directions are distinguishable. A *magnitude* -- distance, an absolute error -- goes to a
-    perceptually uniform sequential ramp.
+#: Colours used to annotate the terms of an equation, and then repeated as chips beneath it. Qualitative, because
+#: the terms of an equation are an identity and not a magnitude.
+TERM_COLOURS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#56B4E9"]
+
+
+def view_specs(built: dict) -> list:
+    """The benchmark tasks, each named for the physical prior it asserts.
+
+    Encoding follows what each channel is for, with one rule learned the hard way: chemiscope draws the *symbol*
+    legend in a single colour, so a class carried by shape alone produces seven black markers that are genuinely
+    hard to tell apart. Class is therefore encoded by shape **and** categorical colour together on the views where
+    the class is the subject (A3, D1), and left off the symbol channel entirely where colour has to carry a
+    magnitude or a signed error — there it stays one click away on the colour buttons.
+
+    A signed error gets a diverging palette used symmetrically about zero; a magnitude gets a perceptually
+    uniform sequential ramp.
     """
     out = []
     dim = built.get("dimers")
     if dim:
         m_lr = pick(dim["models"], "mace-polar", "so3lr-tauri", "orbmol")
         m_loc = pick([m for m in dim["models"] if m != m_lr], "mace-h", "dpa4-plus", "grace", "mace-omol")
+        c0, c1, c2 = TERM_COLOURS[0], TERM_COLOURS[1], TERM_COLOURS[2]
         out.append(dict(
-            id="v-decay", key="dimers", models=dim["models"], diagonal=False, center0=True,
-            title=r"Asymptotic decay: does \(E_{\mathrm{int}}\) keep falling as \(r^{-1}\)?",
-            equation=r"E_{\mathrm{int}}(r)\;\xrightarrow{\;r\to\infty\;}\;\frac{q_A q_B}{4\pi\varepsilon_0 r}"
-                     r"\;+\;O(r^{-2})",
+            id="v-decay", key="dimers", tid="A1", group="A", models=dim["models"], diagonal=False, center0=True,
+            title="Asymptotic decay of the interaction energy",
+            equation=(r"E_{\mathrm{int}}(r)\;\xrightarrow{\;r\to\infty\;}\;"
+                      r"\textcolor{" + c0 + r"}{\frac{q_A q_B}{4\pi\varepsilon_0 r}}"
+                      r"\;+\;\textcolor{" + c1 + r"}{O(r^{-2})}"),
+            terms=[(c0, "the monopole term — all that survives for a charged pair"),
+                   (c1, "dipole and higher, which die away faster")],
             prose=("Beyond the cutoff a charged pair is governed by one term, and it does not decay quickly. "
-                   "Separation runs along x; the signed error of a model runs up y on a diverging scale centred "
-                   "on zero, so white is exact and the two colours are the two directions of being wrong. Shape "
-                   "is the interaction class. An error that <em>grows</em> with separation is the long-range "
-                   "failure; one that shrinks is ordinary short-range inaccuracy."),
+                   "Separation runs along x and the signed error up y, on a diverging scale centred on zero, so "
+                   "white is exact and the two hues are the two directions of being wrong. An error that "
+                   "<em>grows</em> with separation is the long-range failure; one that shrinks is ordinary "
+                   "short-range inaccuracy."),
             settings={"map": {"x": {"property": "separation", "scale": "log"},
                               "y": {"property": f"err/{m_lr}"},
-                              "symbol": "class",
                               "color": {"property": f"err/{m_lr}", "palette": "bwr"},
                               "size": {"property": f"abserr/{m_loc}", "factor": 40}}}))
         out.append(dict(
-            id="v-parity", key="dimers", models=dim["models"], diagonal=True, parity=True, center0=False,
-            title=r"Parity: two models on the same structures",
-            equation=r"E^{A}_{\mathrm{int}}\;\text{vs}\;E^{B}_{\mathrm{int}},\qquad "
-                     r"\text{identity line}\;y=x",
-            prose=("Pick the model on each axis. Points on the identity line are structures the two models agree "
-                   "on; the spread away from it is where they differ, and the colour says at what separation. "
-                   "Two models that fail on the same structures fail for a reason in the data; two that fail on "
-                   "different ones fail for reasons of their own."),
-            settings={"map": {"x": {"property": f"E_int/{m_lr}"}, "y": {"property": f"E_int/{m_loc}"},
-                              "symbol": "class",
+            id="v-residual", key="dimers", tid="A2", group="A", models=dim["models"], diagonal=True,
+            center0=False,
+            title="Residuals against the reference",
+            equation=(r"\textcolor{" + c0 + r"}{E^{\mathrm{model}}_{\mathrm{int}}}\;\;\text{vs}\;\;"
+                      r"\textcolor{" + c1 + r"}{E^{\mathrm{DFT}}_{\mathrm{int}}},\qquad"
+                      r"\textcolor{" + c2 + r"}{y = x}"),
+            terms=[(c0, "the model, on the vertical axis"), (c1, "the reference, on the horizontal"),
+                   (c2, "the identity line: agreement")],
+            prose=("A model can sit on the identity line at contact and leave it in the tail, which is exactly "
+                   "what the summary statistics are built to catch. Colour is separation, so the departure "
+                   "orders itself by distance; shape and colour both carry the class on the next view."),
+            settings={"map": {"x": {"property": "E_int/REF"}, "y": {"property": f"E_int/{m_lr}"},
                               "color": {"property": "separation", "scale": "log", "palette": "cividis"}}}))
         out.append(dict(
-            id="v-residual", key="dimers", models=dim["models"], diagonal=True, center0=False,
-            title=r"Against the reference, not against each other",
-            equation=r"E^{\mathrm{model}}_{\mathrm{int}}\;\text{vs}\;E^{\mathrm{DFT}}_{\mathrm{int}}",
-            prose=("The same picture with the reference on x. A model can sit on the line at contact and leave it "
-                   "in the tail, which is exactly the failure the summary statistics are built to catch — switch "
-                   "the colour to separation and the departure orders itself by distance."),
-            settings={"map": {"x": {"property": "E_int/REF"}, "y": {"property": f"E_int/{m_lr}"},
+            id="v-parity", key="dimers", tid="A3", group="A", models=dim["models"], diagonal=True, parity=True,
+            center0=False,
+            title="Parity between two models",
+            equation=(r"\textcolor{" + c0 + r"}{E^{A}_{\mathrm{int}}}\;\;\text{vs}\;\;"
+                      r"\textcolor{" + c1 + r"}{E^{B}_{\mathrm{int}}}"),
+            terms=[(c0, "model on the x axis — choose it below"),
+                   (c1, "model on the y axis — choose it below")],
+            prose=("Pick the model on each axis. Points on the identity line are structures the two agree on; the "
+                   "spread away from it is where they differ. Two models that fail on the same structures fail "
+                   "for a reason in the data; two that fail on different ones fail for reasons of their own. "
+                   "Class is carried by both shape and colour here, so the legend is readable either way."),
+            settings={"map": {"x": {"property": f"E_int/{m_lr}"}, "y": {"property": f"E_int/{m_loc}"},
                               "symbol": "class",
-                              "color": {"property": "separation", "scale": "log", "palette": "viridis"}}}))
-    if "dimers-atoms" in built:
+                              "color": {"property": "class", "palette": "tab10"}}}))
+    if "families_fixedq" in built:
+        b = built["families_fixedq"]
+        m = pick(b["models"], "mace-polar", "so3lr-tauri", "orbmol")
+        c0, c1 = TERM_COLOURS[0], TERM_COLOURS[1]
         out.append(dict(
-            id="v-charge", key="dimers-atoms", models=[], diagonal=True, center0=False,
-            title=r"Charge conservation and the Löwdin reference",
-            equation=r"\sum_{i\in f} q_i \;=\; Q_f \qquad\text{and}\qquad "
-                     r"\mu \;=\; \sum_i q_i \mathbf{r}_i",
+            id="v-response", key="families_fixedq", tid="B1", group="B", models=b["models"], diagonal=True,
+            center0=False,
+            title="Fixed-charge response",
+            equation=(r"\Delta\Delta E=\textcolor{" + c0 + r"}{\big[E(s_1,\text{near})-E(s_0,\text{near})\big]}"
+                      r"-\textcolor{" + c1 + r"}{\big[E(s_1,\text{far})-E(s_0,\text{far})\big]}"),
+            terms=[(c0, "the local energy difference with the charge nearby"),
+                   (c1, "the same difference with it far away — subtracting this removes everything local")],
+            prose=("Four structures of identical composition and identical total charge, so every per-element "
+                   "offset, every charge-state offset and any constant cancels exactly. What survives is the "
+                   "reply of a local energy difference to a charge placed far away, and it decays as "
+                   "\\(R^{-2}\\) — a question a Coulomb tail alone cannot answer."),
+            settings={"map": {"x": {"property": "ddE/REF"}, "y": {"property": f"ddE/{m}"},
+                              "color": {"property": "atoms", "palette": "magma"}}}))
+    if "dimers-atoms" in built:
+        c0, c1 = TERM_COLOURS[0], TERM_COLOURS[1]
+        out.append(dict(
+            id="v-charge", key="dimers-atoms", tid="C1", group="C", models=[], diagonal=True, center0=False,
+            title="Charge conservation and the Löwdin reference",
+            equation=(r"\textcolor{" + c0 + r"}{\sum_{i\in f} q_i} \;=\; \textcolor{" + c1 + r"}{Q_f}"
+                      r"\qquad\text{and}\qquad \mu \;=\; \sum_i q_i \mathbf{r}_i"),
+            terms=[(c0, "the model's atomic charges, summed over a fragment"),
+                   (c1, "the fragment's formal charge — an integer, by construction")],
             prose=("Every atom of every scored dimer: the DFT Löwdin charge against the formal charge it was "
-                   "assigned. The formal charges are integers by construction, so they lie on a few horizontal "
-                   "lines, while the real charges spread along the identity line — that spread is the "
-                   "polarisation and charge transfer a model has to reproduce, and it is what a charge-"
-                   "equilibration scheme is for. Each point is one atomic environment, so selecting one "
+                   "assigned. The formal charges are integers, so they lie on a few horizontal lines; the real "
+                   "charges spread along the identity line, and that spread is the polarisation and charge "
+                   "transfer a model has to reproduce. Each point is one atomic environment, so selecting one "
                    "highlights that atom."),
             settings={"map": {"x": {"property": "q_lowdin"}, "y": {"property": "q_formal"},
                               "color": {"property": "fragment", "palette": "plasma"}}}))
     if "trimers" in built:
         b = built["trimers"]
         m = pick(b["models"], "mace-polar", "so3lr-tauri", "orbmol")
+        c0, c1, c2 = TERM_COLOURS[0], TERM_COLOURS[1], TERM_COLOURS[2]
         out.append(dict(
-            id="v-threebody", key="trimers", models=b["models"], diagonal=True, center0=False,
-            title=r"Three-body non-additivity",
-            equation=r"E_3 \;=\; E_{ABC}-E_{AB}-E_{AC}-E_{BC}+E_A+E_B+E_C",
-            prose=("What is left once every pair contribution is removed. A model built only from pairs has no "
-                   "access to this term, however well it does on dimers; cooperative polarisation lives here."),
+            id="v-threebody", key="trimers", tid="D1", group="D", models=b["models"], diagonal=True,
+            center0=False,
+            title="Three-body non-additivity",
+            equation=(r"E_3 \;=\; \textcolor{" + c0 + r"}{E_{ABC}}"
+                      r"\;-\;\textcolor{" + c1 + r"}{(E_{AB}+E_{AC}+E_{BC})}"
+                      r"\;+\;\textcolor{" + c2 + r"}{(E_A+E_B+E_C)}"),
+            terms=[(c0, "the trimer"), (c1, "every pair, removed"),
+                   (c2, "every monomer, added back")],
+            prose=("What is left once every pair contribution is removed. A model assembled from pairs has no "
+                   "access to this term however well it does on dimers, and cooperative polarisation lives here."),
             settings={"map": {"x": {"property": "E3/REF"}, "y": {"property": f"E3/{m}"},
                               "symbol": "class",
-                              "color": {"property": "total charge", "palette": "bwr"}}}))
-    if "families_fixedq" in built:
-        b = built["families_fixedq"]
-        m = pick(b["models"], "mace-polar", "so3lr-tauri", "orbmol")
-        out.append(dict(
-            id="v-response", key="families_fixedq", models=b["models"], diagonal=True, center0=False,
-            title=r"Fixed-charge response: \(\Delta\Delta E \propto R^{-2}\)",
-            equation=r"\Delta\Delta E=\big[E(s_1,\text{near})-E(s_0,\text{near})\big]"
-                     r"-\big[E(s_1,\text{far})-E(s_0,\text{far})\big]",
-            prose=("Four structures whose composition and total charge are identical, so every per-element "
-                   "offset, every charge-state offset and any constant cancels exactly. What survives is the "
-                   "reply of a local energy difference to a charge placed far away — a question a Coulomb tail "
-                   "alone cannot answer."),
-            settings={"map": {"x": {"property": "ddE/REF"}, "y": {"property": f"ddE/{m}"},
-                              "color": {"property": "atoms", "palette": "magma"}}}))
+                              "color": {"property": "class", "palette": "tab10"}}}))
     return out
 
 
@@ -1037,13 +1110,17 @@ def main(argv=None) -> int:
     summary = [f"{b['n']} {k}" for k, b in built.items() if not k.endswith("-atoms")]
 
     sections, views = [], []
-    for n, v in enumerate(view_specs(built), start=1):
+    for v in view_specs(built):
         views.append({"id": v["id"], "key": v["key"], "settings": v["settings"],
                       "models": v.get("models", []), "diagonal": bool(v.get("diagonal")),
                       "parity": bool(v.get("parity")), "center0": bool(v.get("center0"))})
-        sections.append(SECTION.format(id=v["id"], num=f"{n:02d}", title=v["title"],
-                                       equation=v["equation"], prose=v["prose"]))
+        chips = "".join(f'<span><i style="background:{col}"></i>{txt}</span>'
+                        for col, txt in v.get("terms", []))
+        sections.append(SECTION.format(
+            id=v["id"], tid=v["tid"], group=f"{v['group']} · {TASK_GROUPS[v['group']]}",
+            title=v["title"], equation=v["equation"], chips=chips, prose=v["prose"]))
 
+    rank_names = []
     rank = {"cols": [], "rows": [], "sort": "lrs", "components": [
         {"k": "s_decay", "t": "decay", "col": "#0072B2"},
         {"k": "s_scale", "t": "scale", "col": "#009E73"},
@@ -1088,13 +1165,32 @@ def main(argv=None) -> int:
                 "level": r["level"][:20] + (" ⚠" if r["mismatch"] else ""),
                 "abs_eps": abs(eps) if eps is not None else 9e9,
             })
+        rank_names = [n for n in _d["results"]]
         print(f"[chemiscope] ranking: {len(rank['rows'])} models")
     except Exception as e:
         print(f"[chemiscope] no ranking table ({type(e).__name__}: {e})")
 
     out = pathlib.Path(a.out).resolve()
     fam_colours = {k: v["colour"] for k, v in pal.FAMILIES.items()}
+    MARK = {"o": '<circle cx="7" cy="7" r="5.2"/>',
+            "s": '<rect x="2.2" y="2.2" width="9.6" height="9.6" rx="1.4"/>',
+            "D": '<rect x="2.6" y="2.6" width="8.8" height="8.8" rx="1.2" transform="rotate(45 7 7)"/>',
+            "^": '<polygon points="7,1.8 12.4,11.6 1.6,11.6"/>',
+            "v": '<polygon points="7,12.2 1.6,2.4 12.4,2.4"/>',
+            "P": '<path d="M5.4 1.8h3.2v3.6h3.6v3.2H8.6v3.6H5.4V8.6H1.8V5.4h3.6z"/>'}
+    names = sorted(rank_names)
+    by_fam = {}
+    for nm in names:
+        st = pal.style_of(nm, names)
+        by_fam.setdefault((st["family"], st["label"], st["colour"]), []).append((nm, st["marker"]))
+    key_html = ""
+    for (_fam, label, colour), members in sorted(by_fam.items(), key=lambda kv: kv[0][1]):
+        rows = "".join(
+            f'<div><svg width="14" height="14" viewBox="0 0 14 14" fill="{colour}">{MARK.get(mk, MARK["o"])}'
+            f'</svg>{nm}</div>' for nm, mk in sorted(members))
+        key_html += '<div class="keyfam"><b>' + label + '</b>' + rows + '</div>'
     html = HTML.format(
+        key=KEY.format(families=key_html) if key_html else "",
         scans=SCANS,
         scan_css=SCAN_CSS.format(),
         scan_js=SCAN_JS.format(seq=json.dumps(pal.SEQUENTIAL["batlow"]),
