@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import glob
 import json
+import math
 import os
 from typing import Optional, Tuple
 
@@ -93,7 +94,9 @@ def distil_priors(name: str, J: dict) -> dict:
     return {
         "model": name,
         "label": J.get("label", name),
-        "backend": J.get("backend", ""),
+        # the name only: the full spec carries model paths, and these summaries get published
+        "backend": (J.get("backend") or {}).get("name", "") if isinstance(J.get("backend"), dict)
+        else str(J.get("backend", "")).split(":")[0],
         "cutoff_A": J.get("cutoff_A"),
         "declared_local": J.get("declared_local"),
         "checks": {k: {"status": str(v.get("status", "?")), "summary": str(v.get("summary", ""))}
@@ -101,18 +104,108 @@ def distil_priors(name: str, J: dict) -> dict:
     }
 
 
-def collect(runs: str = "runs") -> dict:
+def scans(J: dict, setname: str) -> list:
+    """Class-mean E_int against distance, as the harness already binned it: the material for a distance scan.
+
+    ``[{cls, d, n, dft, model, mae}]``, meV. These are means over the scans of a class at that distance, so the
+    curve is the class's behaviour rather than one pair's.
+    """
+    rows = (((J.get("sets") or {}).get(setname) or {}).get("E_int") or {}).get("by_distance") or []
+    out = []
+    for r in rows:
+        if r.get("d") is None or r.get("dft") is None or r.get("model") is None:
+            continue
+        out.append({"cls": r.get("cls", "?"), "d": float(r["d"]), "n": r.get("n"),
+                    "dft": float(r["dft"]), "model": float(r["model"]),
+                    "mae": None if r.get("mae") is None else float(r["mae"])})
+    return out
+
+
+def _find(path: str, base: Optional[str]) -> Optional[str]:
+    """A result records the data paths as the eval saw them, which is usually relative to where it ran."""
+    for cand in (path, os.path.join(base or "", path), os.path.join(base or "", os.path.basename(path))):
+        if cand and os.path.exists(cand):
+            return cand
+    return None
+
+
+def parity(J: dict, setname: str, groups: Optional[list] = None, kind: str = "E_int",
+           base: Optional[str] = None) -> list:
+    """Per-group model value against its reference, rebuilt from the saved predictions.
+
+    ``lrbench eval --save-predictions`` stores one energy per evaluated term; a group's value is the same linear
+    combination of those terms that defines the reference, so model and reference are formed identically and a
+    parity plot compares like with like. ``[{cls, d, ref, model}]`` in meV. Groups that touch a DFT pathology, or
+    any term the model failed, are left out -- never plotted as zero.
+
+    ``groups`` defaults to the groups file the result itself records (``data.<set>.groups``), so a result carries
+    everything needed to rebuild this.
+    """
+    S = (J.get("sets") or {}).get(setname) or {}
+    P = S.get("predictions") or {}
+    if not P:
+        return []
+    if groups is None:
+        gp = ((J.get("data") or {}).get(setname) or {}).get("groups")
+        gp = _find(gp, base) if gp else None
+        if not gp:
+            return []
+        with open(gp) as f:
+            groups = json.load(f)
+    out = []
+    for g in groups or []:
+        if g.get("kind") != kind or g.get("ref") is None:
+            continue
+        meta = g.get("meta") or {}
+        if any("pathology" in str(x) for x in (meta.get("flags") or [])):
+            continue
+        v, ok = 0.0, True
+        for term, coef in g.get("terms") or []:
+            vals = P.get(term)
+            if not vals or vals[0] is None:
+                ok = False
+                break
+            good = [x for x in vals if isinstance(x, (int, float))]
+            if not good:
+                ok = False
+                break
+            v += float(coef) * (sum(good) / len(good))      # ensemble members are averaged, as in scoring
+        if ok:
+            out.append({"cls": meta.get("cls", "?"), "d": meta.get("dmin"),
+                        "ref": round(1e3 * float(g["ref"]), 4), "model": round(1e3 * v, 4)})
+    return out
+
+
+def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200,
+            base: Optional[str] = None) -> dict:
     """Every result in ``runs/*.json`` and every prior suite in ``runs/priors/*.json``, distilled."""
     results, priors = {}, {}
+    base = base or os.path.dirname(os.path.abspath(runs))   # where the evals ran, for the recorded data paths
     for p in sorted(glob.glob(os.path.join(runs, "*.json"))):
         try:
             with open(p) as f:
                 J = json.load(f)
         except Exception:
             continue  # a file still being written
-        if "sets" in J:
-            results[os.path.basename(p)[:-5]] = distil(os.path.basename(p)[:-5], J)
-    for p in sorted(glob.glob(os.path.join(runs, "priors", "*.json"))):
+        if "sets" not in J:
+            continue
+        name = os.path.basename(p)[:-5]
+        d = distil(name, J)
+        if with_points:
+            for s in d["sets"]:
+                d["sets"][s]["scans"] = scans(J, s)
+                pts = parity(J, s, base=base)
+                if len(pts) > max_points:        # thin evenly; a parity cloud does not need every point
+                    step = len(pts) / max_points
+                    pts = [pts[int(i * step)] for i in range(max_points)]
+                d["sets"][s]["parity"] = pts
+        results[name] = d
+    # `lrbench priors --out` writes wherever it is told, and the docs show a bare file name, so look in the
+    # conventional subdirectory *and* alongside the eval results rather than silently finding nothing
+    prior_paths = sorted(set(glob.glob(os.path.join(runs, "priors", "*.json")))
+                         | set(glob.glob(os.path.join(runs, "*.priors.json")))
+                         | set(glob.glob(os.path.join(runs, "priors-*.json"))))
+    for p in prior_paths:
         try:
             with open(p) as f:
                 J = json.load(f)
@@ -121,3 +214,53 @@ def collect(runs: str = "runs") -> dict:
         if "checks" in J:
             priors[os.path.basename(p)[:-5]] = distil_priors(os.path.basename(p)[:-5], J)
     return {"results": results, "priors": priors, "source": os.path.abspath(runs)}
+
+
+# ----------------------------------------------------------------------------------------- the long-range score
+#
+# One number, built only from quantities that already have a known-correct value, and never shown without its
+# parts. Each component is mapped to [0, 1] where 1 is correct and 0 is the no-long-range floor:
+#
+#     decay      s1 = clip(tail fraction, 0, 1)        the fraction of the r-dependence reproduced
+#     scale      s2 = 1 - min(|eps|, 1)                how much of the physical magnitude is captured
+#     response   s3 = clip(ddE slope, 0, 1)            the reply to a charge that is far away
+#     accuracy   s4 = 1 - min(E_8A / E_8A(flat), 1)    the offset-free error against a flat model's
+#
+# LRS = 100 (s1 s2 s3 s4)^(1/4). The *geometric* mean is the point: a model that scores zero on any one of these
+# has no long-range physics, and no amount of credit elsewhere should disguise that. An arithmetic mean would give
+# a model with no tail at all a respectable 50 for doing well on the other three.
+#
+# It is a summary of these four tests on these sets, not a ranking of models in general, and it is always printed
+# beside the bars it is made of.
+COMPONENTS = [("decay", "tail fraction"), ("scale", "|ε|"), ("response", "ΔΔE slope"),
+              ("accuracy", "8 Å error vs flat")]
+
+
+def _clip01(x):
+    return None if x is None else max(0.0, min(1.0, float(x)))
+
+
+def score_components(r: dict) -> dict:
+    """The four sub-scores and the long-range score for one distilled result, or Nones where a test did not run."""
+    S = r["sets"].get("dimers") or {}
+    c = (S.get("classes") or {}).get("ion_pair") or {}
+    ddE = (r["sets"].get("families_fixedq") or {}).get("ddE")
+    tail = (c.get("tail") or [None])[0]
+    eps = (c.get("eps") or [None])[0]
+    off8 = (c.get("off8") or [None])[0]
+    flat8 = c.get("flat8")
+    s = {
+        "decay": _clip01(tail),
+        "scale": None if eps is None else _clip01(1.0 - min(abs(eps), 1.0)),
+        "response": _clip01((ddE or [None])[0]),
+        "accuracy": None if (off8 is None or not flat8) else _clip01(1.0 - min(off8 / flat8, 1.0)),
+    }
+    have = [v for v in s.values() if v is not None]
+    s["lrs"] = None if len(have) < 2 else round(
+        100.0 * (math.prod(have) ** (1.0 / len(have))), 1)
+    s["n_components"] = len(have)
+    # A geometric mean over three components is not comparable with one over four: a model that was never asked
+    # the response question scores as though it had passed it. Consumers must show this, so it travels with the
+    # score rather than being left for them to look up.
+    s["partial"] = len(have) < len(COMPONENTS)
+    return s
