@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -29,9 +28,8 @@ def _eval(datadir, out, sets="toy"):
 def _as_released(R, monkeypatch, name="lj-exact"):
     """Make the LJ result look like a registry model's: a released name plus the package identity an adapter
     records. Only the identity is faked -- every number is the real LJ eval."""
-    from lrbench import models
-    real = models.lookup
-    monkeypatch.setattr(models, "lookup", lambda n: SimpleNamespace(name=name) if n == name else real(n))
+    real = RS._registry_spec
+    monkeypatch.setattr(RS, "_registry_spec", lambda n: LJ if n == name else real(n))
     R["label"] = name
     for m in R["members"]:
         m["external_model"] = {"package": "ase", "version": "3.0"}
@@ -67,14 +65,19 @@ def test_strip_dirs_removes_every_directory_but_leaves_urls():
     assert s("/home/someone/lr-sets") == "lr-sets"
     assert s("ase:lrbench.adapters:metatomic?path='/scratch/u/ckpt/pet-omol-s.pt'") == \
         "ase:lrbench.adapters:metatomic?path='pet-omol-s.pt'"
-    assert s("~/x/y.gguf") == "y.gguf" and s("runs/out.json") == "out.json"
+    assert s("~/x/y.gguf") == "y.gguf" and s("$LRBENCH_UPET_DIR/pet-omol-s.pt") == "pet-omol-s.pt"
+    assert s("runs/out.json") == "runs/out.json"          # relative: not a leak, left alone
+    for kept in ("--model-level wB97M-V/def2-TZVPD", "force MAE 27.8 meV/A", "model PBE/PAW (OMat24) vs labels",
+                 "(model - DFT)/DFT"):
+        assert s(kept) == kept, "levels, units and ratios are not directories"
     assert s("see https://huggingface.co/lab-cosmo/upet") == "see https://huggingface.co/lab-cosmo/upet"
     assert s("lrbench.adapters:so3lr?model='so3lr'") == "lrbench.adapters:so3lr?model='so3lr'"
 
 
 def test_eval_records_the_code_commit_and_hashes_adapter_checkpoints(datadir, tmp_path):
     R = _eval(datadir, tmp_path / "r.json")
-    assert "code_commit" in R          # None outside a git checkout; a sha (maybe +dirty) inside one
+    c = R["code_commit"]               # None outside this repo's own checkout; a sha (maybe +dirty) inside it
+    assert c is None or __import__("re").match(r"^[0-9a-f]{40}(\+dirty)?$", c)
     w = tmp_path / "w.pt"
     w.write_bytes(b"weights")
     assert RS.spec_weights_file(f"ase:lrbench.adapters:metatomic?path='{w}'&name='x'") == str(w)
@@ -166,6 +169,9 @@ def test_validator_rules(datadir, tmp_path, monkeypatch):
     assert "+dirty" in errs(code_commit=COMMIT + "+dirty")
     assert "directory path" in errs(notes=["ran from /home/someone/runs"])
     assert "unknown keys" in errs(host="node01")
+    assert "no metrics" in errs(metrics=[])
+    monkeypatch.setattr(RS, "_registry_spec", lambda n: "ase:lrbench.adapters:mace_polar?model='polar-1-m'")
+    assert "cannot relabel" in errs()
     assert "no revision" in errs(data=dict(good["data"], jsonl_sha256="0" * 64))
 
 
@@ -228,3 +234,26 @@ def test_new_set_and_new_curves_path(tmp_path, monkeypatch):
     assert "STALE" in RS.summary_md(root)
     RS.add(str(tmp_path / "r2.json"), root, commit=COMMIT)       # re-scored on the current revision
     assert "STALE" not in RS.summary_md(root)
+
+
+def test_partial_failures_reach_the_row(datadir, tmp_path, monkeypatch):
+    """A backend error and a silent non-finite energy both count, and the row says so in a note."""
+    import lrbench.backends as B
+    root = str(tmp_path / "results")
+    RS.add_set("toy", datadir, root, licence="CC0-1.0", public=True)
+    real = B.ASEBackend._predict
+
+    for kind in ("error", "nan"):
+        def flaky(self, structs, _k=kind):
+            out = real(self, structs)
+            for o in out[len(out) // 2:]:
+                o.update(energy=None, forces=None, error="RuntimeError: boom") if _k == "error" else \
+                    o.update(energy=float("nan"))
+            return out
+        monkeypatch.setattr(B.ASEBackend, "_predict", flaky)
+        with pytest.warns(Warning):
+            R = _eval(datadir, tmp_path / f"{kind}.json")
+        row = RS.row_from_result(R, "toy", model="x", commit=COMMIT)
+        assert row["n_failed"] > 0, kind
+        assert any("fail" in n for n in row["notes"]), kind
+        assert RS.validate_row(row, root, private=True) == [], kind

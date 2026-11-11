@@ -40,8 +40,8 @@ PRIVATE = "private"
 _HEX = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT = re.compile(r"^[0-9a-f]{7,40}$")
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
-# a directory prefix: "/a/b/", "~/a/", "$VAR/", "runs/" -- not inside a URL, a dotted name or a word
-_DIRS = re.compile(r"(?<![\w:/.\-])(?:~|\$\{?\w+\}?)?/?(?:[\w.\-]+/)+")
+# a directory prefix anchored at "/", "~/", "$VAR/", "./" or "../" -- never "wB97M-V/def2-TZVPD", "meV/A" or a URL
+_DIRS = re.compile(r"(?<![\w:/.\-)])(?:(?:~|\$\{?\w+\}?|\.\.?)/(?:[\w.\-]+/)*|/(?:[\w.\-]+/)+)")
 # what the validator refuses anywhere in a row: an absolute or home-relative directory
 _ABS = re.compile(r"(?<![\w:/.\-])(?:~/|/(?:[\w.\-]+/)+|[A-Za-z]:\\)")
 
@@ -49,16 +49,22 @@ _ABS = re.compile(r"(?<![\w:/.\-])(?:~/|/(?:[\w.\-]+/)+|[A-Za-z]:\\)")
 # --------------------------------------------------------------------------------------------------------- helpers
 
 def strip_dirs(s: str) -> str:
-    """Drop every directory prefix from a string (``--data /x/y/lr-sets`` -> ``--data lr-sets``)."""
+    """Drop absolute, home- and variable-relative directory prefixes (``--data /x/y/lr-sets`` -> ``--data lr-sets``),
+    leaving level names (``wB97M-V/def2-TZVPD``), units (``meV/A``) and URLs alone."""
     return _DIRS.sub("", s)
 
 
 def code_commit() -> Optional[str]:
     """The git commit of the lrbench source that is running, ``+dirty`` if it has uncommitted changes; None when
     lrbench is not run from a git checkout (an installed wheel), in which case ``lrbench_version`` is all there is."""
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.realpath(__file__))
     try:
         run = lambda *a: subprocess.run(["git", "-C", here, *a], capture_output=True, text=True, timeout=10)
+        top = run("rev-parse", "--show-toplevel")
+        # only this repository's own checkout: not a wheel in a venv inside some other project, not a vendored copy
+        if top.returncode or os.path.realpath(os.path.join(top.stdout.strip(), "src", "lrbench")) != here \
+                or run("ls-files", "--error-unmatch", "__init__.py").returncode:
+            return None
         r = run("rev-parse", "HEAD")
         if r.returncode:
             return None
@@ -177,6 +183,10 @@ def row_from_result(R: dict, set_name: str, model: str = "", commit: str = "") -
                         "charge_spin": m.get("charge_spin", ext.get("charge_spin"))})
     src = (R.get("data") or {}).get(set_name) or S.get("source") or {}
     E = S.get("E_int") or {}
+    n_failed = _n_failed(S)
+    notes = [strip_dirs(x) for x in R.get("notes", [])]
+    if n_failed and not any("fail" in x for x in notes):
+        notes.append(f"{n_failed} predictions or groups failed on {set_name} and are not scored")
     pref = f"{set_name}: "
     metrics = [{"metric": a[len(pref):], "value": b, "n": c, "note": d}
                for a, b, c, d in headline_rows({"sets": {set_name: S}}) if a.startswith(pref)]
@@ -187,15 +197,33 @@ def row_from_result(R: dict, set_name: str, model: str = "", commit: str = "") -
         "reference_level": (lv.get("label_levels") or {}).get(set_name) or S.get("levels") or [],
         "level_mismatch": bool((lv.get("mismatch") or {}).get(set_name)), "seeds": n,
         "evidence": "claim" if n >= CLAIM_SEEDS else "screen",
-        "n_failed": int(S.get("n_prediction_errors") or 0), "n_scored": int(E.get("n") or S.get("n_groups") or 0),
+        "n_failed": n_failed, "n_scored": int(E.get("n") or S.get("n_groups") or 0),
         "date": (R.get("created") or datetime.date.today().isoformat())[:10], "code_commit": commit,
         "lrbench_version": R.get("lrbench_version", "?"),
         "data": {"jsonl_sha256": src.get("jsonl_sha256"), "groups_sha256": src.get("groups_sha256"),
                  "revision": src.get("revision")},
         "argv": [strip_dirs(a) for a in R.get("argv", [])],
         "metrics": metrics,
-        "notes": [strip_dirs(x) for x in R.get("notes", [])],
+        "notes": notes,
     }
+
+
+def _n_failed(S: dict) -> int:
+    """The largest failure count the set block reports: backend errors, groups that could not be evaluated (a None or
+    non-finite energy with no error string), and a backend's own ``failures`` record where it writes one."""
+    counts = [S.get("n_prediction_errors") or 0]
+    counts += [(S.get(k) or {}).get("n_failed") or 0 for k in ("E_int", "ddE", "dE")]
+    f = S.get("failures")
+    counts.append(f if isinstance(f, int) else len(f) if isinstance(f, (list, dict)) else 0)
+    return int(max(counts))
+
+
+def _registry_spec(name: str) -> Optional[str]:
+    """The adapter spec of a *released* model: membership in the named-model table, nothing looser (aliases, GGUF
+    build registries and the like resolve names too, but do not make a model released)."""
+    from .models import MODELS
+    m = MODELS.get(name)
+    return m.spec if m else None
 
 
 def add(result_path: str, root: str = "results", sets: Optional[List[str]] = None, model: str = "",
@@ -268,12 +296,16 @@ def validate_row(row: dict, root: str, path: str = "", private: bool = False) ->
         e.append("date must be YYYY-MM-DD")
     if not row["members"] or len(row["members"]) != row["seeds"]:
         e.append("one member per seed")
+    if not row["metrics"]:
+        e.append("no metrics: the result has no headline rows for this set")
     if not private:
-        from .models import lookup
-        m = lookup(row["model"])
-        if m is None or m.name != row["model"]:
+        spec = _registry_spec(row["model"])
+        if spec is None:
             e.append(f"model {row['model']!r} is not a released model in the registry (lrbench models); rows for "
                      f"unreleased models belong in {root}/private/")
+        elif any(mb.get("spec") != strip_dirs(spec) for mb in row["members"]):
+            e.append(f"members were not run with the registry spec of {row['model']!r} ({strip_dirs(spec)}): a row "
+                     "cannot relabel another model's result")
         for i, mb in enumerate(row["members"]):
             hashed = _HEX.match(mb.get("sha256") or "")
             versioned = mb.get("package") and mb.get("version") not in (None, "", "?")

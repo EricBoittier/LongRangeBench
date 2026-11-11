@@ -34,10 +34,10 @@ A result produced before lrbench recorded its own commit needs `--commit <sha>`:
 | key | meaning |
 |---|---|
 | `set`, `model`, `label` | the set, the registry name (also the file name), the display label |
-| `members` | per seed: the spec (directories stripped), the weights `sha256`, backend, package + version, checkpoint, charge/spin handling |
+| `members` | per seed: the spec (directories stripped), the weights `sha256`, backend, package + version, checkpoint, charge/spin handling. `sha256` is null for checkpoints a package downloads itself (MACE, orb, SO3LR, ...), which are identified by package version and checkpoint name instead |
 | `model_level`, `reference_level`, `level_mismatch` | the level the model was trained at, the set's label level(s), and whether they differ |
 | `seeds`, `evidence` | number of members; `claim` at 4 or more seeds, else `screen` |
-| `n_failed`, `n_scored` | predictions the backend failed on, and E_int groups scored |
+| `n_failed`, `n_scored` | the largest failure count the set block reports (backend errors, groups with no finite value, a backend's own `failures`), and E_int groups scored |
 | `date`, `code_commit`, `lrbench_version` | when the eval ran and from which clean commit |
 | `data` | jsonl and groups `sha256` (and HF revision) of the data scored |
 | `argv` | the eval command, with directories stripped |
@@ -47,6 +47,7 @@ A result produced before lrbench recorded its own commit needs `--commit <sha>`:
 ## What the validator refuses
 
 - **Unknown or missing keys**, including `host`, and any absolute or home-relative path anywhere in a row or card.
+- **A row with no metrics.**
 - **A row whose set has no card**, or whose data hashes match no carded revision. The data scored must be data
   someone recorded.
 - **Inconsistent caveats.** The validator refuses:
@@ -55,7 +56,8 @@ A result produced before lrbench recorded its own commit needs `--commit <sha>`:
   - an `evidence` value that does not follow from `seeds`.
 - **A dirty or missing `code_commit`.** Numbers from uncommitted code cannot be reproduced.
 - **In the public tree only:** these rows belong in `private/` instead:
-  - a model that is not a released model in the registry (`lrbench models`);
+  - a model that is not in the named-model registry (`lrbench models`), or whose members were not run with that
+    entry's spec, so a row cannot relabel another model's result;
   - a member with neither a weights sha256 nor a package version, which is what `--no-hash` produces;
   - a set whose card is not public.
 
