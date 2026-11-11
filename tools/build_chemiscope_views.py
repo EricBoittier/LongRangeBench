@@ -250,6 +250,13 @@ table.rank td {{ text-align:right; padding:8px 9px; border-bottom:1px solid var(
 table.rank td.name {{ font-weight:500; }}
 table.rank tr.ceiling {{ background:color-mix(in srgb, var(--blue) 7%, transparent); }}
 table.rank td.lrs {{ font-family:var(--mono); font-weight:500; font-size:14.5px; }}
+table.rank th.vis, table.rank td.vis {{ text-align:center; padding-left:4px; padding-right:4px; width:44px; }}
+table.rank tr.off td {{ opacity:0.34; }}
+table.rank tr.off td.vis {{ opacity:1; }}
+button.eye {{ width:17px; height:17px; padding:0; border-radius:50%; cursor:pointer;
+  border:1.5px solid var(--fam); background:var(--fam); transition:background 120ms, box-shadow 120ms; }}
+button.eye[aria-pressed="false"] {{ background:transparent; }}
+button.eye:hover {{ box-shadow:0 0 0 3px color-mix(in srgb, var(--fam) 28%, transparent); }}
 .bar {{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:16px 0 10px;
   font-family:var(--sans); font-size:12.5px; }}
 .bar .lbl {{ color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;
@@ -347,6 +354,40 @@ async function inflate(b64) {{
   const s = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
   return JSON.parse(await new Response(s).text());
 }}
+/* Which models are in play. The ranking table and the widgets must agree about this, so one set drives both:
+   hiding a model removes it from every selector below, and moves any axis that was showing it. The points on a
+   map are structures, not models, so hiding one changes what can be *plotted*, never which structures exist. */
+const HIDDEN = new Set();
+const STATES = [];
+const visible = ms => ms.filter(m => !HIDDEN.has(m));
+function onVisibilityChange() {{
+  for (const st of STATES) {{
+    const s = st.viz.saveSettings().map;
+    const live = visible(st.models);
+    const owner = p => {{ const i = (p || "").indexOf("/"); return i < 0 ? null : p.slice(i + 1); }};
+    const fix = axis => {{
+      const m = owner(s[axis].property);
+      if (!m || !HIDDEN.has(m) || !live.length) return null;
+      const kind = s[axis].property.slice(0, s[axis].property.indexOf("/"));
+      const next = kind + "/" + live[0];
+      return st.ds.properties[next] ? next : null;
+    }};
+    const patch = {{}};
+    for (const axis of ["x", "y"]) {{
+      const next = fix(axis);
+      if (next) patch[axis] = {{ property: next }};
+    }}
+    const cm = owner(s.color.property);
+    if (cm && HIDDEN.has(cm) && live.length) {{
+      const kind = s.color.property.slice(0, s.color.property.indexOf("/"));
+      if (st.ds.properties[kind + "/" + live[0]]) patch.color = {{ property: kind + "/" + live[0] }};
+    }}
+    if (Object.keys(patch).length) st.viz.applySettings({{ map: patch }});
+    redraw(document.getElementById(st.id + "-bar"));
+    setDiagonal(st);
+  }}
+  if (window.drawRanking) window.drawRanking();
+}}
 const cache = {{}};
 async function dataset(key) {{
   if (!cache[key]) cache[key] = await inflate(DATA[key]);
@@ -443,7 +484,7 @@ function buildBar(st, v) {{
     bar.innerHTML = "";
     const s = st.viz.saveSettings().map;
     const props = Object.keys(st.ds.properties);
-    const models = st.models || [];
+    const models = visible(st.models || []);
     if (v.parity && models.length) {{
       const px = prefix(s.x.property) || "E_int", py = prefix(s.y.property) || "E_int";
       group(bar, "x model", models.map(m => ({{ label: m, m, dot: MODELCOL[m] }})),
@@ -483,9 +524,10 @@ function buildBar(st, v) {{
         setDiagonal(st);
       }});
     }}
+    const shown = p => {{ const i = p.indexOf("/"); return i < 0 || !HIDDEN.has(p.slice(i + 1)); }};
     const colours = ["separation", "class", "total charge", "atoms", "fragment", "q_lowdin"]
       .filter(c => props.includes(c))
-      .concat(props.filter(p => p.startsWith("abserr/") || p.startsWith("err/")).slice(0, 2));
+      .concat(props.filter(p => (p.startsWith("abserr/") || p.startsWith("err/")) && shown(p)).slice(0, 2));
     /* The palette is a consequence of what the property *is*, so it is applied, not offered: the swatch on each
        button is the ramp that choosing it will bring. */
     group(bar, "colour", colours.map(c => ({{ label: c, c, swatch: rampOf(st.ds, c) }})),
@@ -524,6 +566,7 @@ function scoreBars(r) {{
   if (host && RANK.rows.length) {{
     let sortKey = RANK.sort, asc = false;
     const draw = () => {{
+      window.drawRanking = draw;
       const rows = RANK.rows.slice().sort((a, b) => {{
         if (a.ceiling !== b.ceiling) return a.ceiling ? -1 : 1;
         const x = a[sortKey], y = b[sortKey];
@@ -531,9 +574,14 @@ function scoreBars(r) {{
         if (y === null || y === undefined) return -1;
         return (asc ? 1 : -1) * (typeof x === "string" ? x.localeCompare(y) : x - y);
       }});
-      host.innerHTML = "<thead><tr>" + RANK.cols.map(c =>
+      host.innerHTML = "<thead><tr><th class='vis' title='show or hide this model in every widget below'>" +
+        "show</th>" + RANK.cols.map(c =>
         `<th data-k="${{c.k}}" class="${{c.k === sortKey ? "sorted" : ""}}" title="${{c.h || ""}}">${{c.t}}</th>`)
-        .join("") + "</tr></thead><tbody>" + rows.map(r => `<tr class="${{r.ceiling ? "ceiling" : ""}}">` +
+        .join("") + "</tr></thead><tbody>" + rows.map(r =>
+          `<tr class="${{r.ceiling ? "ceiling" : ""}}${{HIDDEN.has(r.key) ? " off" : ""}}">` +
+          `<td class="vis"><button class="eye" data-m="${{r.key}}" aria-pressed="${{!HIDDEN.has(r.key)}}" ` +
+          `title="${{HIDDEN.has(r.key) ? "show" : "hide"}} ${{r.key}}" ` +
+          `style="--fam:${{r.fam || "#999"}}"></button></td>` +
           RANK.cols.map(c => {{
             if (c.k === "bars") return `<td>${{scoreBars(r)}}</td>`;
             const v = r[c.k];
@@ -545,9 +593,14 @@ function scoreBars(r) {{
           }}).join("") + "</tr>").join("") + "</tbody>";
       host.querySelectorAll("th").forEach(th => th.onclick = () => {{
         const k = th.dataset.k;
-        if (k === "bars") return;
+        if (!k || k === "bars") return;
         if (k === sortKey) asc = !asc; else {{ sortKey = k; asc = k === "model"; }}
         draw();
+      }});
+      host.querySelectorAll("button.eye").forEach(b => b.onclick = () => {{
+        const m = b.dataset.m;
+        if (HIDDEN.has(m)) HIDDEN.delete(m); else HIDDEN.add(m);
+        onVisibilityChange();
       }});
     }};
     draw();
@@ -560,6 +613,7 @@ function scoreBars(r) {{
       const viz = await Chemiscope.DefaultVisualizer.load(
         {{ map: v.id + "-map", info: v.id + "-info", meta: v.id + "-meta", structure: v.id + "-structure" }}, ds);
       const st = {{ id: v.id, viz, ds, models: v.models || [], diag: !!v.diagonal }};
+      STATES.push(st);
       buildBar(st, v);
       viz.onSettingChange(() => redraw(document.getElementById(v.id + "-bar")));
       setTimeout(() => {{ if (v.center0) centreColour(st); setDiagonal(st); }}, 450);
@@ -979,7 +1033,8 @@ long-range physics, and credit elsewhere should not disguise that.</p>
 <p class="sub">The bars beside each score are the four components in that order, so the number is never shown
 without the thing it was built from. A score marked <b>*</b> was built from fewer than four — a task that did not
 run cannot be told from one that was passed, so those are not comparable with the rest. This summarises these tests on these sets; it is not a ranking of models in
-general. The ceiling row is the dataset's own multipole + induction prior, not a model. Click a column to re-sort.</p>
+general. The ceiling row is the dataset's own multipole + induction prior, not a model. Click a column to re-sort, and the
+dot beside a model to take it out of every widget below — the table and the figures always show the same set.</p>
 <table class="rank" id="rank-body"></table>
 </section>
 """
@@ -1244,7 +1299,7 @@ def main(argv=None) -> int:
             st = pal.style_of(name, list(_d["results"]))
             rank["rows"].append({
                 "fam": st["colour"], "family": st["label"], "marker": st["marker"],
-                "model": r["label"][:36], "ceiling": "oracle" in name,
+                "model": r["label"][:36], "key": name, "ceiling": "oracle" in name,
                 "lrs": None if sc["lrs"] is None else
                        (f"{sc['lrs']}*" if sc.get("partial") else sc["lrs"]),
                 "s_decay": sc["decay"], "s_scale": sc["scale"], "s_response": sc["response"],

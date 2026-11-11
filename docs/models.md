@@ -11,7 +11,8 @@ the backend's problem.
 | spec | backend |
 |---|---|
 | `ase:module:Factory?kw=v&kw2=v2` | any ASE calculator by import path. Values are parsed as Python literals; quote strings (`?model='polar-1-m'`) |
-| `model.pt` | metatomic / TorchScript export, through `metatomic-ase` |
+| `model.pt` | metatomic / TorchScript export, through `metatomic-ase`. No level is implied by a bare path, so pass `--model-level` |
+| `ase:lrbench.adapters:metatomic?path='model.pt'` | the same export, but with its level inferred from the file name and its charge handling read off the model — prefer this |
 | `model.gguf` | mlip.cpp, via the `mlipcpp-eval` binary; else the C API (`--mlipcpp-lib` or `$MLIPCPP_C_LIB`); else the Python bindings, which pass no charge or spin and are flagged in the result |
 | `mlipcpp-capi:model.gguf` | force the C API path |
 | `oracle:multipole?order=2&ind=1&moments=frags.json` | the multipole oracle, not a model — see [metrics.md](metrics.md#the-multipole-oracle) |
@@ -19,6 +20,37 @@ the backend's problem.
 
 `--ensemble a.gguf,b.gguf,...` scores a seed ensemble: predictions are averaged for scoring and the member spread
 feeds the normalised conformal intervals.
+
+### Metatomic exports, and what "takes a charge" is allowed to mean
+
+Any model exported to metatomic TorchScript — `mtt export`, i.e. most of the metatensor/metatomic ecosystem — can be
+scored here, and that is the widest door into the benchmark. `metatomic-ase` reads the total charge from
+`atoms.info["charge"]` and the multiplicity from `atoms.info["spin_multiplicity"]`, which is exactly where this
+benchmark puts them, so a conditioned model is told the charge structure by structure through the same path as every
+other adapter.
+
+Prefer the `metatomic` adapter over a bare `model.pt` path, for two reasons:
+
+```sh
+lrbench eval --model "ase:lrbench.adapters:metatomic?path='checkpoints/pet-omol-s.pt'" --sets all --data ./lr-sets
+```
+
+**The level is inferred from the file name.** A bare `model.pt` carries no level, so its energies are scored but
+never level-checked, and a quiet mismatch is the one error this benchmark most wants to avoid. The adapter reads the
+dataset token out of a `upet`-style name (`pet-omol-*` → OMol25 `wB97M-V/def2-TZVPD`, `pet-spice-*` → SPICE,
+`pet-mad-*` → PBEsol/PAW, …), longest token first so `pet-omatpes-l` is not read as OMat24. Pass `level=` for a
+checkpoint whose name does not say.
+
+**Whether the model takes a charge is read off the model, not guessed.** `AtomisticModel.requested_inputs()` is the
+model's own declaration of what it consumes, and it sets `charge_spin`. A model that requests `charge` is handed one
+and scored on what it does with it. A model that requests nothing is recorded as *unable to be told* a charge, and is
+never handed one — so "ignored the charge" keeps meaning only what it says, and is never confused with "was never
+asked". Of the released PET checkpoints only the `pet-omol-*` family requests `charge` and `spin_multiplicity`;
+`pet-spice-*`, `pet-mols-*` and `pet-omad-*` request nothing, which is verifiable in one line: the three energies for
+Q = 0, −1, +1 come back bit-identical.
+
+This route needs `metatrain >= 2026.4` to read checkpoint version 16, which is what the current `upet` checkpoints
+are; 2025.12 reads only up to v9 and fails with a version error.
 
 ### Charges and spin
 

@@ -21,6 +21,8 @@ default (12 Å, switched from 0.45 x cutoff, or PME in a box) would truncate the
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
@@ -30,12 +32,13 @@ PBE0MBD_V1 = "PBE0+MBD"  # the original SO3LR (registry name 'so3lr') was traine
 
 SPICE = "wB97M-D3(BJ)/def2-TZVPPD"
 PBE_OMAT = "PBE/PAW (OMat24)"
+PBESOL_MAD = "PBEsol/PAW (MAD)"
 RPBE_D3 = "RPBE-D3 (water, CACE-LES training set)"
 WB97M_D3_TZVPP = "wB97M-D3/def2-TZVPPD"
 LEVELS = {"maceles": SPICE, "cace": RPBE_D3, "so3lr": PBE0MBD, "mace_polar": OMOL, "mace_omol": OMOL, "kernel_lr": OMOL,
           # OrbMol (OMol25; v2 adds OPoly26) and the released DPA4 checkpoints (OMol25 100M split)
           "orbmol": OMOL, "deepmd": OMOL, "aimnet2": WB97M_D3_TZVPP, "fairchem": OMOL,
-          "grace": PBE_OMAT,
+          "grace": PBE_OMAT, "pet_mad": PBESOL_MAD,
           # MACE-MH-1 heads (mace-foundations model card / arXiv 2510.25380). The omol head is listed there as
           # wB97M-VV10, i.e. OMol25's wB97M-V/def2-TZVPD labels (1 % subset).
           "mace_mh:omol": OMOL, "mace_mh:omat_pbe": "PBE/PAW (OMat24)", "mace_mh:spice_wB97M": "wB97M-D3(BJ)/def2-TZVPPD",
@@ -63,6 +66,9 @@ def default_level(spec: str) -> str:
         return LEVELS.get(f"mace_mh:{_kw(q).get('head', 'omol')}", "unknown")
     if name == "so3lr":
         return so3lr_level(_kw(q).get("model", "so3lr-tauri-m-2606"))
+    if name == "metatomic":
+        kw = _kw(q)
+        return kw.get("level") or metatomic_level(kw.get("path", ""))
     return LEVELS.get(name, "unknown")
 
 
@@ -479,3 +485,110 @@ def grace(model: str = "GRACE-2L-OMAT", level: str = PBE_OMAT, **kw):
         "charge_spin": "NONE: no total-charge or spin input (recorded, not silently ignored)",
         "long_range": "none (local, 6 A cutoff; semi-local message passing)"})
     return Adapter(calc, level, meta, charge_spin=False)
+
+
+# ------------------------------------------------------------------------------------------ PET-MAD (lab-cosmo)
+def pet_mad(version: str = "latest", device: str = "cuda", level: str = PBESOL_MAD, **kw):
+    """PET-MAD (``pet-mad``, lab-cosmo; BSD-3-Clause), the universal PET trained on the MAD dataset.
+
+    This is the same architecture as the PET models the long-range work is built on, which is why it belongs in
+    the table — but it is a *materials* model: MAD is PBEsol/PAW in VASP, computed without spin polarisation and
+    without dispersion, chosen for internal consistency rather than per-structure accuracy. It takes no total
+    charge, so ``charge_spin=False`` records that the model could not be *told* the charge rather than leaving it
+    to look as though it ignored one, and the level is declared so an eval against our wB97M-V/def2-TZVPD
+    references is refused unless the mismatch is allowed explicitly.
+
+    The charge-conditioned PET models (PET-OMol-S and its long-range fine-tunes) are a different matter: they are
+    distributed as mlip.cpp GGUF, and running them needs a charge the published bindings cannot pass.
+    """
+    from pet_mad.calculator import PETMADCalculator
+    calc = PETMADCalculator(version=version, device=device, **kw)
+    meta = _pkg_meta("pet-mad", f"PET-MAD ({version})", {
+        "licence": "BSD-3-Clause",
+        "charge_spin": "NONE: no total-charge or spin input (recorded, not silently ignored)",
+        "long_range": "none (local message passing)"})
+    return Adapter(calc, level, meta, charge_spin=False)
+
+
+# --------------------------------------------------------------------- metatomic (any exported .pt, incl. upet PET)
+#: The training level of each ``upet`` checkpoint family, keyed by the dataset token in its name. The names on
+#: huggingface.co/lab-cosmo/upet are ``pet-<dataset>-<size>-v<version>``, and the dataset fixes the labels:
+#:
+#:   omol    OMol25            wB97M-V/def2-TZVPD      -- the level of this benchmark's own references
+#:   spice   SPICE             wB97M-D3(BJ)/def2-TZVPPD
+#:   mols    mixed molecular   mixed (not a single level)
+#:   mad     MAD               PBEsol/PAW, no spin polarisation, no dispersion
+#:   omat    OMat24            PBE/PAW
+#:   omad    OMat24 + MAD      mixed PBE/PAW
+#:   oam     OMat24+Alexandria+MPtrj   mixed PBE/PAW
+#:
+#: Only the ``omol`` family shares our level, so only it is scored without ``--allow-level-mismatch``.
+METATOMIC_LEVELS = {"omol": OMOL, "spice": SPICE, "mad": PBESOL_MAD, "omat": PBE_OMAT,
+                    "omad": "mixed", "oam": "mixed", "omatpes": "mixed", "mols": "mixed"}
+
+
+def metatomic_level(path: str) -> str:
+    """Guess the training level from a ``upet``-style file name, or ``"unknown"``.
+
+    Longest dataset token wins, so ``pet-omatpes-l`` is not read as ``omat``.
+    """
+    stem = str(path).replace("\\", "/").rsplit("/", 1)[-1]
+    stem = stem[:-3] if stem.endswith(".pt") else stem
+    best, best_len = "unknown", 0
+    for token, level in METATOMIC_LEVELS.items():
+        if token in stem and len(token) > best_len:
+            best, best_len = level, len(token)
+    return best
+
+
+def metatomic(path: str, device: str = "auto", level: str = "", name: str = "", licence: str = "BSD-3-Clause",
+              long_range: str = "none (local message passing)"):
+    """Any model exported to metatomic TorchScript (``mtt export`` / ``metatomic``), e.g. the ``upet`` PET family.
+
+    This is the general door into the benchmark: ``metatomic-ase`` reads the total charge from ``atoms.info
+    ["charge"]`` and the multiplicity from ``atoms.info["spin_multiplicity"]``, so a model that *declares* those
+    inputs is told them, structure by structure, through the same path as every other adapter here.
+
+    Whether it declares them is not guessed. ``AtomisticModel.requested_inputs()`` is the model's own statement of
+    what it consumes, and it decides ``charge_spin``: a model that requests ``charge`` is given one and is scored on
+    what it does with it, while a model that requests nothing is recorded as *unable to be told* -- the pet-mad
+    distinction -- rather than left looking as though it ignored a charge it was handed. Of the released PET
+    checkpoints only the ``pet-omol-*`` family requests ``charge`` and ``spin_multiplicity``; ``pet-spice-*``,
+    ``pet-mols-*`` and ``pet-omad-*`` request nothing.
+
+    ``level`` defaults to :func:`metatomic_level` on the file name; pass it explicitly for a checkpoint whose name
+    does not carry its dataset, because an unknown level means energies are scored but not level-checked.
+    """
+    from .backends import metatomic_calculator
+    calc = metatomic_calculator(path, device)
+    level = level or metatomic_level(path)
+    inputs, known = (), True
+    model = getattr(calc, "_model", None)  # private, so treat not finding it as "cannot ask", never as "no charge"
+    try:
+        if model is None:
+            known = False
+        else:
+            try:
+                inputs = tuple(sorted(model.requested_inputs(use_new_names=True).keys()))
+            except TypeError:  # older metatomic: no use_new_names
+                inputs = tuple(sorted(model.requested_inputs().keys()))
+    except Exception:
+        known = False
+    if not known:
+        # The two mistakes are not symmetric. Stripping the charge from a model that needs one turns an ion pair
+        # neutral and yields a confidently flat tail -- a wrong number that looks like a finding. Leaving it in for
+        # a model that does not want one costs nothing, because metatomic only forwards the inputs the model asks
+        # for. So an unreadable model keeps its charge and is recorded as unknown rather than as unconditioned.
+        warnings.warn(f"cannot read requested_inputs() from {path}: charge/spin are left in atoms.info for "
+                      "metatomic to forward or ignore, and charge_spin is recorded as unknown")
+    conditioned = "charge" in inputs
+    stem = str(path).replace("\\", "/").rsplit("/", 1)[-1]
+    meta = _pkg_meta("metatomic-torch", name or stem, {
+        "licence": licence,
+        "checkpoint": stem,
+        "requested_inputs": list(inputs) if known else None,
+        "charge_spin": ("atoms.info charge / spin_multiplicity (declared by the model)" if conditioned else
+                        "NONE: the model requests no charge input (recorded, not silently ignored)" if known else
+                        "UNKNOWN: the model could not be asked what it consumes; charge/spin left for metatomic"),
+        "long_range": long_range})
+    return Adapter(calc, level, meta, charge_spin=conditioned or not known)

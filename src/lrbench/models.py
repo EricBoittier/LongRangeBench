@@ -26,7 +26,9 @@ ORB_ENV = "orb"
 DEEPMD_ENV = "deepmd"
 FAIRCHEM_ENV = "fairchem"
 GRACE_ENV = "grace"
+PETMAD_ENV = "pet-mad"
 AIMNET_ENV = "aimnet"
+METATOMIC_ENV = "metatomic"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
@@ -76,6 +78,26 @@ ENVS: Dict[str, dict] = {
         "notes": "torch with CUDA matching the node. Checkpoints are fetched on first use. The total charge is "
                  "set on the calculator rather than read from atoms.info, which the adapter does for every "
                  "structure; the docs warn that a wrong charge is silently wrong, so that plumbing matters.",
+    },
+    PETMAD_ENV: {
+        "probe": "pet_mad.calculator",
+        "python": ">=3.11",
+        "install": ['uv pip install pet-mad', 'uv pip install -e ".[test]"'],
+        "notes": "torch, metatomic and metatrain come with it. The checkpoint is fetched from "
+                 "huggingface.co/lab-cosmo/pet-mad on first use.",
+    },
+    METATOMIC_ENV: {
+        "probe": "metatomic.torch",
+        "python": ">=3.11",
+        "install": ['uv pip install "metatrain[pet]>=2026.4" metatomic-ase',
+                    'uv pip install -e ".[test]"'],
+        "notes": "metatrain 2026.4 or newer is required to read checkpoint version 16, which is what the current "
+                 "upet checkpoints are; 2025.12 reads only up to v9 and fails with a version error. The models "
+                 "enter the benchmark as exported TorchScript, so each checkpoint is converted once:\n"
+                 "    mtt export models/pet-omol-s-v1.0.0.ckpt -o $LRBENCH_UPET_DIR/pet-omol-s.pt\n"
+                 "metatomic-ase reads the total charge from atoms.info['charge'] and the multiplicity from "
+                 "atoms.info['spin_multiplicity'], so a model that declares those inputs is told them -- which is "
+                 "what lets the charge-conditioned PET models be scored here at all, with no mlip.cpp in the path.",
     },
     GRACE_ENV: {
         "probe": "tensorpotential.calculator",
@@ -206,6 +228,53 @@ MODELS.update({m.name: m for m in [
                "as aimnet2", "MIT (code); see the model card for the weights", "as aimnet2",
                "damped-shifted-force Coulomb, 15 A cutoff: truncates the tails this benchmark measures, and is "
                "reported as its own row rather than silently substituted"),
+]})
+
+# PET-MAD: the PET architecture as a universal *materials* model (MAD, PBEsol/PAW). Same family as the PET models
+# this benchmark grew out of, but trained at another level and with no charge input, so it is declared as such.
+MODELS.update({m.name: m for m in [
+    NamedModel("pet-mad", "ase:lrbench.adapters:pet_mad?version='latest'", "PET-MAD (universal, MAD)",
+               "PBEsol/PAW (MAD)", PETMAD_ENV, "huggingface.co/lab-cosmo/pet-mad (fetched on first use)",
+               "BSD-3-Clause", "none: no total-charge or spin input",
+               "none (local message passing)", aliases=["petmad", "pet"]),
+]})
+
+# The upet PET checkpoints (huggingface.co/lab-cosmo/upet, BSD-3-Clause), exported to metatomic TorchScript. These
+# matter for two reasons. They are the same architecture as the long-range PET work this benchmark grew out of, and
+# the pet-omol-* family is trained on OMol25 -- our own level -- *and* declares a total-charge input, so it is a
+# charge-conditioned model scored against charged references with no level caveat. That combination is rare here.
+#
+# Whether a checkpoint consumes a charge is read off the model itself (AtomisticModel.requested_inputs), not assumed
+# from its name: only pet-omol-* requests charge and spin_multiplicity. pet-spice-*, pet-mols-* and pet-omad-*
+# request nothing, so they are recorded as unable to be *told* a charge, the same way pet-mad is -- which is the
+# honest reading, and keeps "ignored the charge" meaning only what it says.
+_UPET = _os.environ.get("LRBENCH_UPET_DIR", _os.path.expanduser("~/.cache/lrbench/upet"))
+SPICE_LEVEL = "wB97M-D3(BJ)/def2-TZVPPD"   # SPICE, as in adapters.SPICE; models.py keeps its levels literal
+_UPET_SRC = "huggingface.co/lab-cosmo/upet, exported with `mtt export`"
+_UPET_LR = "none (local message passing)"
+MODELS.update({m.name: m for m in [
+    NamedModel("pet-omol-s", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-omol-s.pt'&name='PET-OMol-S'",
+               "PET-OMol-S (charge-conditioned)", OMOL, METATOMIC_ENV, _UPET_SRC + " (pet-omol-s-v1.0.0)",
+               "BSD-3-Clause", "atoms.info charge + spin_multiplicity (declared by the model)", _UPET_LR,
+               aliases=["petomols", "pet-omol"]),
+    NamedModel("pet-omol-m", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-omol-m.pt'&name='PET-OMol-M'",
+               "PET-OMol-M (charge-conditioned)", OMOL, METATOMIC_ENV, _UPET_SRC + " (pet-omol-m-v1.0.0)",
+               "BSD-3-Clause", "as pet-omol-s", _UPET_LR, aliases=["petomolm"]),
+    NamedModel("pet-omol-l", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-omol-l.pt'&name='PET-OMol-L'",
+               "PET-OMol-L (charge-conditioned)", OMOL, METATOMIC_ENV, _UPET_SRC + " (pet-omol-l-v1.0.0)",
+               "BSD-3-Clause", "as pet-omol-s", _UPET_LR, aliases=["petomoll"]),
+    NamedModel("pet-spice-s", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-spice-s.pt'&name='PET-SPICE-S'",
+               "PET-SPICE-S", SPICE_LEVEL, METATOMIC_ENV, _UPET_SRC + " (pet-spice-s-v0.2.0)", "BSD-3-Clause",
+               "none: the model requests no charge input", _UPET_LR, aliases=["petspices"]),
+    NamedModel("pet-spice-l", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-spice-l.pt'&name='PET-SPICE-L'",
+               "PET-SPICE-L", SPICE_LEVEL, METATOMIC_ENV, _UPET_SRC + " (pet-spice-l-v0.2.0)", "BSD-3-Clause",
+               "as pet-spice-s", _UPET_LR, aliases=["petspicel"]),
+    NamedModel("pet-mols-s", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-mols-s.pt'&name='PET-MOLS-S'",
+               "PET-MOLS-S (mixed molecular)", "mixed", METATOMIC_ENV, _UPET_SRC + " (pet-mols-s-v1.1.0)",
+               "BSD-3-Clause", "as pet-spice-s", _UPET_LR, aliases=["petmolss"]),
+    NamedModel("pet-omad-s", f"ase:lrbench.adapters:metatomic?path='{_UPET}/pet-omad-s.pt'&name='PET-OMAD-S'",
+               "PET-OMAD-S (OMat24 + MAD)", "mixed", METATOMIC_ENV, _UPET_SRC + " (pet-omad-s-v1.0.0)",
+               "BSD-3-Clause", "as pet-spice-s", _UPET_LR, aliases=["petomads"]),
 ]})
 
 # GRACE (graph ACE): a materials model at PBE/PAW with no charge input. It is here for the ACE family and as a

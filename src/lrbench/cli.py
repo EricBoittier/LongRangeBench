@@ -215,6 +215,21 @@ def cmd_eval(args):
                                "formal_charges": formal, **be.info()})
         if not be.passes_charge_spin:
             out["notes"].append(f"{spec}: backend passes no charge/spin; charged structures are evaluated neutral")
+        # A model that fails on *some* structures is the dangerous case, because the survivors still produce a
+        # full-looking table. The failures are rarely random: they fall on the biggest, most separated geometries,
+        # which are precisely what the tail metrics are made of, so the model gets scored on its short range and
+        # reported as though it had been scored on everything. Say so loudly, once, per member and per set.
+        for s_, per_set in per.items():
+            n_bad = sum(1 for p_ in per_set.values() if p_.get("energy") is None)
+            if n_bad:
+                frac = n_bad / max(1, len(per_set))
+                msg = (f"{spec}: {n_bad} of {len(per_set)} predictions failed on {s_} ({frac:.0%}); those "
+                       "structures are dropped from every metric, so coverage is not what the group n implies")
+                out["notes"].append(msg)
+                warnings.warn(msg)
+                err = next((p_.get("error") for p_ in per_set.values() if p_.get("error")), None)
+                if err:
+                    out["notes"].append(f"{spec}: first error on {s_}: {err}")
     off = element_offsets(data, preds, args.element_offsets)
     if off:
         apply_offsets(data, preds, off)
