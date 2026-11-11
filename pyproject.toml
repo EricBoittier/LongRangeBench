@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "longrangebench"
+version = "0.1.0"
+description = "Long-range benchmark for machine-learned interatomic potentials: tail, fixed-charge, many-body, charge and calibration diagnostics"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "LICENSE-DATA"]
+authors = [{ name = "Eric Boittier" }]
+keywords = ["machine-learning", "interatomic-potentials", "benchmark", "electrostatics", "long-range", "chemistry"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["numpy", "scipy", "ase"]
+
+[project.optional-dependencies]
+hf = ["huggingface_hub"]
+plot = ["matplotlib"]
+gguf = ["gguf"]
+metatomic = ["metatomic-torch", "metatomic-ase"]
+cqr = ["scikit-learn"]
+viz = ["chemiscope>=1.1"]
+test = ["pytest"]
+dev = ["pytest", "matplotlib", "ruff"]
+
+[project.scripts]
+lrbench = "lrbench.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/EricBoittier/LongRangeBench"
+Source = "https://github.com/EricBoittier/LongRangeBench"
+Issues = "https://github.com/EricBoittier/LongRangeBench/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+# Real defects, not formatting. The code is deliberately compact (semicolons, dense comprehensions, long
+# lines up to 120); a reformat would churn every file without finding a bug.
+select = ["F", "E9"]

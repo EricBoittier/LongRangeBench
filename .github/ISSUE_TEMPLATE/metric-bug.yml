@@ -1,0 +1,36 @@
+name: Metric gives a wrong answer
+description: A diagnostic scores a model in a way you can show is wrong. These are the most valuable reports.
+labels: ["metric", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The value of this benchmark is that its numbers mean what they claim. If a diagnostic contradicts something
+        you can demonstrate about a model, that is a bug here, not in your model.
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the metric says, and what you can show is true instead
+      placeholder: |
+        lrbench reports tail fraction 0.02 for a model with an explicit Ewald term, but a direct
+        E_int(d) scan of the same model (attached) falls off correctly from 8 to 20 A.
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The command line, and if you can, a minimal case on the toy set (`lrbench toy ./toy-data`).
+      render: shell
+    validations: { required: true }
+  - type: textarea
+    id: result
+    attributes:
+      label: The result JSON
+      description: >
+        Attach it, or paste the relevant block. It records the command, the dataset hashes, the model level and the
+        versions, which is usually enough to find the cause.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations: { required: true }

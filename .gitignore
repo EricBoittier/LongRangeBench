@@ -1,0 +1,21 @@
+# environments and build artefacts
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+*.so
+
+# caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# local runs: results, figures, downloaded or generated data
+toy-data/
+runs/
+results/
+figs/
+*.results.json
+perf.json

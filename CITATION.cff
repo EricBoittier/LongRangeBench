@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: "LongRangeBench: long-range diagnostics for machine-learned interatomic potentials"
+message: "If you use this software or its diagnostics, please cite it. A paper describing the sets and metrics is in preparation; until it appears, cite this repository and the commit you used."
+type: software
+authors:
+  - family-names: Boittier
+    given-names: Eric
+repository-code: "https://github.com/EricBoittier/LongRangeBench"
+license: BSD-3-Clause
+version: 0.1.0
+date-released: "2026-11-11"
+keywords:
+  - machine-learned interatomic potentials
+  - long-range interactions
+  - electrostatics
+  - benchmark
+  - computational chemistry

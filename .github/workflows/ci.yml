@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[test,plot,cqr]"
+      - name: Tests
+        run: pytest -q
+      - name: The documented quickstart must work
+        run: |
+          set -e
+          lrbench toy ./toy-data
+          lrbench eval --sets toy --data ./toy-data --normalise --no-hash --out exact.json \
+              --model 'ase:ase.calculators.lj:LennardJones?sigma=2.5&epsilon=0.05&rc=40.0'
+          lrbench eval --sets toy --data ./toy-data --normalise --no-hash --out cut.json --label 'LJ, 6 A cutoff' \
+              --model 'ase:ase.calculators.lj:LennardJones?sigma=2.5&epsilon=0.05&rc=6.0'
+          lrbench compare exact.json cut.json --md table.md --figdir figs/
+          python - <<'PY'
+          import json
+          tf = lambda f: {c: v["slope"][0] for c, v in
+                          json.load(open(f))["sets"]["toy"]["E_int"]["tail"].items()}
+          exact, cut = tf("exact.json"), tf("cut.json")
+          print("tail fraction -> exact:", exact, " truncated:", cut)
+          assert exact and all(abs(v - 1.0) < 1e-6 for v in exact.values()), exact
+          assert cut and all(abs(v) < 1e-6 for v in cut.values()), cut
+          PY
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .

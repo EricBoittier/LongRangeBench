@@ -1,0 +1,48 @@
+name: Add a model
+description: Propose a released model for the adapter registry.
+labels: ["model"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anything with an ASE calculator can already be scored without code
+        (`--model "ase:my_package:MyCalculator?kw=v"`). An adapter is for released models that need set-up, so they
+        can appear in `lrbench models` and `lrbench suite`. See docs/adding-a-model.md.
+  - type: input
+    id: name
+    attributes:
+      label: Model and version
+    validations: { required: true }
+  - type: input
+    id: level
+    attributes:
+      label: Training level of theory
+      description: Functional and basis, or the reference method — e.g. wB97M-V/def2-TZVPD. Not just "DFT".
+    validations: { required: true }
+  - type: input
+    id: licence
+    attributes:
+      label: Licence of the weights
+    validations: { required: true }
+  - type: dropdown
+    id: charge
+    attributes:
+      label: Can it be given a total charge and multiplicity?
+      options:
+        - "Yes: total charge and multiplicity"
+        - "Total charge only"
+        - "Per-atom formal charges"
+        - "No: neutral structures only"
+    validations: { required: true }
+  - type: textarea
+    id: lr
+    attributes:
+      label: What its long-range term actually is
+      placeholder: "Learned charges + real-space Coulomb; latent Ewald summation; nothing (local message passing); ..."
+    validations: { required: true }
+  - type: textarea
+    id: install
+    attributes:
+      label: How to install it and obtain the checkpoint
+      render: shell
+    validations: { required: true }

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Adding a dataset
+    url: https://github.com/EricBoittier/LongRangeBench/blob/main/docs/adding-a-dataset.md
+    about: What a set needs before it can be scored (levels, groups, licence, pathology flags).
+  - name: Roadmap
+    url: https://github.com/EricBoittier/LongRangeBench/blob/main/ROADMAP.md
+    about: Public data, a frozen protocol and a generated leaderboard — and where help is most useful.
