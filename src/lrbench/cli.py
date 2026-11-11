@@ -214,6 +214,12 @@ def cmd_eval(args):
         out["members"].append({"spec": spec, "path": os.path.abspath(p) if os.path.exists(p) else p,
                                "sha256": _file_sha256(spec_weights_file(p)) if not args.no_hash else None,
                                "formal_charges": formal, **be.info()})
+        # whether the model has an explicit long-range term, from the file itself where it can be read
+        from .gguf_registry import lr_keys
+        from .models import long_range_flag
+        mb = out["members"][-1]
+        lk = lr_keys(p) if str(p).endswith(".gguf") else None
+        mb["has_lr"] = bool(lk) if lk is not None else long_range_flag(mb)
         if not be.passes_charge_spin:
             out["notes"].append(f"{spec}: backend passes no charge/spin; charged structures are evaluated neutral")
         # A model that fails on *some* structures is the dangerous case, because the survivors still produce a

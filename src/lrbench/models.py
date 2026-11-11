@@ -126,6 +126,11 @@ class NamedModel:
     def same_level_as_ours(self) -> bool:
         return self.level == OMOL
 
+    @property
+    def has_lr(self) -> bool:
+        """Whether the model has an explicit long-range term (see :data:`HAS_LR`)."""
+        return HAS_LR[self.name.split(":", 1)[0]]
+
 
 MODELS: Dict[str, NamedModel] = {m.name: m for m in [
     NamedModel("so3lr", "ase:lrbench.adapters:so3lr?model='so3lr'", "SO3LR (original, v1)", "PBE0+MBD", SO3LR_ENV,
@@ -288,6 +293,53 @@ MODELS.update({m.name: m for m in [
                "PBE/PAW (OMat24)", GRACE_ENV, "tensorpotential auto-download", "Academic Software License",
                "none: no total-charge or spin input", "none (local, 6 A cutoff)"),
 ]})
+
+#: Whether each released model carries an **explicit long-range term**: an energy contribution that does not vanish
+#: beyond the message-passing cutoff (Coulomb on learned or equilibrated charges, LES, a DSF Coulomb with its own
+#: 15 A cutoff). Total-charge conditioning of a local model does not count: it changes the local energy, not its
+#: range. Curated from each model's paper and adapter, and the single source every table and page reads, so a
+#: column can never fall back to "no" for a model nobody asked about. Every registry model must appear here
+#: (tests/test_suite.py).
+HAS_LR: Dict[str, bool] = {
+    "so3lr": True, "so3lr-tauri": True, "so3lr-tauri-s": True, "so3lr-tauri-l": True,
+    "mace-polar": True, "mace-polar-l": True,
+    "mace-h": False,        # MACE-MH-1, OMol head: local message passing, no field / electrostatic term
+    "mace-omol": False,
+    "maceles-off": True, "caceles-water": True,        # Latent Ewald Summation
+    "orbmol": True,         # OrbMol-v2: latent charges + Coulomb (the term orbmol-v1 lacks)
+    "orbmol-v1": False,
+    "dpa4-plus": False, "dpa4-air": False,
+    "uma-s": False, "esen-omol": False,
+    "aimnet2": True, "aimnet2-dsf": True,                # Coulomb on predicted charges (DSF: truncated at 15 A)
+    "pet-mad": False, "pet-omol-s": False, "pet-omol-m": False, "pet-omol-l": False,
+    "pet-spice-s": False, "pet-spice-l": False, "pet-mols-s": False, "pet-omad-s": False,
+    "grace-2l": False, "grace-1l": False,
+}
+
+
+def long_range_flag(member: dict) -> Optional[bool]:
+    """Whether a result member's model has an explicit long-range term: True / False, or None when it cannot be
+    told. Never a default. In order: what the eval recorded; the GGUF registry entry (derived from the file's own
+    metadata keys, :func:`lrbench.gguf_registry.lr_keys`); the named-model registry (:data:`HAS_LR`), matched on
+    the spec the member ran; and last the adapter's own ``long_range`` declaration."""
+    if isinstance(member.get("has_lr"), bool):
+        return member["has_lr"]
+    gr = member.get("gguf_registry") or {}
+    if gr.get("name"):
+        from .gguf_registry import lookup as gguf_lookup
+        e = gguf_lookup(gr["name"]) or {}
+        if isinstance(e.get("has_lr"), bool):
+            return e["has_lr"]
+    from .results import strip_dirs
+    spec = strip_dirs(member.get("spec") or "")
+    for m in MODELS.values():
+        if spec and spec in (m.spec, strip_dirs(m.spec)):
+            return m.has_lr
+    lr = str((member.get("external_model") or {}).get("long_range") or "").strip().lower()
+    if lr.startswith("none"):
+        return False
+    return True if lr and not lr.startswith("?") else None
+
 
 # The four models of the external comparison, in table order.
 EXTERNAL = ["so3lr", "so3lr-tauri", "mace-h", "mace-polar"]

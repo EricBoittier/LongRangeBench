@@ -298,6 +298,24 @@ def capi_for(spec_path: str, lib: Optional[str], device: str = "cpu") -> Optiona
     return {"lib": L, "provenance": prov}
 
 
+#: Metadata key fragments that mark an explicit long-range term in a GGUF: the plato_lr Coulomb / conditioning head
+#: (``pet.plato_lr.lrc_*``) and the PET-LR long-range branch (``pet.iris_lr*``). ``pet.plato_lr.rope_init`` alone
+#: is not one: local models carry it too.
+LR_KEY_MARKERS = (".lrc_", "iris_lr")
+
+
+def lr_keys(gguf: str) -> Optional[List[str]]:
+    """The model's long-range metadata keys ([] for a local model), or None when the file cannot be read (no
+    ``gguf`` package, or no file): "cannot tell" is never reported as "no"."""
+    if not os.path.isfile(gguf):
+        return None
+    from .backends import gguf_metadata
+    meta = gguf_metadata(gguf)
+    if not meta:
+        return None
+    return sorted(k for k in meta if any(t in k for t in LR_KEY_MARKERS))
+
+
 def entry_from_file(name: str, gguf: str, build: str, binary: str, **fields) -> dict:
     """A registry entry for ``gguf`` evaluated with ``binary`` (the build of record): hashes, companions, and the
     metadata keys this build does not contain (``keys_not_literal``)."""
@@ -306,8 +324,11 @@ def entry_from_file(name: str, gguf: str, build: str, binary: str, **fields) -> 
     rel = gguf
     if root and os.path.abspath(gguf).startswith(os.path.abspath(root) + os.sep):
         rel = "${LRBENCH_GGUF_ROOT}/" + os.path.relpath(os.path.abspath(gguf), os.path.abspath(root))
+    lk = lr_keys(gguf)
     e = {"gguf": rel, "sha256": sha256(gguf), "companions": comp, "build": build,
          "keys_not_literal": sorted(unread_keys(gguf, binary))}
+    if lk is not None:
+        e["has_lr"] = bool(lk)
     e.update(fields)
     return e
 
@@ -339,6 +360,11 @@ def _cmd_check(a):
         except ValueError as err:
             c = {"ok": False, "problems": [str(err)]}
         probs = f["problems"] + c["problems"]
+        lk = lr_keys(_expand(e["gguf"]))
+        if "has_lr" not in e:
+            probs.append("no has_lr flag (whether the model has an explicit long-range term)")
+        elif lk is not None and bool(lk) != e["has_lr"]:
+            probs.append(f"has_lr is {e['has_lr']} but the file {'has' if lk else 'has no'} long-range keys")
         bad += bool(probs)
         print(f"{n:14s} {'OK ' if not probs else 'BAD'} " + ("; ".join(probs) if probs else f"build {e['build']}"))
     sys.exit(1 if bad else 0)

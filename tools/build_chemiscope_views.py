@@ -1936,7 +1936,7 @@ def main(argv=None) -> int:
                        (f"{sc['lrs']}*" if sc.get("partial") else sc["lrs"]),
                 "s_decay": sc["decay"], "s_scale": sc["scale"], "s_response": sc["response"],
                 "s_accuracy": sc["accuracy"],
-                "lr": "ceiling" if "oracle" in name else ("yes" if r["has_lr"] else "no"),
+                "lr": "ceiling" if "oracle" in name else {True: "yes", False: "no"}.get(r["has_lr"], "?"),
                 "tail": g(c.get("tail")), "eps": eps, "ddE": g(ddE, 4),
                 "off8": g(c.get("off8"), 1), "far12": g(c.get("far12"), 1), "fmae": g(S.get("F_mae"), 1),
                 "level": r["level"][:20] + (" ⚠" if r["mismatch"] else ""),

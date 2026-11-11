@@ -50,7 +50,8 @@
    "keys_not_literal": [
     "pet.d_pet"
    ],
-   "note": "PR #4's metatomic adapter serves the released export under the name pet-omol-s; this is the same model as an mlip.cpp GGUF. no long-range head; eval of record used an older build (596e2ae): the base model reads no long-range keys, so it is pinned to the FTq/FTB build"
+   "note": "PR #4's metatomic adapter serves the released export under the name pet-omol-s; this is the same model as an mlip.cpp GGUF. no long-range head; eval of record used an older build (596e2ae): the base model reads no long-range keys, so it is pinned to the FTq/FTB build",
+   "has_lr": false
   },
   "FTq13": {
    "title": "fine-tune of PET-OMol-S with the long-range charge head",
@@ -91,7 +92,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FTq14": {
    "title": "fine-tune of PET-OMol-S with the long-range charge head",
@@ -132,7 +134,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FTq15": {
    "title": "fine-tune of PET-OMol-S with the long-range charge head",
@@ -173,7 +176,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FTq16": {
    "title": "fine-tune of PET-OMol-S with the long-range charge head",
@@ -214,7 +218,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FTB13": {
    "title": "fine-tune of PET-OMol-S, same data, no long-range head",
@@ -230,7 +235,8 @@
    "keys_not_literal": [
     "pet.d_pet",
     "pet.plato_lr.rope_init"
-   ]
+   ],
+   "has_lr": false
   },
   "FCbl13": {
    "title": "long-range fine-tune with backbone links",
@@ -273,7 +279,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FCbl14": {
    "title": "long-range fine-tune with backbone links",
@@ -316,7 +323,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FCbl15": {
    "title": "long-range fine-tune with backbone links",
@@ -359,7 +367,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FCbl16": {
    "title": "long-range fine-tune with backbone links",
@@ -402,7 +411,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "IPR4_13": {
    "title": "long-range fine-tune + charge-state pair rows (x4)",
@@ -443,7 +453,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "IPR4_14": {
    "title": "long-range fine-tune + charge-state pair rows (x4)",
@@ -484,7 +495,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "IPR4_15": {
    "title": "long-range fine-tune + charge-state pair rows (x4)",
@@ -525,7 +537,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "IPR4_16": {
    "title": "long-range fine-tune + charge-state pair rows (x4)",
@@ -566,7 +579,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FC3b13": {
    "title": "long-range fine-tune with backbone links + link-state mixture (fix 3b); 2 seeds = screen",
@@ -612,7 +626,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "FC3b14": {
    "title": "long-range fine-tune with backbone links + link-state mixture (fix 3b); 2 seeds = screen",
@@ -658,7 +673,8 @@
     "pet.plato_lr.sqe_w_hi",
     "pet.plato_lr.sqe_w_lo",
     "pet.plato_lr.sqe_w_raw"
-   ]
+   ],
+   "has_lr": true
   },
   "pet-lr-control": {
    "title": "PET-LR omol-4m 'control' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -675,7 +691,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "pet-lr-readout": {
    "title": "PET-LR omol-4m 'readout' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -692,7 +709,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "pet-lr-readout-pol": {
    "title": "PET-LR omol-4m 'readout-pol' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -709,7 +727,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "pet-lr-readout-1m": {
    "title": "PET-LR omol-4m 'readout-1m' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -726,7 +745,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "pet-lr-readout-2m": {
    "title": "PET-LR omol-4m 'readout-2m' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -743,7 +763,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "pet-lr-readout-4m": {
    "title": "PET-LR omol-4m 'readout-4m' checkpoint (third-party JAX model) through the mlip.cpp port",
@@ -760,7 +781,8 @@
     "pet.iris_lr.dipole_origin",
     "pet.source"
    ],
-   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3"
+   "note": "energies carry no composition baseline (element offsets are fitted by lrbench); charge states -3..+3",
+   "has_lr": true
   },
   "L0_s13": {
    "title": "from-scratch local baseline (ladder rung 0, no long-range term)",
@@ -776,7 +798,8 @@
    "keys_not_literal": [
     "pet.d_pet",
     "pet.plato_lr.rope_init"
-   ]
+   ],
+   "has_lr": false
   },
   "L0_s14": {
    "title": "from-scratch local baseline (ladder rung 0, no long-range term)",
@@ -792,7 +815,8 @@
    "keys_not_literal": [
     "pet.d_pet",
     "pet.plato_lr.rope_init"
-   ]
+   ],
+   "has_lr": false
   },
   "L0_s15": {
    "title": "from-scratch local baseline (ladder rung 0, no long-range term)",
@@ -808,7 +832,8 @@
    "keys_not_literal": [
     "pet.d_pet",
     "pet.plato_lr.rope_init"
-   ]
+   ],
+   "has_lr": false
   },
   "L0_s16": {
    "title": "from-scratch local baseline (ladder rung 0, no long-range term)",
@@ -824,7 +849,8 @@
    "keys_not_literal": [
     "pet.d_pet",
     "pet.plato_lr.rope_init"
-   ]
+   ],
+   "has_lr": false
   }
  },
  "groups": {
