@@ -105,10 +105,17 @@ FAMILIES = {
     "grace":   {"match": ("grace", "ace"),       "colour": "#9C755F", "label": "GRACE (ACE)"},
     "cace":    {"match": ("cace",),              "colour": "#59A14F", "label": "CACE"},
     "fairchem": {"match": ("uma", "esen"),       "colour": "#EDC948", "label": "fairchem"},
+    # One family for the whole PET architecture: the charge-conditioned OMol checkpoints, the SPICE and mixed ones,
+    # and the PET-MAD materials model all share the hue and separate by marker. #FF9DA7 is the next unused member of
+    # tableau10, so it collides with nothing above.
+    "pet":     {"match": ("pet",),               "colour": "#FF9DA7", "label": "PET"},
 }
 
-#: Marker and dash, cycled within a family so members of one family are separable without a second hue.
-MARKERS = ["o", "s", "D", "^", "v", "P"]
+#: Marker and dash, cycled within a family so members of one family are separable without a second hue. There must
+#: be at least as many markers as the largest family has members, or two models would come out with the same hue
+#: *and* the same mark and be genuinely indistinguishable -- the PET family alone has eight. ``test_palette`` holds
+#: that line, so extend this list rather than letting the cycle wrap.
+MARKERS = ["o", "s", "D", "^", "v", "P", "X", "*", "h", "<", ">", "p"]
 DASHES = ["", "4 2", "1 2", "6 2 1 2"]
 
 

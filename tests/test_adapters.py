@@ -112,3 +112,79 @@ def test_adapter_recomputes_when_only_the_charge_changes():
         a.calc = ad
         seen.append(a.get_potential_energy())
     assert seen == [0.0, -7.0, 0.0, 14.0]
+
+
+def test_metatomic_level_reads_the_dataset_from_the_name():
+    """The upet names carry their training set, and the longest token must win: ``pet-omatpes-l`` is OMatPES, not
+    OMat24, and reading it as the latter would silently score it against the wrong labels."""
+    from lrbench.adapters import OMOL, SPICE, metatomic_level
+    assert metatomic_level("checkpoints/pet-omol-s.pt") == OMOL
+    assert metatomic_level("pet-omol-l-v1.0.0.pt") == OMOL
+    assert metatomic_level("pet-spice-s.pt") == SPICE
+    assert metatomic_level("pet-mad-s.pt") == "PBEsol/PAW (MAD)"
+    assert metatomic_level("pet-omat-l.pt") == "PBE/PAW (OMat24)"
+    assert metatomic_level("pet-omatpes-l.pt") == "mixed"   # not read as 'omat'
+    assert metatomic_level("some-other-model.pt") == "unknown"
+
+
+class _FakeAtomisticModel:
+    def __init__(self, inputs):
+        self._inputs = dict.fromkeys(inputs, object())
+
+    def requested_inputs(self, use_new_names=True):
+        return self._inputs
+
+
+class _FakeMetatomicCalc(Calculator):
+    """Stands in for MetatomicCalculator: an LJ energy plus the ``_model`` whose declared inputs the adapter reads."""
+    implemented_properties = ["energy", "forces"]
+
+    def __init__(self, inputs):
+        super().__init__()
+        self._model = _FakeAtomisticModel(inputs)
+
+    def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        super().calculate(atoms, properties, system_changes)
+        a = atoms.copy()
+        a.calc = lj()
+        self.seen = dict(atoms.info)
+        self.results = {"energy": a.get_potential_energy(), "forces": a.get_forces()}
+
+
+def test_metatomic_charge_spin_follows_what_the_model_declares(monkeypatch):
+    """``charge_spin`` is read off ``requested_inputs``, never guessed.
+
+    A model that asks for a charge is given one and scored on what it does with it; a model that asks for nothing is
+    recorded as unable to be *told* one, so "ignored the charge" keeps meaning only what it says. Of the released
+    PET checkpoints only the pet-omol-* family requests ``charge``.
+    """
+    import lrbench.backends as B
+    from lrbench.adapters import metatomic
+
+    for inputs, conditioned in ((["charge", "spin_multiplicity"], True), ([], False)):
+        monkeypatch.setattr(B, "metatomic_calculator", lambda path, device, _i=inputs: _FakeMetatomicCalc(_i))
+        ad = metatomic("pet-omol-s.pt", device="cpu")
+        assert ad.charge_spin is conditioned
+        assert ad.lrbench_meta["requested_inputs"] == list(inputs)
+        assert ("NONE" in ad.lrbench_meta["charge_spin"]) is not conditioned
+        p = ASEBackend(ad).predict([_s()])[0]
+        assert p["error"] is None
+        # a model that declares no charge input is never handed one
+        assert ("charge" in ad.inner.seen) is conditioned
+
+
+def test_metatomic_survives_a_model_that_cannot_be_asked(monkeypatch):
+    """An older or wrapped model with no ``requested_inputs`` must degrade to 'not conditioned' and say so, rather
+    than raising or claiming a charge input it cannot demonstrate."""
+    import lrbench.backends as B
+    from lrbench.adapters import metatomic
+
+    class Mute(_FakeMetatomicCalc):
+        def __init__(self):
+            super().__init__([])
+            self._model = None
+
+    monkeypatch.setattr(B, "metatomic_calculator", lambda path, device: Mute())
+    ad = metatomic("mystery.pt", device="cpu", level="L")
+    assert ad.charge_spin is False and ad.lrbench_level == "L"
+    assert ad.lrbench_meta["requested_inputs"] == []

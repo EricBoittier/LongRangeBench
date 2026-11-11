@@ -135,9 +135,11 @@ Anything with an ASE calculator can be scored, by import path, with no code in t
 lrbench eval --model "ase:my_package.calculators:MyPotential?cutoff=6.0" --sets dimers --data ./lr-sets
 ```
 
-Also supported: metatomic / TorchScript exports (`model.pt`), mlip.cpp GGUF models (`model.gguf`, via
+Also supported: metatomic / TorchScript exports — `mtt export`, i.e. most of the metatensor ecosystem, where the
+level is inferred from the checkpoint name and the charge handling is read off the model's own
+`requested_inputs()` rather than assumed — mlip.cpp GGUF models (`model.gguf`, via
 `mlipcpp-eval`, the C API or the Python bindings), seed ensembles, and named released models — `so3lr`,
-`so3lr-tauri{,-s,-l}`, `mace-h`, `mace-polar{,-l}`, `mace-omol`, `maceles-off`, `caceles-water` (`lrbench models`
+`so3lr-tauri{,-s,-l}`, `mace-h`, `mace-polar{,-l}`, `mace-omol`, `maceles-off`, `caceles-water`, `pet-omol-{s,m,l}`, `pet-spice-{s,l}`, `pet-mols-s`, `pet-omad-s`, `pet-mad` (`lrbench models`
 lists them with their training level, licence and how charge/spin enter). `lrbench suite` runs several, each in its
 own Python environment, and writes one combined table. See [docs/models.md](docs/models.md) and
 [docs/adding-a-model.md](docs/adding-a-model.md).
