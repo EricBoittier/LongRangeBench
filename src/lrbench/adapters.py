@@ -33,7 +33,7 @@ RPBE_D3 = "RPBE-D3 (water, CACE-LES training set)"
 WB97M_D3_TZVPP = "wB97M-D3/def2-TZVPPD"
 LEVELS = {"maceles": SPICE, "cace": RPBE_D3, "so3lr": PBE0MBD, "mace_polar": OMOL, "mace_omol": OMOL, "kernel_lr": OMOL,
           # OrbMol (OMol25; v2 adds OPoly26) and the released DPA4 checkpoints (OMol25 100M split)
-          "orbmol": OMOL, "deepmd": OMOL, "aimnet2": WB97M_D3_TZVPP,
+          "orbmol": OMOL, "deepmd": OMOL, "aimnet2": WB97M_D3_TZVPP, "fairchem": OMOL,
           # MACE-MH-1 heads (mace-foundations model card / arXiv 2510.25380). The omol head is listed there as
           # wB97M-VV10, i.e. OMol25's wB97M-V/def2-TZVPD labels (1 % subset).
           "mace_mh:omol": OMOL, "mace_mh:omat_pbe": "PBE/PAW (OMat24)", "mace_mh:spice_wB97M": "wB97M-D3(BJ)/def2-TZVPPD",
@@ -431,4 +431,30 @@ def aimnet2(model: str = "aimnet2", lrcoulomb: str = "simple", cutoff: float = 1
         "long_range": ("predicted partial charges + Coulomb over all pairs, no cutoff (vacuum)" if lrcoulomb ==
                        "simple" else f"predicted partial charges + {lrcoulomb.upper()} Coulomb, cutoff {cutoff} A")})
     return Adapter(calc, level, meta, before=_set_charge,
+                   charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))
+
+
+# ------------------------------------------------------------------------------ fairchem (UMA, eSEN) -- Meta FAIR
+def fairchem(model: str = "uma-s-1p2p1", task: str = "", device: str = "cuda", level: str = OMOL,
+             inference_settings: str = "default"):
+    """A fairchem-core v2 pretrained model (UMA, eSEN, AllSCAIP) through ``FAIRChemCalculator``.
+
+    The OMol25 heads are trained at wB97M-V/def2-TZVPD -- the same level as our sets -- and take a total charge and
+    spin multiplicity from ``atoms.info`` (``charge``, ``spin``). They carry **no** explicit electrostatic term: the
+    charge enters as an embedding, so these are the strongest local models at the right level, which is exactly what
+    makes them the control the long-range models have to beat beyond the cutoff.
+
+    ``task`` is the UMA task name (``omol`` for molecules) and is required for the multi-task UMA checkpoints;
+    single-task checkpoints such as ``esen-sm-conserving-all-omol`` take none, and it defaults to ``omol`` for a
+    model whose name starts with ``uma``. Weights are gated on Hugging Face: accept the licence and log in first.
+    """
+    from fairchem.core import FAIRChemCalculator, pretrained_mlip
+    unit = pretrained_mlip.get_predict_unit(model, device=device, inference_settings=inference_settings)
+    task = task or ("omol" if model.startswith("uma") else "")
+    calc = FAIRChemCalculator(unit, task_name=task or None)
+    meta = _pkg_meta("fairchem-core", f"fairchem {model}" + (f" ({task} task)" if task else ""), {
+        "licence": "Meta FAIR Chemistry model licence (gated on Hugging Face)",
+        "charge_spin": "atoms.info charge / spin (2S+1), as an embedding",
+        "long_range": "none (local message passing); the total charge enters only as an embedding"})
+    return Adapter(calc, level, meta, info_map={"spin_multiplicity": "spin"},
                    charges=lambda R: R.get("charges"), dipole=lambda R: R.get("dipole"))

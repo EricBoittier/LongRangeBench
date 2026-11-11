@@ -24,6 +24,7 @@ SO3LR_ENV = "so3lr"
 MACE_ENV = "mace"
 ORB_ENV = "orb"
 DEEPMD_ENV = "deepmd"
+FAIRCHEM_ENV = "fairchem"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
@@ -56,6 +57,13 @@ ENVS: Dict[str, dict] = {
         "install": ['uv pip install "deepmd-kit[torch]" ase', 'uv pip install -e ".[test]"'],
         "notes": "torch with CUDA matching the node. The DPA4 OMol25 checkpoints are downloaded separately from "
                  "huggingface.co/deepmodelingcommunity/DPA4-OMol; set LRBENCH_DPA4_DIR to where they are.",
+    },
+    FAIRCHEM_ENV: {
+        "probe": "fairchem.core",
+        "python": ">=3.10",
+        "install": ['uv pip install fairchem-core', 'uv pip install -e ".[test]"'],
+        "notes": "The weights are gated: accept the licence on huggingface.co/facebook/UMA and log in (hf auth "
+                 "login) before the first run. Checkpoints are cached in ~/.cache/fairchem (uma-s is ~2.3 GB).",
     },
 }
 
@@ -150,6 +158,20 @@ MODELS.update({m.name: m for m in [
                "&name='DPA4-Air-OMol25-100M'", "DPA4-Air, OMol25 100M (5.1 M params)", OMOL, DEEPMD_ENV,
                "huggingface.co/deepmodelingcommunity/DPA4-OMol", "CC BY-NC 4.0",
                "as dpa4-plus", "as dpa4-plus"),
+]})
+
+# Meta FAIR's OMol25 models: the same level as our sets, charge- and spin-aware, and local. They are the control
+# that any long-range claim has to beat beyond the cutoff.
+MODELS.update({m.name: m for m in [
+    NamedModel("uma-s", "ase:lrbench.adapters:fairchem?model='uma-s-1p2p1'&task='omol'", "UMA-S 1.2.1, omol task",
+               OMOL, FAIRCHEM_ENV, "huggingface.co/facebook/UMA (gated)",
+               "Meta FAIR Chemistry model licence", "atoms.info charge + spin (2S+1), as an embedding",
+               "none (local message passing)", aliases=["uma", "uma-small"]),
+    NamedModel("esen-omol", "ase:lrbench.adapters:fairchem?model='esen-sm-conserving-all-omol'",
+               "eSEN-SM conserving, all of OMol25", OMOL, FAIRCHEM_ENV,
+               "fairchem-core download (gated on Hugging Face)", "Meta FAIR Chemistry model licence",
+               "atoms.info charge + spin (2S+1), as an embedding", "none (local message passing)",
+               aliases=["esen", "esen-sm"]),
 ]})
 
 # The four models of the external comparison, in table order.

@@ -265,8 +265,7 @@ def _(GREY, INK, LOCAL_RED, LR_BLUE, mo, np, plt, prov, results, set_pick):
 
 @app.cell
 def _(mo, results):
-    # ------------------------------------------------------------------------------- what failed, and what was skipped
-    import json as _json
+    # ------------------------------------------------------------------------- what failed, and what was skipped
 
     def issues(J):
         out = []
