@@ -123,7 +123,7 @@ LongRangeBench is a harness; data comes from three places.
 | source | status | licence |
 |---|---|---|
 | **toy LJ set** (`lrbench toy`) | ships with the repo, used by CI | CC0 |
-| **canonical long-range sets** (dimers, families, trimers, charge parity, props) | `dimers`, `families_fixedq` and `trimers` are **public**: scores are committed in [results/](results/SUMMARY.md) and the structures are shown in the [explorer](https://ericboittier.github.io/LongRangeBench/). The full dataset is **moving to a public HuggingFace dataset**, with further sets to follow from CSCS | CC BY 4.0 |
+| **canonical long-range sets** (dimers, families, trimers, charge parity, props) | `dimers`, `families_fixedq` and `trimers` are **public**: scores are committed in [results/](results/SUMMARY.md) and the structures are shown in the [explorer](https://ericboittier.github.io/LongRangeBench/explorer/). The full dataset is **moving to a public HuggingFace dataset**, with further sets to follow from CSCS | CC BY 4.0 |
 | **external public QM sets** — GSCDB137 NC (45 subsets), NCI Atlas, BFDB biodimers, DES370K, SAPT10k, PLA15, Ko et al. 4G | converters included, you fetch the upstream data; nothing is redistributed here | each upstream's own licence |
 
 Point `--data` at a directory of canonical `.jsonl` + `.groups.json` files, or use `--data hf` for the
@@ -170,7 +170,8 @@ lrbench eval --model <spec> --sets all --data ./lr-sets --out runs/mymodel.json
 marimo export html-wasm notebooks/long_range_diagnostics.py --single-file -o site/index.html
 ```
 
-The committed results and this notebook (as WebAssembly) are published at
+The committed results, an explorer of every scored structure (`site/explorer/`, built with
+`tools/build_chemiscope_views.py --rows results`) and this notebook (as WebAssembly) are published at
 <https://ericboittier.github.io/LongRangeBench/> by `.github/workflows/pages.yml` on every push to `main`
 (`tools/build_pages.py` renders `results/SUMMARY.md`; no raw result JSON is read).
 
