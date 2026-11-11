@@ -179,8 +179,8 @@ Committed result rows ([results/SUMMARY.md](../results/SUMMARY.md)):
 
 - **charge_parity:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
 - **dimers:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen), `so3lr-tauri-l` (screen), `so3lr-tauri-s` (screen), `so3lr-tauri` (screen), `so3lr` (screen)
-- **ext_biodimers_wb97mv:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen)
-- **ext_gscdb_nc:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen)
+- **ext_biodimers_wb97mv:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `so3lr-tauri-s` (screen), `so3lr-tauri` (screen), `so3lr` (screen)
+- **ext_gscdb_nc:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr-tauri-s` (screen), `so3lr-tauri` (screen), `so3lr` (screen)
 - **families_corrected:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
 - **families_fixedq:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen), `so3lr-tauri-l` (screen), `so3lr-tauri-s` (screen), `so3lr-tauri` (screen), `so3lr` (screen)
 - **families_full:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
