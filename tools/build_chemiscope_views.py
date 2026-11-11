@@ -195,7 +195,7 @@ HTML = """<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<link rel="stylesheet" href="{katex_css}">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chemiscope@{ver}/dist/chemiscope.min.js"></script>
@@ -417,6 +417,69 @@ function setDiagonal(st) {{
   try {{ st.viz.map._relayout({{ shapes: st.diag ? [diagonalShape(st.viz, st.ds)].filter(Boolean) : [] }}); }}
   catch (e) {{ console.warn("diagonal:", e); }}
 }}
+/* The data range of one axis, or null when the property holds nothing finite. */
+function axisRange(st, prop) {{
+  const p = st.ds.properties[prop];
+  if (!p) return null;
+  const v = finite(p.values);
+  return v.length ? [Math.min(...v), Math.max(...v)] : null;
+}}
+
+/* A log axis is a claim that the quantity is positive. A signed error is not, and chemiscope would simply drop
+   every non-positive point -- silently losing exactly the half of the data that says the model has the sign wrong. */
+function canLog(st, prop) {{
+  const r = axisRange(st, prop);
+  return !!r && r[0] > 0;
+}}
+
+/* What "log" should mean for a given axis, or null when it can mean nothing.
+   Offering the button only where the data is already positive is correct and nearly useless -- on these views that
+   is one axis out of twelve, because almost everything here is a signed error or a negative interaction energy.
+   But the thing a reader actually wants from a log axis on a signed error is the *magnitude* over orders of
+   magnitude, and every error property on this page has an absolute twin. So the button switches to that twin and
+   says so: "log |y|" is a different quantity from y, and relabelling is the honest way to offer it. */
+function logTarget(st, prop) {{
+  if (canLog(st, prop)) return {{ property: prop, label: "log" }};
+  const i = (prop || "").indexOf("/");
+  if (i > 0) {{
+    const twin = "abserr/" + prop.slice(i + 1);
+    if (st.ds.properties[twin] && canLog(st, twin)) return {{ property: twin, label: "log |·|" }};
+  }}
+  return null;
+}}
+
+/* One axis's scale buttons: a log option when one exists, and linear always. */
+function scaleGroup(bar, st, axis, cur) {{
+  const t = logTarget(st, cur);
+  const items = (t ? [{{ label: t.label, v: "log", prop: t.property }}] : [])
+    .concat([{{ label: "linear", v: "linear" }}]);
+  const s = st.viz.saveSettings().map;
+  group(bar, axis, items, it => it.v === s[axis].scale, it => {{
+    const next = {{}};
+    next[axis] = {{ scale: it.v }};
+    if (it.prop && it.prop !== cur) next[axis].property = it.prop;
+    st.viz.applySettings({{ map: next }});
+    if (st.shared) setShared(st);
+    setDiagonal(st);
+  }});
+}}
+
+/* Two axes on one scale. A parity plot is only readable this way: with independent autoscaling, y = x is not the
+   45-degree line it appears to be, and two models whose errors differ by an order of magnitude can look alike. */
+function setShared(st) {{
+  try {{
+    const s = st.viz.saveSettings().map;
+    const rx = axisRange(st, s.x.property), ry = axisRange(st, s.y.property);
+    if (!rx || !ry) return;
+    const next = st.shared
+      ? {{ x: {{ min: Math.min(rx[0], ry[0]), max: Math.max(rx[1], ry[1]) }},
+           y: {{ min: Math.min(rx[0], ry[0]), max: Math.max(rx[1], ry[1]) }} }}
+      : {{ x: {{ min: rx[0], max: rx[1] }}, y: {{ min: ry[0], max: ry[1] }} }};
+    st.viz.applySettings({{ map: next }});
+    setDiagonal(st);
+  }} catch (e) {{ console.warn("shared axis:", e); }}
+}}
+
 /* a diverging scale is only honest when it is centred on zero */
 function centreColour(st) {{
   try {{
@@ -537,9 +600,10 @@ function buildBar(st, v) {{
       st.viz.applySettings({{ map: {{ color: {{ property: it.c, palette: PALETTES[kind][0] }} }} }});
       if (kind === "diverging") centreColour(st);
     }});
-    group(bar, "x", [{{ label: "log", v: "log" }}, {{ label: "linear", v: "linear" }}],
-          it => it.v === s.x.scale,
-          it => {{ st.viz.applySettings({{ map: {{ x: {{ scale: it.v }} }} }}); setDiagonal(st); }});
+    scaleGroup(bar, st, "x", s.x.property);
+    scaleGroup(bar, st, "y", s.y.property);
+    group(bar, "", [{{ label: "shared axis", v: 1 }}], () => !!st.shared,
+          () => {{ st.shared = !st.shared; setShared(st); }});
     group(bar, "", [{{ label: "y = x", v: 1 }}], () => st.diag,
           () => {{ st.diag = !st.diag; setDiagonal(st); }});
   }};
@@ -617,11 +681,12 @@ function scoreBars(r) {{
       if (v.settings) ds.settings = v.settings;
       const viz = await Chemiscope.DefaultVisualizer.load(
         {{ map: v.id + "-map", info: v.id + "-info", meta: v.id + "-meta", structure: v.id + "-structure" }}, ds);
-      const st = {{ id: v.id, viz, ds, models: v.models || [], diag: !!v.diagonal }};
+      const st = {{ id: v.id, viz, ds, models: v.models || [], diag: !!v.diagonal,
+                   shared: !!v.parity }};   // a parity plot is wrong by default without it
       STATES.push(st);
       buildBar(st, v);
       viz.onSettingChange(() => redraw(document.getElementById(v.id + "-bar")));
-      setTimeout(() => {{ if (v.center0) centreColour(st); setDiagonal(st); }}, 450);
+      setTimeout(() => {{ if (v.center0) centreColour(st); if (st.shared) setShared(st); setDiagonal(st); }}, 450);
     }} catch (e) {{
       document.getElementById(v.id + "-view").innerHTML =
         '<p class="err">chemiscope could not load this view: ' + e + '</p>';
@@ -1323,6 +1388,85 @@ EXTRA_JS = r"""
 })();
 """
 
+KATEX_VERSION = "0.16.9"
+KATEX_CDN = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.css"
+
+#: Where the vendored copy is cached between builds, in the style of the other model/asset directories.
+KATEX_CACHE = pathlib.Path(os.environ.get(
+    "LRBENCH_KATEX_DIR", os.path.expanduser(f"~/.cache/lrbench/katex/{KATEX_VERSION}")))
+
+
+def katex_assets(cache: pathlib.Path = KATEX_CACHE, fetch: bool = True) -> pathlib.Path | None:
+    """A local KaTeX stylesheet plus its woff2 faces, or ``None`` if neither cached nor fetchable.
+
+    The page is published as a Claude artifact as well as opened from disk, and that viewer's content security
+    policy admits stylesheets only from its own files and Google Fonts. A stylesheet from a CDN is therefore
+    *silently dropped* there, and every equation renders as a heap of unstyled spans -- so the maths has to travel
+    with the page rather than be fetched beside it. Vendoring also means a page opened from disk needs no network
+    at all.
+
+    Only ``woff2`` is kept: every browser that can run chemiscope supports it, and the ``woff``/``ttf`` sources are
+    stripped from the CSS so a missing legacy file cannot 404.
+    """
+    css = cache / "katex.min.css"
+    if css.exists() and len(list((cache / "fonts").glob("*.woff2"))) >= 20:
+        return cache
+    if not fetch:
+        return None
+    import re
+    import urllib.request
+    base = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist"
+    try:
+        (cache / "fonts").mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(f"{base}/katex.min.css", timeout=60) as r:
+            text = r.read().decode()
+        text = re.sub(r',url\(fonts/[A-Za-z0-9_-]+\.woff\)\s*format\("woff"\)', "", text)
+        text = re.sub(r',url\(fonts/[A-Za-z0-9_-]+\.ttf\)\s*format\("truetype"\)', "", text)
+        names = sorted(set(re.findall(r"fonts/([A-Za-z0-9_-]+\.woff2)", text)))
+        if not names:
+            return None
+        for n in names:
+            dst = cache / "fonts" / n
+            if not dst.exists() or dst.stat().st_size == 0:
+                with urllib.request.urlopen(f"{base}/fonts/{n}", timeout=60) as r:
+                    dst.write_bytes(r.read())
+        css.write_text(text)   # written last, so a part-finished fetch is not mistaken for a cached copy
+        return cache
+    except Exception:
+        return None
+
+
+def install_katex(out: pathlib.Path, mode: str = "auto", verbose: bool = True) -> str:
+    """Put KaTeX beside ``out`` and return the href the page should use.
+
+    ``vendor`` insists and fails loudly; ``cdn`` never vendors; ``auto`` vendors when it can and falls back to the
+    CDN with a warning, so a build without network still produces a page that works in a browser -- just not one
+    that will survive publishing.
+    """
+    import shutil
+    if mode == "cdn":
+        return KATEX_CDN
+    src = katex_assets()
+    if src is None:
+        if mode == "vendor":
+            raise SystemExit("build_chemiscope_views: --katex vendor asked for, but KaTeX could not be fetched or "
+                             f"found in {KATEX_CACHE}")
+        if verbose:
+            print(f"[katex] not cached and not fetchable; falling back to the CDN. The page will render from disk "
+                  f"but its equations will be dropped by a published artifact's CSP.", file=sys.stderr)
+        return KATEX_CDN
+    dst = out.parent / "katex"
+    (dst / "fonts").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src / "katex.min.css", dst / "katex.min.css")
+    n = 0
+    for f in (src / "fonts").glob("*.woff2"):
+        shutil.copyfile(f, dst / "fonts" / f.name)
+        n += 1
+    if verbose:
+        print(f"[katex] vendored {KATEX_VERSION} beside the page ({n} woff2 faces in {dst})")
+    return "katex/katex.min.css"
+
+
 def payloads(runs_dir, data_dir=None, verbose: bool = True) -> dict:
     """{key: {blob, models, n, label}} — one gzipped, base64 chemiscope dataset per set, plus its atoms twin.
 
@@ -1524,6 +1668,10 @@ def main(argv=None) -> int:
     ap.add_argument("--data", default=None, help="dataset directory (default: alongside runs, ../lr-sets)")
     ap.add_argument("-o", "--out", default="chemiscope-views.html")
     ap.add_argument("--chemiscope-version", default="1.1.0")
+    ap.add_argument("--katex", choices=("auto", "vendor", "cdn"), default="auto",
+                    help="ship KaTeX beside the page (default: auto). A published artifact's CSP drops a "
+                         "stylesheet loaded from a CDN, so 'cdn' produces a page whose equations do not survive "
+                         "publishing.")
     ap.add_argument("--open", action="store_true")
     a = ap.parse_args(argv)
 
@@ -1661,7 +1809,9 @@ def main(argv=None) -> int:
         body += mine
     body.append(METHOD.format(protocol=PROTOCOL_C))
 
+    katex_css = install_katex(out, a.katex)
     html = HTML.format(
+        katex_css=katex_css,
         body="\n".join(body),
         scan_css=SCAN_CSS.format(),
         palette=json.dumps({"seq": pal.SEQUENTIAL["batlow"], "div": pal.DIVERGING["vik"],
