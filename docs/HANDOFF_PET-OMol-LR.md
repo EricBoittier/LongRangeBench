@@ -7,6 +7,25 @@ still lacks. That workspace is the `lrbench/` tree of a private fork, where the 
 The two trees were compared file by file, mapping `lrbench/{src,tests,tools,configs}` → `{src,tests,tools,configs}`,
 at workspace head da09f8c against this repository at 3405e7a.
 
+### Since this note was written: how PET models reach the benchmark (PR #4)
+
+- **Released PET checkpoints go through metatomic.** `pet-omol-{s,m,l}`, `pet-spice-{s,l}`, `pet-mols-s` and
+  `pet-omad-s` are named models. They run through the `metatomic` adapter, using `mtt export` → `.pt` →
+  `metatomic-ase`.
+  - The total charge and multiplicity come from `atoms.info`, and the charge is passed only when the model's own
+    `requested_inputs()` asks for it. Only `pet-omol-*` does.
+  - The level is inferred from the checkpoint name.
+  - No mlip.cpp is in this path. See [models.md](models.md#metatomic-exports-and-what-takes-a-charge-is-allowed-to-mean).
+- **The TorchScript profiling executor is now off by default.** With it on, these exports failed on the large,
+  far-separated charged geometries ("Global alloc not supported yet"). A partial-failure run now warns, and the
+  result's `notes` name the count. Any PET number produced before this change needs a re-score with `n_failed = 0`
+  checked before it is quoted. That includes the PET-OMol-S tier-A screen in PR #2's discussion, which was scored
+  outside the named-model route.
+- **mlip.cpp GGUF is now only for the long-range-head models.** These are the fine-tunes that add a long-range head
+  and are served as GGUF. They cannot be expressed as a metatomic export today. Their charge must reach the model
+  through `mlipcpp-eval` or the C API, never through the Python bindings, which pass no charge. A dedicated mlip.cpp
+  adapter with its own registry rows is planned as a separate change.
+
 ## (a) What to port
 
 ### Already here: nothing to do
@@ -125,7 +144,7 @@ from these sets go into this repository. `CHANGELOG.md` already states this in g
 ## (e) Open items from the workspace changelog
 
 Not yet recorded here:
-- **Pending re-score on `ext_ncia` and `ext_gscdb_nc`.** One mlip.cpp-served model returned 40 non-finite points,
+- **Pending re-score on `ext_ncia` and `ext_gscdb_nc`.** One mlip.cpp-served (long-range-head GGUF) model returned 40 non-finite points,
   all on structures where a lone atom sits ≥ 8 Å from the rest (RG10N, D442x10). The cause was an mlip.cpp backend
   error, not a benchmark issue. A re-score with the fixed build is pending; record the result here as a backend note,
   not a set defect.
@@ -158,5 +177,6 @@ in PR [#1340](https://github.com/metatensor/metatrain/pull/1340); both are open 
 
 **Suggested check.** Run the bare-ion or ion–neutral closest-contact scan (6–9 Å, 0.01 Å steps) for one PET model
 twice, in fp32 and fp64, and add `precision`'s fp64 reference to the `seam` report. A seam failure that disappears
-in fp64 belongs to this issue, and the result should say so. Once #1340 is released, record the metatrain version
-in the model metadata.
+in fp64 belongs to this issue, and the result should say so. The metatomic adapter already records the
+`metatomic-torch` version in `members[].external_model`. Once #1340 is released, also record the metatrain version
+that exported the checkpoint, because the staircase comes from the exported graph.
