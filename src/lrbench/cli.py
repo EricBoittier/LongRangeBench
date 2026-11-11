@@ -221,6 +221,8 @@ def cmd_eval(args):
         # reported as though it had been scored on everything. Say so loudly, once, per member and per set.
         for s_, per_set in per.items():
             n_bad = sum(1 for p_ in per_set.values() if p_.get("energy") is None)
+            fl = out.setdefault("failures", {}).setdefault(s_, {"n_structures": len(per_set), "n_failed": 0})
+            fl["n_failed"] = max(fl["n_failed"], n_bad)
             if n_bad:
                 frac = n_bad / max(1, len(per_set))
                 msg = (f"{spec}: {n_bad} of {len(per_set)} predictions failed on {s_} ({frac:.0%}); those "
@@ -230,6 +232,9 @@ def cmd_eval(args):
                 err = next((p_.get("error") for p_ in per_set.values() if p_.get("error")), None)
                 if err:
                     out["notes"].append(f"{spec}: first error on {s_}: {err}")
+    # A run with failed structures is not a result: it is marked incomplete here, and tools that collect results
+    # (tools/collect_result.py) refuse it.
+    out["complete"] = not any(v["n_failed"] for v in out.get("failures", {}).values())
     off = element_offsets(data, preds, args.element_offsets)
     if off:
         apply_offsets(data, preds, off)

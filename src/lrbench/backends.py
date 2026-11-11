@@ -2,6 +2,7 @@
 ``{"energy": float, "forces": (N, 3) array | None, "charges": (N,) array | None, "error": str | None}``.
 
 Model specs (``--model``):
+  - a GGUF registry name (lrbench.gguf_registry) -> its path.gguf, run with the mlip.cpp build it was trained with
   - ``path.gguf``                       mlip.cpp: ``mlipcpp-eval`` batch (default; the only path that passes formal
                                          charges), else the C API through ctypes (``MLIPCPP_C_LIB``; charge/spin, no
                                          formal charges), else the Python bindings (no charge/spin)
@@ -140,7 +141,12 @@ class MlipcppEval(Backend):
                 res.append({"energy": None, "forces": None, "charges": None, "error": f["error"]})
                 continue
             lq = f.get("latent_charges")
-            res.append({"energy": float(f["energy"]), "forces": np.asarray(f["forces"], float).reshape(-1, 3),
+            e_, F_ = float(f["energy"]), np.asarray(f["forces"], float).reshape(-1, 3)
+            if not (np.isfinite(e_) and np.isfinite(F_).all()):  # a NaN is a failure, not a number to score
+                res.append({"energy": None, "forces": None, "charges": None,
+                            "error": "mlipcpp-eval returned a non-finite energy or force"})
+                continue
+            res.append({"energy": e_, "forces": F_,
                         "charges": None if lq is None else np.asarray(lq, float).reshape(len(s.species), -1)[:, 0],
                         "error": None})
             if self.keep_sqe and f.get("sqe_charges"):
@@ -154,7 +160,8 @@ class MlipcppEval(Backend):
         return [r for i in range(0, len(structs), n) for r in self._run(structs[i:i + n])]
 
     def info(self):
-        return dict(super().info(), binary=self.binary, device=self.device, launcher=" ".join(self.launcher),
+        reg = {"gguf_registry": self.registry} if getattr(self, "registry", None) else {}
+        return dict(super().info(), **reg, binary=self.binary, device=self.device, launcher=" ".join(self.launcher),
                     precision="TF32 (MLIPCPP_TF32=1)" if self.tf32 else "fp32 (GGML_CUDA_NO_TF32=1)",
                     formal_charges_written=self.formal, **{"model_header": self.last_header})
 
@@ -384,6 +391,13 @@ def make_backend(spec: str, device: str = "cpu", formal: bool = False, tf32: boo
             raise ValueError("metatomic models get no formal charges here (--formal-charges none)")
         return ASEBackend(metatomic_calculator(spec, device), label=f"metatomic:{spec}")
     if spec.endswith(".gguf"):
+        from .gguf_registry import backend_for  # a registered GGUF is run with the build it was trained with
+        reg = backend_for(spec, mlipcpp_bin, device)
+        if reg:
+            be = MlipcppEval(spec, reg["binary"], "cpu" if device == "auto" else device, launcher, formal, tf32,
+                             chunk=chunk)
+            be.registry = reg["provenance"]
+            return be
         try:
             return MlipcppEval(spec, mlipcpp_bin, device, launcher, formal, tf32, chunk=chunk)
         except FileNotFoundError:

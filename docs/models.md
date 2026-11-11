@@ -52,6 +52,36 @@ Q = 0, −1, +1 come back bit-identical.
 This route needs `metatrain >= 2026.4` to read checkpoint version 16, which is what the current `upet` checkpoints
 are; 2025.12 reads only up to v9 and fails with a version error.
 
+### mlip.cpp GGUFs and the build that reads them
+
+A GGUF from a long-range branch of mlip.cpp only means what it was trained to mean when it is run by **that
+branch's build**. The extra terms live in metadata keys (`pet.plato_lr.lrc_qproj`, `lrc_links`, `lrc_states`, ...);
+a build that predates them loads the file without an error and ignores the keys, and the energies it returns belong
+to a different model. Charge-head models also name companion GGUFs (`lrc_qmodel = q.gguf`, `lrc_fmodel`), resolved
+next to the model file.
+
+`configs/gguf_models.json` (or `$LRBENCH_GGUF_REGISTRY`) names such models and binds each to its mlip.cpp commit,
+with the sha256 of the weights and of every companion. Paths are written against `$LRBENCH_GGUF_ROOT`
+(`<name>/model.gguf` plus companions) and `$LRBENCH_MLIPCPP_BUILDS` (`<commit>/bin/mlipcpp-eval`, or
+`<commit>-cuda/...` for `--device cuda`, each with a `COMMIT` file). A registered name then works anywhere a model
+name does:
+
+```sh
+lrbench eval --model ftq13 --sets all --data ./lr-sets --device cuda --out ftq13.json
+python -m lrbench.gguf_registry check            # hashes, companions, build commit and metadata keys, every entry
+python -m lrbench.gguf_registry smoke ftq        # one charged structure per model of a group, energy + forces
+python -m lrbench.gguf_registry add NAME model.gguf --build COMMIT --binary .../mlipcpp-eval   # a new entry
+```
+
+Before it runs, the backend refuses a binary built from another commit, a binary that lacks a metadata key the
+build of record contains, and a missing or changed companion. `LRBENCH_ALLOW_BINARY_MISMATCH=1` scores anyway and
+records the mismatch in the member block (`gguf_registry.binary_check`). The key check is a string search of the
+binary. Keys the build of record itself does not contain as literals (`keys_not_literal`, composed at run time) are
+not held against another binary, so the commit check is the primary guard.
+
+The registry holds identities, not weights: unreleased entries record a sha256 so that a result can name exactly
+what was scored.
+
 ### Charges and spin
 
 `--formal-charges auto` passes per-atom formal charges only to models that declare they use them; `from-data` always
