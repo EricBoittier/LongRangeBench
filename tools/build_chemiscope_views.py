@@ -195,7 +195,7 @@ HTML = """<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<link rel="stylesheet" href="{katex_css}">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chemiscope@{ver}/dist/chemiscope.min.js"></script>
@@ -1323,6 +1323,85 @@ EXTRA_JS = r"""
 })();
 """
 
+KATEX_VERSION = "0.16.9"
+KATEX_CDN = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.css"
+
+#: Where the vendored copy is cached between builds, in the style of the other model/asset directories.
+KATEX_CACHE = pathlib.Path(os.environ.get(
+    "LRBENCH_KATEX_DIR", os.path.expanduser(f"~/.cache/lrbench/katex/{KATEX_VERSION}")))
+
+
+def katex_assets(cache: pathlib.Path = KATEX_CACHE, fetch: bool = True) -> pathlib.Path | None:
+    """A local KaTeX stylesheet plus its woff2 faces, or ``None`` if neither cached nor fetchable.
+
+    The page is published as a Claude artifact as well as opened from disk, and that viewer's content security
+    policy admits stylesheets only from its own files and Google Fonts. A stylesheet from a CDN is therefore
+    *silently dropped* there, and every equation renders as a heap of unstyled spans -- so the maths has to travel
+    with the page rather than be fetched beside it. Vendoring also means a page opened from disk needs no network
+    at all.
+
+    Only ``woff2`` is kept: every browser that can run chemiscope supports it, and the ``woff``/``ttf`` sources are
+    stripped from the CSS so a missing legacy file cannot 404.
+    """
+    css = cache / "katex.min.css"
+    if css.exists() and len(list((cache / "fonts").glob("*.woff2"))) >= 20:
+        return cache
+    if not fetch:
+        return None
+    import re
+    import urllib.request
+    base = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist"
+    try:
+        (cache / "fonts").mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(f"{base}/katex.min.css", timeout=60) as r:
+            text = r.read().decode()
+        text = re.sub(r',url\(fonts/[A-Za-z0-9_-]+\.woff\)\s*format\("woff"\)', "", text)
+        text = re.sub(r',url\(fonts/[A-Za-z0-9_-]+\.ttf\)\s*format\("truetype"\)', "", text)
+        names = sorted(set(re.findall(r"fonts/([A-Za-z0-9_-]+\.woff2)", text)))
+        if not names:
+            return None
+        for n in names:
+            dst = cache / "fonts" / n
+            if not dst.exists() or dst.stat().st_size == 0:
+                with urllib.request.urlopen(f"{base}/fonts/{n}", timeout=60) as r:
+                    dst.write_bytes(r.read())
+        css.write_text(text)   # written last, so a part-finished fetch is not mistaken for a cached copy
+        return cache
+    except Exception:
+        return None
+
+
+def install_katex(out: pathlib.Path, mode: str = "auto", verbose: bool = True) -> str:
+    """Put KaTeX beside ``out`` and return the href the page should use.
+
+    ``vendor`` insists and fails loudly; ``cdn`` never vendors; ``auto`` vendors when it can and falls back to the
+    CDN with a warning, so a build without network still produces a page that works in a browser -- just not one
+    that will survive publishing.
+    """
+    import shutil
+    if mode == "cdn":
+        return KATEX_CDN
+    src = katex_assets()
+    if src is None:
+        if mode == "vendor":
+            raise SystemExit("build_chemiscope_views: --katex vendor asked for, but KaTeX could not be fetched or "
+                             f"found in {KATEX_CACHE}")
+        if verbose:
+            print(f"[katex] not cached and not fetchable; falling back to the CDN. The page will render from disk "
+                  f"but its equations will be dropped by a published artifact's CSP.", file=sys.stderr)
+        return KATEX_CDN
+    dst = out.parent / "katex"
+    (dst / "fonts").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src / "katex.min.css", dst / "katex.min.css")
+    n = 0
+    for f in (src / "fonts").glob("*.woff2"):
+        shutil.copyfile(f, dst / "fonts" / f.name)
+        n += 1
+    if verbose:
+        print(f"[katex] vendored {KATEX_VERSION} beside the page ({n} woff2 faces in {dst})")
+    return "katex/katex.min.css"
+
+
 def payloads(runs_dir, data_dir=None, verbose: bool = True) -> dict:
     """{key: {blob, models, n, label}} — one gzipped, base64 chemiscope dataset per set, plus its atoms twin.
 
@@ -1524,6 +1603,10 @@ def main(argv=None) -> int:
     ap.add_argument("--data", default=None, help="dataset directory (default: alongside runs, ../lr-sets)")
     ap.add_argument("-o", "--out", default="chemiscope-views.html")
     ap.add_argument("--chemiscope-version", default="1.1.0")
+    ap.add_argument("--katex", choices=("auto", "vendor", "cdn"), default="auto",
+                    help="ship KaTeX beside the page (default: auto). A published artifact's CSP drops a "
+                         "stylesheet loaded from a CDN, so 'cdn' produces a page whose equations do not survive "
+                         "publishing.")
     ap.add_argument("--open", action="store_true")
     a = ap.parse_args(argv)
 
@@ -1661,7 +1744,9 @@ def main(argv=None) -> int:
         body += mine
     body.append(METHOD.format(protocol=PROTOCOL_C))
 
+    katex_css = install_katex(out, a.katex)
     html = HTML.format(
+        katex_css=katex_css,
         body="\n".join(body),
         scan_css=SCAN_CSS.format(),
         palette=json.dumps({"seq": pal.SEQUENTIAL["batlow"], "div": pal.DIVERGING["vik"],
