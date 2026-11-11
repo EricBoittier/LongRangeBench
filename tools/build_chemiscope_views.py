@@ -302,7 +302,7 @@ table.idx td:nth-child(2), table.idx td:nth-child(3) {{ text-align:left; }}
 .keyfam b {{ display:block; font-size:11.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
   color:var(--mut); margin-bottom:4px; }}
 .keyfam div {{ display:flex; align-items:center; gap:8px; line-height:1.9; }}
-.keyfam svg {{ flex:none; }}{scan_css}
+.keyfam svg {{ flex:none; }}{scan_css}{extra_css}
 footer {{ margin:64px 0 72px; color:var(--mut); font-size:15px; }}
 @media (max-width:760px) {{ body {{ font-size:17px; }} h1 {{ font-size:33px; }} .wrap {{ padding:0 17px; }}
   .cs-map {{ height:400px; }} .lede {{ font-size:19px; }} }}
@@ -335,6 +335,7 @@ value is known <em>a priori</em>, which makes a single number interpretable with
 const DATA = {data};
 const VIEWS = {views};
 const RANK = {rank};
+const PAL = {palette};
 {scan_js}
 /* chemiscope's palettes, as it reports them itself: a categorical property gets a categorical palette, a signed
    quantity a diverging one centred on zero, a magnitude a perceptually uniform sequential ramp. */
@@ -567,9 +568,10 @@ function scoreBars(r) {{
     let sortKey = RANK.sort, asc = false;
     const draw = () => {{
       window.drawRanking = draw;
+      const sk = sortKey === "lrs" ? "_lrsnum" : sortKey;
       const rows = RANK.rows.slice().sort((a, b) => {{
         if (a.ceiling !== b.ceiling) return a.ceiling ? -1 : 1;
-        const x = a[sortKey], y = b[sortKey];
+        const x = a[sk], y = b[sk];
         if (x === null || x === undefined) return 1;
         if (y === null || y === undefined) return -1;
         return (asc ? 1 : -1) * (typeof x === "string" ? x.localeCompare(y) : x - y);
@@ -583,14 +585,17 @@ function scoreBars(r) {{
           `title="${{HIDDEN.has(r.key) ? "show" : "hide"}} ${{r.key}}" ` +
           `style="--fam:${{r.fam || "#999"}}"></button></td>` +
           RANK.cols.map(c => {{
-            if (c.k === "bars") return `<td>${{scoreBars(r)}}</td>`;
+            if (c.k === "bars") return `<td data-k="bars">${{scoreBars(r)}}</td>`;
             const v = r[c.k];
-            const cls = c.k === "model" ? "name" : (c.k === "lrs" ? "lrs" : "");
+            let cls = c.k === "model" ? "name" : (c.k === "lrs" ? "lrs" : "");
+            if (c.k === "level" && r.mismatch) cls += " lotbad";
             if (c.k === "model")
-              return `<td class="name" title="${{r.family || ""}}">` +
+              return `<td class="name" data-k="model" title="${{r.family || ""}}">` +
                      `<span class="fam" style="background:${{r.fam || "#999"}}"></span>${{v}}</td>`;
-            return `<td class="${{cls}}">${{v === null || v === undefined ? "·" : v}}</td>`;
+            return `<td class="${{cls}}" data-k="${{c.k}}">` +
+                   `${{v === null || v === undefined ? "·" : v}}</td>`;
           }}).join("") + "</tr>").join("") + "</tbody>";
+      if (window.afterRanking) window.afterRanking(rows);
       host.querySelectorAll("th").forEach(th => th.onclick = () => {{
         const k = th.dataset.k;
         if (!k || k === "bars") return;
@@ -635,15 +640,21 @@ window.addEventListener("load", () => {{
       {{ left: "$$", right: "$$", display: true }}, {{ left: "\\\\[", right: "\\\\]", display: true }},
       {{ left: "\\\\(", right: "\\\\)", display: false }}], throwOnError: false }});
 }});
+</script>
+<script>
+{extra_js}
 </script></body></html>
 """
 
 SECTION = """<section id="{id}">
 <p class="eyebrow" style="color:{gcol}">{group}</p>
 <h2><span class="tid" style="background:{gcol}">{tid}</span>{title}</h2>
+<details class="disc">
+<summary>the quantity, and why this is the right one</summary>
 <div class="eq">$${equation}$$</div>
 <div class="chips">{chips}</div>
 <p>{prose}</p>
+</details>
 <div class="bar" id="{id}-bar"></div>
 <div class="view" id="{id}-view">
   <div class="panes">
@@ -654,7 +665,9 @@ SECTION = """<section id="{id}">
 </section>
 """
 
-PROTOCOL_A = """<div class="scanwrap">
+PROTOCOL_A = """<details class="disc proto">
+<summary>protocol A · the dimer scan — drag the separation, the cutoff and the gate</summary>
+<div class="scanwrap">
   <div class="scanhead"><b>A · the dimer scan</b> — two fragments pulled apart along one axis. Everything the
   tail diagnostics measure happens in this picture.</div>
   <div class="ctl">
@@ -668,9 +681,12 @@ PROTOCOL_A = """<div class="scanwrap">
   <div class="scanrow"><svg id="A-geo" viewBox="0 0 420 150"></svg><svg id="A-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="A-read"></div>
 </div>
+</details>
 """
 
-PROTOCOL_B = """<div class="scanwrap">
+PROTOCOL_B = """<details class="disc proto">
+<summary>protocol B · the fixed-charge quartet — drag the charge distance and the cutoff</summary>
+<div class="scanwrap">
   <div class="scanhead"><b>B · the fixed-charge quartet</b> — a local pair of sites, and one charge far away.
   Four energies, differenced twice, so that everything except the long-range reply cancels.</div>
   <div class="ctl">
@@ -682,15 +698,19 @@ PROTOCOL_B = """<div class="scanwrap">
   <div class="scanrow"><svg id="B-geo" viewBox="0 0 420 200"></svg><svg id="B-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="B-read"></div>
 </div>
+</details>
 """
 
-PROTOCOL_C = """<div class="scanwrap">
+PROTOCOL_C = """<details class="disc proto">
+<summary>protocol C · the pathologies — what the harness refuses to score, and why</summary>
+<div class="scanwrap">
   <div class="scanhead"><b>C · the pathologies</b> — points the harness reports but refuses to score, and the one
   case where a metric stops being able to tell a model from a flat line.</div>
   <div class="bar" id="C-bar"></div>
   <div class="scanrow"><svg id="C-geo" viewBox="0 0 420 180"></svg><svg id="C-plot" viewBox="0 0 420 220"></svg></div>
   <div class="readout" id="C-read"></div>
 </div>
+</details>
 """
 
 SCAN_CSS = """
@@ -953,6 +973,8 @@ function initScans() {{
 METHOD = """<section id="notes">
 <p class="eyebrow">method</p>
 <h2>Protocol and conventions</h2>
+<details class="disc">
+<summary>how every figure on this page was produced, and the encoding rules</summary>
 <p class="sub">No model was re-evaluated for these figures. Every point comes from the canonical records and the
 per-term energies saved by <code>lrbench eval --save-predictions</code>, recombined through each group's own
 definition — so a model's value and its reference are the same linear combination and a point compares like with
@@ -965,6 +987,7 @@ perceptually uniform sequential ramp.</p>
 <p class="sub"><b>Levels of theory are never pooled.</b> A model trained at a different level from the reference
 data is marked ⚠ in the table: its energies are not comparable with these references, its dimensionless
 diagnostics are.</p>
+</details>
 {protocol}
 </section>
 """
@@ -974,8 +997,11 @@ TASK_INDEX = """<section id="tasks">
 <h2>The task index</h2>
 <p class="sub">Each task is constructed so that the correct value is known in advance. That is what makes a single
 number interpretable: a result can be read against the value it should have, not against another model.</p>
-<table class="rank idx"><thead><tr><th>id</th><th>task</th><th>quantity</th><th>correct</th>
-<th>no long-range term</th></tr></thead><tbody>{rows}</tbody></table>
+<p class="sub">The identifiers are live: <b>click one to take that task out of the score</b>, or to put it back.
+A task with no component feeds no score and cannot be toggled — the score is built from A1, A2 and B1 only, and the
+column says which term each one supplies.</p>
+<table class="rank idx" id="task-index"><thead><tr><th>id</th><th>task</th><th>quantity</th><th>correct</th>
+<th>no long-range term</th><th>in the score</th></tr></thead><tbody>{rows}</tbody></table>
 </section>
 """
 
@@ -1001,13 +1027,20 @@ GROUP_BLURB = {
          "to this term however well it does on dimers.",
 }
 
+#: ``(id, task, quantity, correct, no-long-range floor, score components it feeds)``.
+#:
+#: The last field is the honest part. The long-range score is built from four components, and they do not come from
+#: six tasks evenly: A1 supplies the decay term, A2 supplies both magnitude terms, B1 supplies the response, and
+#: **A3, C1 and D1 feed the score not at all** -- they are diagnostics that are read, not scored. Saying so in the
+#: table is better than leaving a reader to assume the score summarises everything above it.
 TASK_ROWS = [
-    ("A1", "Asymptotic decay", "tail fraction", "1", "0"),
-    ("A2", "Residuals against the reference", "E_int error (meV)", "0", "the DFT span"),
-    ("A3", "Parity between two models", "agreement on the identity line", "—", "—"),
-    ("B1", "Fixed-charge response", "ΔΔE slope", "1", "0"),
-    ("C1", "Charge conservation", "Σq − Q, parity vs Löwdin", "0", "n/a if no charges"),
-    ("D1", "Three-body non-additivity", "E₃ (meV)", "reference E₃", "0"),
+    ("A1", "Asymptotic decay", "tail fraction", "1", "0", ("s_decay",)),
+    ("A2", "Residuals against the reference", "E_int error (meV)", "0", "the DFT span",
+     ("s_scale", "s_accuracy")),
+    ("A3", "Parity between two models", "agreement on the identity line", "—", "—", ()),
+    ("B1", "Fixed-charge response", "ΔΔE slope", "1", "0", ("s_response",)),
+    ("C1", "Charge conservation", "Σq − Q, parity vs Löwdin", "0", "n/a if no charges", ()),
+    ("D1", "Three-body non-additivity", "E₃ (meV)", "reference E₃", "0", ()),
 ]
 
 
@@ -1023,7 +1056,11 @@ neither channel is load-bearing on its own.</p>
 
 RANKING = """<section id="score">
 <h2><span class="num">score</span>The long-range score</h2>
-<div class="eq">$$\\mathrm{LRS} = 100\\left(\\prod_{j} s_j\\right)^{1/n},\\qquad
+<div class="lrsline"><span id="lrs-formula">\\(\\mathrm{LRS} = 100\\left(\\prod_j s_j\\right)^{1/n}\\)</span></div>
+<div id="weights"></div>
+<details class="disc">
+<summary>how the score is defined, and what it deliberately refuses to do</summary>
+<div class="eq">$$\\mathrm{LRS} = 100\\left(\\prod_{j} s_j^{\\,w_j}\\right)^{1/\\sum_j w_j},\\qquad
 s_j \\in [0,1],\\; 1 = \\text{correct}$$</div>
 <p>Four quantities, each with a value that is right by construction, each mapped so that <b>1</b> is correct and
 <b>0</b> is the no-long-range floor: the fraction of the \\(r\\)-dependence reproduced, how much of the physical
@@ -1035,10 +1072,250 @@ without the thing it was built from. A score marked <b>*</b> was built from fewe
 run cannot be told from one that was passed, so those are not comparable with the rest. This summarises these tests on these sets; it is not a ranking of models in
 general. The ceiling row is the dataset's own multipole + induction prior, not a model. Click a column to re-sort, and the
 dot beside a model to take it out of every widget below — the table and the figures always show the same set.</p>
+<p class="sub"><b>Weights are a question, not a setting.</b> Changing them changes what is being asked, so the
+formula above restates itself and every score and rank follows. Equal weights are the default because no component
+has a principled claim to more; a weight of zero removes the term rather than shrinking it, which is why taking a
+task out and setting its weight to zero are the same operation.</p>
+</details>
+<div class="numkey" id="numkey"></div>
 <table class="rank" id="rank-body"></table>
 </section>
 """
 
+
+
+# ---------------------------------------------------------------------------------- live controls (plain strings)
+#: Styling for the parts that became interactive. Written as an unformatted string and injected whole, so the CSS
+#: braces here are literal and need no doubling -- the surrounding templates are ``str.format``-ed, this is not.
+#:
+#: The semiotic rule the rest of the project follows is extended, not bent, by the two new encodings:
+#:
+#:   identity   saturated hue, as a mark          a model family, an equation's terms
+#:   magnitude  perceptually uniform ramp          now also a *wash behind a number*, so the column reads as a
+#:                                                 gradient at a glance and the digits stay legible
+#:   a flag     low-chroma wash + a glyph          a level-of-theory mismatch
+#:
+#: A flag is separated from an identity by **saturation, not hue**. That matters: every strong hue is already spoken
+#: for by a model family, so a saturated warning colour would read as "some model". A pale wash cannot, and the ⚠
+#: glyph means the flag never rests on colour alone.
+EXTRA_CSS = """
+details.disc { margin:18px 0 6px; }
+details.disc > summary { font-family:var(--sans); font-size:13px; font-weight:600; letter-spacing:.02em;
+  color:var(--mut); cursor:pointer; padding:7px 0 7px 20px; position:relative; list-style:none;
+  border-top:1px solid var(--rule); }
+details.disc > summary::-webkit-details-marker { display:none; }
+details.disc > summary::before { content:"+"; position:absolute; left:4px; top:6px; font-family:var(--mono);
+  font-size:14px; color:var(--mut); }
+details.disc[open] > summary::before { content:"\2212"; }
+details.disc > summary:hover { color:var(--fg); }
+details.disc[open] > summary { color:var(--fg); }
+details.disc.proto > summary { border-top:none; }
+
+/* the formula restates itself as the weights change, so it is never stale beside the numbers */
+.lrsline { font-size:17px; margin:14px 0 4px; }
+
+/* weights: one row, each term in its own colour, zero meaning removed rather than small */
+#weights { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin:10px 0 4px;
+  font-family:var(--sans); font-size:12px; }
+#weights .wq { display:flex; flex-direction:column; gap:3px; min-width:116px; }
+#weights .wq > span { display:flex; align-items:center; gap:6px; color:var(--mut); font-weight:600; }
+#weights .wq em { font-family:var(--mono); font-style:normal; color:var(--fg); }
+#weights .sw { width:9px; height:9px; border-radius:2px; flex:none; }
+#weights .wq.off { opacity:.42; }
+#weights input[type=range] { width:112px; }
+#weights .wbtn { font-family:var(--sans); font-size:11.5px; border:1px solid var(--rule); background:none;
+  color:var(--mut); border-radius:3px; padding:4px 9px; cursor:pointer; }
+#weights .wbtn:hover { color:var(--fg); border-color:var(--mut); }
+
+/* the number scale, shown rather than described */
+.numkey { display:flex; flex-wrap:wrap; gap:22px; align-items:center; margin:14px 0 8px;
+  font-family:var(--sans); font-size:11.5px; color:var(--mut); }
+.numkey .nk { display:flex; align-items:center; gap:7px; }
+.numkey .ramp { width:104px; height:9px; border-radius:2px; border:1px solid var(--rule); }
+
+/* a task id is a control: live ones invite the click, inert ones say they are inert */
+table.idx tr.live { cursor:pointer; }
+table.idx tr.live:hover td { background:color-mix(in srgb, var(--fg) 4%, transparent); }
+table.idx tr.live:focus-visible { outline:2px solid var(--mut); outline-offset:-2px; }
+table.idx tr.dropped td { opacity:.4; }
+table.idx tr.dropped td.name .tid { filter:grayscale(1); }
+table.idx tr.inert td.name .tid { opacity:.5; }
+table.idx td.feeds { font-family:var(--sans); font-size:11px; }
+.cchip { display:inline-block; border-radius:9px; padding:1px 8px; margin-right:4px; color:#fff;
+  font-weight:600; letter-spacing:.01em; }
+.cchip.off { background:#b9b9b9 !important; text-decoration:line-through; }
+.cnone { color:var(--mut); font-style:italic; }
+
+/* a level-of-theory mismatch: a pale wash no family hue can imitate, plus the glyph it already had */
+table.rank td.lotbad { background:rgba(176,124,42,.13); box-shadow:inset 2px 0 0 rgba(176,124,42,.75); }
+table.rank tr.off td.lotbad { background:none; box-shadow:none; }
+table.rank td[data-k].tint { border-radius:2px; }
+"""
+
+#: The interactive layer. It owns three things the static page could not do: the score is computed here rather than
+#: baked in, so taking a task out or re-weighting a term is answerable without a rebuild; every number gets a wash
+#: from the ramp its column's *kind* implies; and the formula re-renders to match whatever is currently being asked.
+EXTRA_JS = """
+(() => {
+  const SEQ2 = PAL.seq, DIV2 = PAL.div;
+  const mix = (stops, t) => {
+    if (!stops || !stops.length) return "#888";
+    t = Math.max(0, Math.min(1, t)); const x = t * (stops.length - 1), i = Math.floor(x), f = x - i;
+    if (i >= stops.length - 1) return stops[stops.length - 1];
+    const h = c => [1, 3, 5].map(k => parseInt(c.slice(k, k + 2), 16));
+    const a = h(stops[i]), b = h(stops[i + 1]);
+    return "rgb(" + a.map((v, k) => Math.round(v * (1 - f) + b[k] * f)).join(",") + ")";
+  };
+  const rgba = (css, al) => css.startsWith("rgb(")
+    ? css.replace("rgb(", "rgba(").replace(")", "," + al + ")")
+    : css;
+
+  /* ---- the score, computed from whatever is currently being asked -------------------------------------- */
+  const live = () => RANK.components.filter(c => c.on && c.w > 0);
+  function lrsOf(r) {
+    // Every enabled component is collected *before* anything is decided. An earlier version returned as soon as it
+    // met a zero, so "partial" was computed from the components seen so far and a model whose first component was
+    // zero got marked incomparable when it was complete. The flag means "fewer values than terms asked for", which
+    // is not knowable until all of them have been looked at.
+    const on = live();
+    const vals = [];
+    for (const c of on) { const v = r[c.k]; if (typeof v === "number") vals.push([v, c.w]); }
+    const partial = vals.length < on.length;
+    const wsum = vals.reduce((a, vw) => a + vw[1], 0);
+    if (vals.length < 2 || !wsum) return { num: null, partial: true };
+    // A real zero zeroes the weighted product: that is the whole point of a geometric mean here, and it must not
+    // be softened into a small number by clamping.
+    if (vals.some(vw => vw[0] <= 0)) return { num: 0, partial: partial };
+    const logsum = vals.reduce((a, vw) => a + vw[1] * Math.log(vw[0]), 0);
+    return { num: 100 * Math.exp(logsum / wsum), partial: partial };
+  }
+  function applyScores() {
+    for (const r of RANK.rows) {
+      const res = lrsOf(r);
+      r._lrsnum = (res.num === null ? -1 : res.num);
+      r.lrs = (res.num === null) ? null : (res.num.toFixed(1) + (res.partial ? "*" : ""));
+    }
+  }
+
+  /* ---- the formula follows the question ----------------------------------------------------------------- */
+  function renderFormula() {
+    const on = live();
+    const el = document.getElementById("lrs-formula");
+    if (!el) return;
+    const eq = (on.length === 0)
+      ? "\\text{no components selected}"
+      : (on.every(c => c.w === 1)
+        ? "\\mathrm{LRS} = 100\\left(" + on.map(c => "s_{\\mathrm{" + c.t + "}}").join("\\,") +
+          "\\right)^{1/" + on.length + "}"
+        : "\\mathrm{LRS} = 100\\left(" +
+          on.map(c => "s_{\\mathrm{" + c.t + "}}^{\\," + c.w + "}").join("\\,") +
+          "\\right)^{1/" + on.reduce((a, c) => a + c.w, 0) + "}");
+    el.textContent = "\\(" + eq + "\\)";
+    if (window.renderMathInElement) try {
+      renderMathInElement(el.parentElement, { delimiters: [{ left: "\\(", right: "\\)", display: false }] });
+    } catch (e) { /* KaTeX absent or late: the text form is still correct */ }
+  }
+
+  /* ---- colour every number by what kind of quantity its column holds ------------------------------------ */
+  const RANGE = {};
+  function ranges(rows) {
+    for (const [k, sp] of Object.entries(RANK.scales || {})) {
+      if (sp.lo !== undefined) { RANGE[k] = [sp.lo, sp.hi]; continue; }
+      const vs = rows.map(r => typeof r[k] === "number" ? Math.abs(r[k]) : null)
+                     .filter(v => v !== null).sort((a, b) => a - b);
+      // the 90th percentile, not the max: one pathological model must not flatten the whole column
+      RANGE[k] = vs.length ? [0, vs[Math.floor(0.9 * (vs.length - 1))] || 1] : [0, 1];
+    }
+  }
+  function tintOf(k, v) {
+    const sp = (RANK.scales || {})[k]; if (!sp || typeof v !== "number") return null;
+    const [lo, hi] = RANGE[k] || [0, 1]; const span = (hi - lo) || 1;
+    if (sp.kind === "div") { const t = 0.5 + 0.5 * Math.max(-1, Math.min(1, v / (hi || 1))); return mix(DIV2, t); }
+    let t = (Math.abs(v) - lo) / span; t = Math.max(0, Math.min(1, t));
+    return mix(SEQ2, sp.kind === "seqrev" ? 1 - t : t);   // an error: the good end is the pale end
+  }
+  window.afterRanking = (rows) => {
+    ranges(rows);
+    const host = document.getElementById("rank-body");
+    if (!host) return;
+    host.querySelectorAll("tbody tr").forEach((tr, i) => {
+      const r = rows[i]; if (!r) return;
+      tr.querySelectorAll("td[data-k]").forEach(td => {
+        const k = td.dataset.k;
+        const v = k === "lrs" ? r._lrsnum : r[k];
+        if (!(k in (RANK.scales || {})) || typeof v !== "number" || v < 0 && k === "lrs") return;
+        const c = tintOf(k, v); if (!c) return;
+        td.style.background = rgba(c, k === "lrs" ? 0.3 : 0.22);
+        td.classList.add("tint");
+      });
+    });
+  };
+
+  /* ---- the controls -------------------------------------------------------------------------------------- */
+  function syncChips() {
+    document.querySelectorAll("#task-index tr.live").forEach(tr => {
+      const ks = (tr.dataset.comps || "").split(",").filter(Boolean);
+      const anyOn = ks.some(k => (RANK.components.find(c => c.k === k) || {}).on);
+      tr.classList.toggle("dropped", !anyOn);
+      tr.setAttribute("aria-pressed", String(anyOn));
+      tr.querySelectorAll(".cchip").forEach(ch => {
+        const c = RANK.components.find(x => x.k === ch.dataset.c) || {};
+        ch.classList.toggle("off", !c.on);
+        ch.style.background = c.col || "#999";
+        ch.title = (c.h || "") + (c.on ? "" : " — currently out of the score");
+      });
+    });
+  }
+  function refresh() {
+    applyScores(); renderFormula(); drawWeights(); syncChips();
+    if (window.drawRanking) window.drawRanking();
+  }
+  function drawWeights() {
+    const host = document.getElementById("weights"); if (!host) return;
+    host.innerHTML = RANK.components.map((c, i) =>
+      `<label class="wq ${c.on ? "" : "off"}"><span><i class="sw" style="background:${c.col}"></i>` +
+      `${c.t} <em>w=${c.w}</em></span>` +
+      `<input type="range" min="0" max="3" step="0.25" value="${c.w}" data-i="${i}" ` +
+      `title="${c.h || ""} — 0 removes the term"></label>`).join("") +
+      `<button class="wbtn" id="w-reset" title="every term in, every weight 1">reset</button>`;
+    host.querySelectorAll("input[type=range]").forEach(inp => inp.oninput = () => {
+      const c = RANK.components[+inp.dataset.i];
+      c.w = parseFloat(inp.value); c.on = c.w > 0;    // zero *is* removal: one meaning, one control
+      refresh();
+    });
+    const rb = document.getElementById("w-reset");
+    if (rb) rb.onclick = () => { RANK.components.forEach(c => { c.w = 1; c.on = true; }); refresh(); };
+  }
+  function drawNumKey() {
+    const host = document.getElementById("numkey"); if (!host) return;
+    const ramp = (stops, rev) => {
+      const n = 12, cs = [];
+      for (let i = 0; i < n; i++) { const t = i / (n - 1); cs.push(mix(stops, rev ? 1 - t : t)); }
+      return `<span class="ramp" style="background:linear-gradient(90deg,${cs.join(",")})"></span>`;
+    };
+    host.innerHTML =
+      `<span class="nk">score &amp; fractions: 0 ${ramp(SEQ2, false)} correct</span>` +
+      `<span class="nk">errors (meV): low ${ramp(SEQ2, true)} high</span>` +
+      `<span class="nk">&epsilon; (signed): &minus;1 ${ramp(DIV2, false)} +1</span>` +
+      `<span class="nk"><i class="sw" style="display:inline-block;width:11px;height:11px;` +
+      `background:rgba(176,124,42,.5);border-radius:2px"></i> level of theory differs from the references (&#9888;)` +
+      `</span>`;
+  }
+  document.querySelectorAll("#task-index tr.live").forEach(tr => {
+    const toggle = () => {
+      const ks = (tr.dataset.comps || "").split(",").filter(Boolean);
+      const anyOn = ks.some(k => (RANK.components.find(c => c.k === k) || {}).on);
+      ks.forEach(k => { const c = RANK.components.find(x => x.k === k);
+                        if (c) { c.on = !anyOn; if (c.on && c.w === 0) c.w = 1; } });
+      refresh();
+    };
+    tr.onclick = toggle;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+  });
+  drawNumKey();
+  refresh();
+})();
+"""
 
 def payloads(runs_dir, data_dir=None, verbose: bool = True) -> dict:
     """{key: {blob, models, n, label}} — one gzipped, base64 chemiscope dataset per set, plus its atoms twin.
@@ -1264,10 +1541,19 @@ def main(argv=None) -> int:
 
     rank_names = []
     rank = {"cols": [], "rows": [], "sort": "lrs", "components": [
-        {"k": "s_decay", "t": "decay", "col": "#0072B2"},
-        {"k": "s_scale", "t": "scale", "col": "#009E73"},
-        {"k": "s_response", "t": "response", "col": "#CC79A7"},
-        {"k": "s_accuracy", "t": "accuracy", "col": "#E69F00"}]}
+        {"k": "s_decay", "t": "decay", "col": "#0072B2", "task": "A1", "w": 1, "on": True,
+         "h": "the fraction of the r-dependence reproduced (A1)"},
+        {"k": "s_scale", "t": "scale", "col": "#009E73", "task": "A2", "w": 1, "on": True,
+         "h": "how much of the physical magnitude is captured (A2)"},
+        {"k": "s_response", "t": "response", "col": "#CC79A7", "task": "B1", "w": 1, "on": True,
+         "h": "the reply to a distant charge (B1)"},
+        {"k": "s_accuracy", "t": "accuracy", "col": "#E69F00", "task": "A2", "w": 1, "on": True,
+         "h": "offset-free error against what a flat model would score (A2)"}],
+        # Each numeric column declares what kind of quantity it holds, because that -- not taste -- picks its ramp.
+        # "seq" rises with the number, "seqrev" falls (an error: less is better), "div" is signed about zero.
+        "scales": {"lrs": {"kind": "seq", "lo": 0, "hi": 100}, "tail": {"kind": "seq", "lo": 0, "hi": 1},
+                   "eps": {"kind": "div", "lo": -1, "hi": 1}, "ddE": {"kind": "seq", "lo": 0, "hi": 1},
+                   "off8": {"kind": "seqrev"}, "far12": {"kind": "seqrev"}, "fmae": {"kind": "seqrev"}}}
     try:
         from lrbench.diagnostics import collect
 
@@ -1308,6 +1594,7 @@ def main(argv=None) -> int:
                 "tail": g(c.get("tail")), "eps": eps, "ddE": g(ddE, 4),
                 "off8": g(c.get("off8"), 1), "far12": g(c.get("far12"), 1), "fmae": g(S.get("F_mae"), 1),
                 "level": r["level"][:20] + (" ⚠" if r["mismatch"] else ""),
+                "mismatch": bool(r["mismatch"]),
                 "abs_eps": abs(eps) if eps is not None else 9e9,
             })
         rank_names = [n for n in _d["results"]]
@@ -1335,10 +1622,23 @@ def main(argv=None) -> int:
             f'</svg>{nm}</div>' for nm, mk in sorted(members))
         key_html += '<div class="keyfam"><b>' + label + '</b>' + rows + '</div>'
     # the labels first, then each letter group with its protocol standing beside its tasks
-    idx = "".join(
-        f'<tr><td class="name"><span class="tid sm" style="background:{pal.GROUPS[tid[0]]["colour"]}">{tid}'
-        f'</span></td><td>{task}</td><td>{q}</td><td class="ok">{good}</td><td class="bad">{floor}</td></tr>'
-        for tid, task, q, good, floor in TASK_ROWS if any(v["tid"] == tid for v in specs))
+    comp_t = {c["k"]: c["t"] for c in rank["components"]}
+    idx_rows = []
+    for tid, task, q, good, floor, comps in TASK_ROWS:
+        if not any(v["tid"] == tid for v in specs):
+            continue
+        # A task that supplies no component is inert: it is shown, labelled, and not clickable, because a control
+        # that looks live and does nothing is worse than no control.
+        live = bool(comps)
+        feeds = ("".join(f'<span class="cchip" data-c="{k}">{comp_t.get(k, k)}</span>' for k in comps)
+                 if live else '<span class="cnone">not scored</span>')
+        idx_rows.append(
+            f'<tr class="{"live" if live else "inert"}" data-tid="{tid}" '
+            f'data-comps="{",".join(comps)}"{" tabindex=0 role=button aria-pressed=true" if live else ""}>'
+            f'<td class="name"><span class="tid sm" style="background:{pal.GROUPS[tid[0]]["colour"]}">{tid}'
+            f'</span></td><td>{task}</td><td>{q}</td><td class="ok">{good}</td><td class="bad">{floor}</td>'
+            f'<td class="feeds">{feeds}</td></tr>')
+    idx = "".join(idx_rows)
     PROTO = {"A": PROTOCOL_A, "B": PROTOCOL_B}
     body = [TASK_INDEX.format(rows=idx), RANKING if rank["rows"] else "",
             KEY.format(families=key_html) if key_html else ""]
@@ -1355,6 +1655,10 @@ def main(argv=None) -> int:
     html = HTML.format(
         body="\n".join(body),
         scan_css=SCAN_CSS.format(),
+        palette=json.dumps({"seq": pal.SEQUENTIAL["batlow"], "div": pal.DIVERGING["vik"],
+                            "groups": {k: v["colour"] for k, v in pal.GROUPS.items()}}),
+        extra_css=EXTRA_CSS,
+        extra_js=EXTRA_JS,
         scan_js=SCAN_JS.format(seq=json.dumps(pal.SEQUENTIAL["batlow"]),
                                div=json.dumps(pal.DIVERGING["vik"]),
                                fam=json.dumps(fam_colours)),
