@@ -94,7 +94,9 @@ def distil_priors(name: str, J: dict) -> dict:
     return {
         "model": name,
         "label": J.get("label", name),
-        "backend": J.get("backend", ""),
+        # the name only: the full spec carries model paths, and these summaries get published
+        "backend": (J.get("backend") or {}).get("name", "") if isinstance(J.get("backend"), dict)
+        else str(J.get("backend", "")).split(":")[0],
         "cutoff_A": J.get("cutoff_A"),
         "declared_local": J.get("declared_local"),
         "checks": {k: {"status": str(v.get("status", "?")), "summary": str(v.get("summary", ""))}

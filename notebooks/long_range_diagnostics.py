@@ -56,11 +56,12 @@ def _(EMBEDDED):
     # distribution is `longrangebench`, it is not published, and it needs scipy and ase). In WebAssembly and on
     # molab there is no run directory, so this notebook must carry its data or say plainly that it has none.
     _runs = os.environ.get("LRBENCH_RUNS", "runs")
-    R, P, CHEM, VIEWS = {}, {}, {}, []
+    R, P, CHEM, VIEWS, SCORES = {}, {}, {}, [], {}
     if EMBEDDED:
         _d = json.loads(EMBEDDED)
         R, P, SOURCE = _d["results"], _d["priors"], _d.get("source", "frozen at build time")
         CHEM, VIEWS = _d.get("chemiscope", {}), _d.get("views", [])
+        SCORES = _d.get("scores", {})
     elif os.path.isdir(_runs):
         try:
             import importlib
@@ -77,7 +78,7 @@ def _(EMBEDDED):
     SET = "dimers"
     CLS = "ion_pair"          # the headline class: two formally charged fragments, the clearest long-range test
     DDE_SET = "families_fixedq"   # the quartets live in their own set, not in dimers
-    return CHEM, CLS, DDE_SET, KE, P, R, SET, SOURCE, VIEWS, io, mo, np, pd
+    return CHEM, CLS, DDE_SET, KE, P, R, SCORES, SET, SOURCE, VIEWS, io, mo, np, pd
 
 
 @app.cell
@@ -403,13 +404,18 @@ def _(R, SOURCE, mo):
 
 
 @app.cell
-def _(CLS, DDE_SET, R, SET, mo, pd):
-    import importlib
+def _(CLS, DDE_SET, R, SCORES, SET, mo, pd):
+    # Scores come precomputed when this notebook carries its data, and from the package when it is reading a run
+    # directory. The import is by name and guarded, so a copy that has its own data never reaches for a package.
+    def _score(name, r):
+        if name in SCORES:
+            return SCORES[name]
+        try:
+            import importlib
 
-    try:   # the same score the explorer page uses, so the two can never disagree
-        _score = importlib.import_module("lrbench.diagnostics").score_components
-    except Exception:
-        _score = None
+            return importlib.import_module("lrbench" ".diagnostics").score_components(r)
+        except Exception:
+            return {}
 
     def _v(t, n=3):
         return None if not t or t[0] is None else round(t[0], n)
@@ -422,7 +428,7 @@ def _(CLS, DDE_SET, R, SET, mo, pd):
         _c = _S["classes"].get(CLS, {})
         _oracle = "oracle" in _name
         _e = _v(_c.get("eps"))
-        _sc = _score(_r) if _score else {}
+        _sc = _score(_name, _r)
         _rd = lambda k: None if _sc.get(k) is None else round(_sc[k], 2)  # noqa: E731
         _rows.append({
             "model": _r["label"][:38],

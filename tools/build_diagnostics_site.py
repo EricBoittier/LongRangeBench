@@ -28,13 +28,67 @@ BEGIN = "    # --- BEGIN EMBEDDED DATA"
 END = "    # --- END EMBEDDED DATA ---"
 
 
+#: The loader used by a frozen notebook. It replaces the live one wholesale, so that a notebook carrying its data
+#: contains **no mention of lrbench anywhere** — not an import, not a module name inside a string, not a sentence
+#: in the docstring. marimo offers to install any package it believes a notebook wants, and a dead branch naming
+#: an unpublished distribution is enough to make it offer; on a hosted runner that surfaces as
+#: "Missing packages: lrbench", which is confusing and unfixable from the reader's side.
+FROZEN_LOADER = '''@app.cell
+def _(EMBEDDED):
+    import io
+    import json
+
+    import marimo as mo
+    import numpy as np
+    import pandas as pd
+
+    # This notebook carries its own data: everything below is read from the literal above, and nothing is imported
+    # beyond the four packages declared in the script block at the top of the file.
+    _d = json.loads(EMBEDDED)
+    R, P = _d["results"], _d["priors"]
+    SOURCE = _d.get("source", "frozen at build time")
+    CHEM, VIEWS = _d.get("chemiscope", {}), _d.get("views", [])
+
+    KE = 14.399645            # e^2/(4 pi eps0), eV A - so k q_A q_B / r is in eV for r in A
+    SET = "dimers"
+    CLS = "ion_pair"
+    DDE_SET = "families_fixedq"
+    return CHEM, CLS, DDE_SET, KE, P, R, SET, SOURCE, VIEWS, io, mo, np, pd
+
+
+'''
+
+LIVE_PROSE = ("numpy, pandas and matplotlib are in Pyodide, and nothing else is imported at the top level. "
+              "`lrbench` is imported\nby name, and only when there is a filesystem with results to read.")
+FROZEN_PROSE = ("numpy, pandas and matplotlib are in Pyodide, and this copy carries its own data, so nothing\n"
+                "else is imported at all.")
+
+
 def freeze(notebook: pathlib.Path, data: dict, out: pathlib.Path) -> pathlib.Path:
-    """Write a copy of `notebook` with `data` substituted into its EMBEDDED literal."""
-    lines = notebook.read_text().splitlines(keepends=True)
+    """Write a copy of `notebook` with `data` in its EMBEDDED literal and the live loader replaced."""
+    src = notebook.read_text()
+    lines = src.splitlines(keepends=True)
     i = next(n for n, line in enumerate(lines) if line.startswith(BEGIN))
     j = next(n for n, line in enumerate(lines) if line.startswith(END))
-    frozen = f"    EMBEDDED = {json.dumps(json.dumps(data, separators=(',', ':')))}\n"
-    out.write_text("".join(lines[:i + 1] + [frozen] + lines[j:]))
+    frozen = "    EMBEDDED = " + json.dumps(json.dumps(data, separators=(",", ":"))) + "\n"
+    src = "".join(lines[:i + 1] + [frozen] + lines[j:])
+
+    start = src.index("@app.cell\ndef _(EMBEDDED):")
+    end = src.index("@app.cell", start + 10)
+    src = src[:start] + FROZEN_LOADER + src[end:]
+    src = src.replace(LIVE_PROSE, FROZEN_PROSE)
+    src = src.replace("    marimo edit notebooks/long_range_diagnostics.py                  # live, reads "
+                      "$LRBENCH_RUNS\n", "")
+    src = src.replace("# The same system as the explorer page (lrbench.palette), with the values inlined because "
+                      "this notebook also", "# The project's colour system, inlined because this notebook also")
+    live_score = src[src.index("    def _score(name, r):"):src.index("    def _v(t, n=3):")]
+    src = src.replace(live_score, "    def _score(name, r):\n        return SCORES.get(name, {})\n\n")
+
+    leftover = [n for n, line in enumerate(src.splitlines(), 1) if "lrbench" in line.lower()]
+    if leftover:
+        print("[site] warning: 'lrbench' still appears on lines " + str(leftover[:6]) +
+              " of the frozen notebook — a hosted runner may offer to install it")
+    out.write_text(src)
     return out
 
 
@@ -71,6 +125,14 @@ def main(argv=None) -> int:
         except Exception as e:                       # chemiscope missing, or no saved predictions
             print(f"[site] no chemiscope views ({type(e).__name__}: {e})")
             data["chemiscope"], data["views"] = {}, []
+
+    try:                              # precompute, so a frozen notebook needs no package to show the score
+        from lrbench.diagnostics import score_components
+
+        data["scores"] = {n: score_components(r) for n, r in data["results"].items()}
+    except Exception as e:
+        print(f"[site] no precomputed scores ({type(e).__name__}: {e})")
+    data["source"] = f"{len(data['results'])} results, frozen at build time"   # not the local path
 
     size = len(json.dumps(data)) / 1024
     print(f"[site] {len(data['results'])} results, {len(data['priors'])} prior suites, {size:.0f} KB frozen")
