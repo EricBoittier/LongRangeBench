@@ -1,0 +1,83 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-spice-l",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--out",
+  "runs/pet-spice-l.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "b640483722c9959474df2d5084717d76d042519135fe0e189551d9b157f95424",
+  "jsonl_sha256": "c106fe2ff92572dfce0f4df498abc7272d852b64c39aa8abc540dd2e14b0781e",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-spice-l",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-spice-l.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all ddE slope / MAE (meV)",
+   "n": "21 / 21 groups",
+   "note": "zero model MAE 134.5 meV",
+   "value": "0.053 [-0.003, 0.077] / 130.2 [80.0, 180.8]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "623 / 66 groups",
+   "note": "zero model MAE 14786.7 meV",
+   "value": "1.004 [1.004, 1.004] / 496.8 [363.2, 715.4]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "720",
+   "note": "absolute; same-level models only",
+   "value": "144.9"
+  }
+ ],
+ "model": "pet-spice-l",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 64,
+ "n_scored": 660,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_full': ['wB97M-V/def2-TZVPD'], 'families_corrected': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD'], 'pathology_h2o2p': ['wB97M-V/def2-TZVPD'], 'charge_parity': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': 996 of 3762 predictions failed on dimers (26%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': first error on dimers: ValueError: this model does not support the atomic type '19' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': 64 of 784 predictions failed on families_full (8%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': first error on families_full: ValueError: this model does not support the atomic type '11' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': first error on trimers: ValueError: this model does not support the atomic type '3' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': 12 of 27 predictions failed on charge_parity (44%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-l.pt'&name='PET-SPICE-L': first error on charge_parity: ValueError: this model does not support the atomic type '3' which is present in the input systems",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_full"
+}

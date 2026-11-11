@@ -1,0 +1,72 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-omol-m",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--out",
+  "runs/pet-omol-m.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "b640483722c9959474df2d5084717d76d042519135fe0e189551d9b157f95424",
+  "jsonl_sha256": "c106fe2ff92572dfce0f4df498abc7272d852b64c39aa8abc540dd2e14b0781e",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-omol-m",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": "pet-omol-m.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-omol-m.pt'&name='PET-OMol-M'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all ddE slope / MAE (meV)",
+   "n": "37 / 37 groups",
+   "note": "zero model MAE 602.9 meV",
+   "value": "0.725 [0.548, 0.831] / 208.5 [126.2, 308.2]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "623 / 66 groups",
+   "note": "zero model MAE 14786.7 meV",
+   "value": "1.000 [1.000, 1.000] / 57.5 [43.1, 72.7]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "784",
+   "note": "absolute; same-level models only",
+   "value": "6.8"
+  }
+ ],
+ "model": "pet-omol-m",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 660,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_full"
+}

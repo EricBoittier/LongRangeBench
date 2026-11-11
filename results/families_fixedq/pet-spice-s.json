@@ -1,0 +1,101 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-spice-s",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--out",
+  "runs/pet-spice-s.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "8aded75992237d22c7bc9c3ccdf46de2e9d73066761a46789d5ef9a8e750542c",
+  "jsonl_sha256": "6490e8f4e2e71790baf57ff955cd2bb70b90089dfbae18cad00ad2ee0b401a2e",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-spice-s",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-spice-s.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "90 ddE / 9 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "0.0006 [0.0000, 0.0021]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "90",
+   "note": "zero model 89.0 meV",
+   "value": "89.0 [84.4, 92.9]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "3.6"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "64.5"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "131",
+   "note": "absolute; same-level models only",
+   "value": "132.1"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "90",
+   "note": "median; -1 = flat model",
+   "value": "-1.000"
+  }
+ ],
+ "model": "pet-spice-s",
+ "model_level": "wB97M-D3(BJ)/def2-TZVPPD",
+ "n_failed": 0,
+ "n_scored": 120,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model wB97M-D3(BJ)/def2-TZVPPD vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_full': ['wB97M-V/def2-TZVPD'], 'families_corrected': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD'], 'pathology_h2o2p': ['wB97M-V/def2-TZVPD'], 'charge_parity': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': 996 of 3762 predictions failed on dimers (26%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': first error on dimers: ValueError: this model does not support the atomic type '19' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': 64 of 784 predictions failed on families_full (8%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': first error on families_full: ValueError: this model does not support the atomic type '11' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': 33 of 41 predictions failed on trimers (80%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': first error on trimers: ValueError: this model does not support the atomic type '3' which is present in the input systems",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': 12 of 27 predictions failed on charge_parity (44%); those structures are dropped from every metric, so coverage is not what the group n implies",
+  "ase:lrbench.adapters:metatomic?path='pet-spice-s.pt'&name='PET-SPICE-S': first error on charge_parity: ValueError: this model does not support the atomic type '3' which is present in the input systems",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}

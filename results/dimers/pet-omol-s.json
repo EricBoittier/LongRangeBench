@@ -1,0 +1,132 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-omol-s",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--out",
+  "runs/pet-omol-s.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "188faf5c956dd761124a06b7e8a25d2973afc628be157d03c7136d930ce84bf8",
+  "jsonl_sha256": "e19acab5ef4585805f95a85217c141979ebac24c2008375d002c4f57dcf6e42f",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-omol-s",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": "pet-omol-s.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-omol-s.pt'&name='PET-OMol-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "216 pts / 36 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [-0.000, 0.000]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "66 pts / 11 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [-0.000, 0.000]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "126 pts / 21 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "-0.000 [-0.000, 0.000]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [-0.000, 0.000]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.000 [0.000, 0.000]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "36",
+   "note": "flat model 979.1 meV",
+   "value": "979.1 [945.1, 1011.3]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "144",
+   "note": "DFT mean |E_int| 786.6 meV",
+   "value": "1152.0 [1032.2, 1275.5]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "11",
+   "note": "flat model 964.6 meV",
+   "value": "964.6 [887.3, 1051.3]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "44",
+   "note": "DFT mean |E_int| 786.8 meV",
+   "value": "3331.4 [729.1, 6162.2]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "501 / 36 groups",
+   "note": "zero model MAE 266.2 meV",
+   "value": "0.000 [-0.000, 0.000] / 266.2 [175.7, 357.1]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "1254",
+   "note": "absolute; same-level models only",
+   "value": "27.8"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "180",
+   "note": "median; 0 exact, -1 tail missing; tail error 20.78 k_BT (300 K)",
+   "value": "-1.000 [-1.000, -1.000]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "55",
+   "note": "median; 0 exact, -1 tail missing; tail error 18.81 k_BT (300 K)",
+   "value": "-1.000 [-1.000, -1.000]"
+  }
+ ],
+ "model": "pet-omol-s",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 1254,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}

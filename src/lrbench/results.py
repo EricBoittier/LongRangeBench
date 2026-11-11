@@ -236,6 +236,14 @@ def _registry_spec(name: str) -> Optional[str]:
     return m.spec if m else None
 
 
+#: A metric whose label says it was not scored is a *report*, not a measurement: a count of records the harness
+#: flagged and refused to score. Some sets consist only of those.
+def scored_metrics(row: dict) -> List[dict]:
+    """The metrics in a row that are measurements rather than counts of what was refused."""
+    return [m for m in (row.get("metrics") or [])
+            if isinstance(m, dict) and "not scored" not in str(m.get("metric", "")).lower()]
+
+
 def add(result_path: str, root: str = "results", sets: Optional[List[str]] = None, model: str = "",
         commit: str = "", private: bool = False) -> List[str]:
     """Write one row per set of a result JSON; returns the paths written. Each row is validated before it is
@@ -246,6 +254,14 @@ def add(result_path: str, root: str = "results", sets: Optional[List[str]] = Non
         row = row_from_result(R, s, model, commit)
         sub = os.path.join(root, PRIVATE) if private else root
         path = os.path.join(sub, s, f"{row['model']}.json")
+        # A row whose every metric is a "not scored" count measures nothing. `pathology_h2o2p` is entirely such
+        # counts for every model, so a row for it would publish a model's name beside no result at all -- and a
+        # reader scanning a results table does not distinguish "flagged 8 records" from "scored 8". Skipping is
+        # also right when a model failed on everything the set has: there is no result to report, only an absence.
+        if not scored_metrics(row):
+            print(f"[results] {s}/{row['model']}: nothing scored (every metric is a refusal count); no row written",
+                  file=sys.stderr)
+            continue
         errs = validate_row(row, root, path, private=private)
         if errs:
             raise ValueError(f"{path}: not written:\n  " + "\n  ".join(errs))
@@ -372,12 +388,17 @@ def _flags(row: dict, card: dict) -> str:
     if row["level_mismatch"]:
         f.append(f"LEVEL MISMATCH (model {row['model_level']})")
     if row["n_failed"]:
-        attempted = row["n_failed"] + (row["n_scored"] or 0)
-        cov = (row["n_scored"] or 0) / attempted if attempted else 0.0
-        if cov < MIN_COVERAGE:
-            f.append(f"THIN COVERAGE: {row['n_scored']} of ~{attempted} scored ({cov:.0%})")
+        # n_scored counts energy groups, so a set that scores no energies at all -- charge_parity measures forces
+        # -- has none by construction, and calling that "0 % coverage" would describe the set, not the model.
+        if not row["n_scored"]:
+            f.append(f"{row['n_failed']} failed; no energy groups in this set")
         else:
-            f.append(f"{row['n_failed']} failed ({cov:.0%} scored)")
+            attempted = row["n_failed"] + row["n_scored"]
+            cov = row["n_scored"] / attempted
+            if cov < MIN_COVERAGE:
+                f.append(f"THIN COVERAGE: {row['n_scored']} of ~{attempted} scored ({cov:.0%})")
+            else:
+                f.append(f"{row['n_failed']} failed ({cov:.0%} scored)")
     f.append(f"{row['evidence']} ({row['seeds']} seed{'s' if row['seeds'] != 1 else ''})")
     if card and not _same_data(card["revisions"][-1], row["data"]):
         f.append("STALE: scored on an earlier revision")

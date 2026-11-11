@@ -284,3 +284,38 @@ def test_a_thin_row_says_so_in_the_table():
     # the threshold is the documented one, tested at the boundary rather than assumed
     assert "THIN" not in flags(int(MIN_COVERAGE * 1000), 1000 - int(MIN_COVERAGE * 1000))
     assert "THIN" in flags(int(MIN_COVERAGE * 1000) - 20, 1000 - int(MIN_COVERAGE * 1000) + 20)
+
+
+def test_a_set_that_only_reports_refusals_gets_no_row():
+    """``pathology_h2o2p`` reports counts of records the harness refused to score, for every model.
+
+    A row for it would put a model's name in a results table beside no result at all, and a reader scanning that
+    table does not distinguish "flagged 8 records" from "scored 8". So such a set is skipped, not published.
+    """
+    from lrbench.results import scored_metrics
+
+    pathology_only = {"metrics": [{"metric": "pathology-flagged (not scored)", "value": "8"}]}
+    assert scored_metrics(pathology_only) == []
+
+    # a set that scores no *energies* can still measure something, and that row is publishable
+    forces_too = {"metrics": [{"metric": "force MAE (meV/A)", "value": "51.8"},
+                              {"metric": "pathology-flagged (not scored)", "value": "4"}]}
+    assert len(scored_metrics(forces_too)) == 1
+    assert scored_metrics({"metrics": []}) == [] and scored_metrics({}) == []
+
+
+def test_coverage_flag_does_not_blame_a_model_for_a_set_with_no_energies():
+    """``n_scored`` counts energy groups. charge_parity has none by construction -- it measures forces -- so
+    reporting "0 % coverage" there would describe the set and read as an accusation against the model."""
+    from lrbench.results import _flags
+
+    def flags(n_scored, n_failed):
+        return _flags({"level_mismatch": False, "model_level": "L", "n_failed": n_failed, "n_scored": n_scored,
+                       "evidence": "screen", "seeds": 1, "data": None}, None)
+
+    no_energies = flags(0, 12)
+    assert "no energy groups in this set" in no_energies and "0%" not in no_energies
+    assert "THIN COVERAGE" not in no_energies
+
+    # a real shortfall is still called one
+    assert "THIN COVERAGE" in flags(9, 33)

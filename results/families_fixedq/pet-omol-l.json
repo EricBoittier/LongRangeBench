@@ -1,0 +1,90 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-omol-l",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--out",
+  "runs/pet-omol-l.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "8aded75992237d22c7bc9c3ccdf46de2e9d73066761a46789d5ef9a8e750542c",
+  "jsonl_sha256": "6490e8f4e2e71790baf57ff955cd2bb70b90089dfbae18cad00ad2ee0b401a2e",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-omol-l",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": "pet-omol-l.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-omol-l.pt'&name='PET-OMol-L'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "fixed-Q wire ddE slope",
+   "n": "90 ddE / 9 pairs",
+   "note": "1 = follows DFT, 0 = flat",
+   "value": "-0.0000 [-0.0001, 0.0000]"
+  },
+  {
+   "metric": "fixed-Q wire ddE MAE (meV)",
+   "n": "90",
+   "note": "zero model 89.0 meV",
+   "value": "89.1 [84.4, 93.0]"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_ene (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "2.1"
+  },
+  {
+   "metric": "zwitterion local-zero MAE, zwit_yne (meV)",
+   "n": "3",
+   "note": "dE_z(m) - dE_z(m=48)",
+   "value": "61.6"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "131",
+   "note": "absolute; same-level models only",
+   "value": "16.2"
+  },
+  {
+   "metric": "normalised wire ddE, (model - DFT)/DFT",
+   "n": "90",
+   "note": "median; -1 = flat model",
+   "value": "-1.000"
+  }
+ ],
+ "model": "pet-omol-l",
+ "model_level": "wB97M-V/def2-TZVPD",
+ "n_failed": 0,
+ "n_scored": 120,
+ "notes": [
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_fixedq"
+}

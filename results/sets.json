@@ -1,4 +1,22 @@
 {
+ "charge_parity": {
+  "description": "",
+  "licence": "CC0-1.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "jsonl_sha256": "3ef1537fb60b81a891587f84592de6d502805488c23a805c97e144ece0081e9c",
+    "n_groups": 0,
+    "n_records": 27,
+    "note": "initial"
+   }
+  ]
+ },
  "dimers": {
   "description": "rigid dimer scans, 41 pairs, d_min 2.5-25 A; wB97M-V/def2-TZVPD (ORCA, OMol25 settings)",
   "licence": "CC-BY-4.0",
@@ -11,6 +29,14 @@
     "date": "2026-11-11",
     "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
     "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+    "n_groups": 1755,
+    "n_records": 1254,
+    "note": "initial"
+   },
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "188faf5c956dd761124a06b7e8a25d2973afc628be157d03c7136d930ce84bf8",
+    "jsonl_sha256": "e19acab5ef4585805f95a85217c141979ebac24c2008375d002c4f57dcf6e42f",
     "n_groups": 1755,
     "n_records": 1254,
     "note": "initial"
@@ -53,6 +79,24 @@
    }
   ]
  },
+ "families_corrected": {
+  "description": "",
+  "licence": "CC0-1.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "c1fc20b38e3bb756b92785592a18a47e799eb5571af712f503c1f3c96a698ff0",
+    "jsonl_sha256": "812024d07ad97d6c1b33879d723e1cfa9a1ba6deb43cde6fa8c70ce7eedb1937",
+    "n_groups": 208,
+    "n_records": 327,
+    "note": "initial"
+   }
+  ]
+ },
  "families_fixedq": {
   "description": "fixed-total-charge partners (PF6- at 9 vs 60 A, zwitterion chains): DDE near vs far",
   "licence": "CC-BY-4.0",
@@ -67,6 +111,50 @@
     "jsonl_sha256": "3b435aa074886afea52fb7ec8fd766658ffc9b7bfa2ec7025d881f04d5f329e4",
     "n_groups": 120,
     "n_records": 230,
+    "note": "initial"
+   },
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "8aded75992237d22c7bc9c3ccdf46de2e9d73066761a46789d5ef9a8e750542c",
+    "jsonl_sha256": "6490e8f4e2e71790baf57ff955cd2bb70b90089dfbae18cad00ad2ee0b401a2e",
+    "n_groups": 120,
+    "n_records": 230,
+    "note": "initial"
+   }
+  ]
+ },
+ "families_full": {
+  "description": "",
+  "licence": "CC0-1.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "b640483722c9959474df2d5084717d76d042519135fe0e189551d9b157f95424",
+    "jsonl_sha256": "c106fe2ff92572dfce0f4df498abc7272d852b64c39aa8abc540dd2e14b0781e",
+    "n_groups": 660,
+    "n_records": 784,
+    "note": "initial"
+   }
+  ]
+ },
+ "pathology_h2o2p": {
+  "description": "",
+  "licence": "CC0-1.0",
+  "public": true,
+  "reference_level": [
+   "wB97M-V/def2-TZVPD"
+  ],
+  "revisions": [
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "f6fa5fcaf7661ce657c9acd591e463c9a8117b326627f6f276d002374fe40883",
+    "jsonl_sha256": "66027b6014719ac6a39e05887cff73b8d2880c87d1f02a2497f7c654aab235df",
+    "n_groups": 3,
+    "n_records": 5,
     "note": "initial"
    }
   ]
@@ -83,6 +171,14 @@
     "date": "2026-11-11",
     "groups_sha256": "56b71d6c7a5790f85997ab4a2e913f904de0cd6cedea44a81376834dc264c3f3",
     "jsonl_sha256": "e2618c45e769dff2aecb1e74398fac67cf6a44227e3c5022a29bbdb6fed97589",
+    "n_groups": 24,
+    "n_records": 41,
+    "note": "initial"
+   },
+   {
+    "date": "2026-11-11",
+    "groups_sha256": "e7174c84573a6ff08737629a2850eeed4edd1967e87cb5d328d953083a846229",
+    "jsonl_sha256": "7ee5544a8a24322f6460579400948fd7c50136fb13221df5b408fb87569f2694",
     "n_groups": 24,
     "n_records": 41,
     "note": "initial"

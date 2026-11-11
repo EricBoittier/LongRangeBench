@@ -1,0 +1,68 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-omad-s",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--out",
+  "runs/pet-omad-s.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "jsonl_sha256": "3ef1537fb60b81a891587f84592de6d502805488c23a805c97e144ece0081e9c",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-omad-s",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-omad-s.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-omad-s.pt'&name='PET-OMAD-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "23",
+   "note": "absolute; same-level models only",
+   "value": "400.6"
+  },
+  {
+   "metric": "pathology-flagged (not scored)",
+   "n": "4 rec / 0 groups",
+   "note": "listed in JSON",
+   "value": "4"
+  }
+ ],
+ "model": "pet-omad-s",
+ "model_level": "mixed",
+ "n_failed": 0,
+ "n_scored": 0,
+ "notes": [
+  "ase:lrbench.adapters:metatomic?path='pet-omad-s.pt'&name='PET-OMAD-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "charge_parity"
+}

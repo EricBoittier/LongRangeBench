@@ -177,11 +177,14 @@ Numbers with provenance live in [results/](../results/SUMMARY.md), one validated
 <!-- BEGIN lrbench results render: results -->
 Committed result rows ([results/SUMMARY.md](../results/SUMMARY.md)):
 
-- **dimers:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
+- **charge_parity:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
+- **dimers:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen), `so3lr` (screen)
 - **ext_biodimers_wb97mv:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen)
 - **ext_gscdb_nc:** `caceles-water` (screen), `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen)
-- **families_fixedq:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
-- **trimers:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `so3lr` (screen)
+- **families_corrected:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
+- **families_fixedq:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen), `so3lr` (screen)
+- **families_full:** `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen)
+- **trimers:** `mace-h` (screen), `mace-omol` (screen), `mace-polar-l` (screen), `mace-polar` (screen), `maceles-off` (screen), `pet-mols-s` (screen), `pet-omad-s` (screen), `pet-omol-l` (screen), `pet-omol-m` (screen), `pet-omol-s` (screen), `pet-spice-l` (screen), `pet-spice-s` (screen), `so3lr` (screen)
 <!-- END lrbench results render: results -->
 
 The `orbmol-v1` / `orbmol` pair is the most informative comparison in the table: one architecture, trained on the

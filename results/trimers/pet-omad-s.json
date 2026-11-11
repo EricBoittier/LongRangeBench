@@ -1,0 +1,86 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-omad-s",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--out",
+  "runs/pet-omad-s.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "e7174c84573a6ff08737629a2850eeed4edd1967e87cb5d328d953083a846229",
+  "jsonl_sha256": "7ee5544a8a24322f6460579400948fd7c50136fb13221df5b408fb87569f2694",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-omad-s",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-omad-s.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-omad-s.pt'&name='PET-OMAD-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "6 / 6 groups",
+   "note": "zero model MAE 4.6 meV",
+   "value": "1030.256 [-2864.513, 1861.465] / 11586.1 [7086.9, 16088.1]"
+  },
+  {
+   "metric": "E3 MAE (meV)",
+   "n": "9",
+   "note": "zero model 8.12",
+   "value": "7295.48 [4439.70, 10490.93]"
+  },
+  {
+   "metric": "dE3 vs far geometry MAE (meV)",
+   "n": "6",
+   "note": "zero model 4.56; slope 1030.256",
+   "value": "11586.10 [6024.28, 17787.71]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "41",
+   "note": "absolute; same-level models only",
+   "value": "404.3"
+  },
+  {
+   "metric": "normalised dE3 vs far, (model - DFT)/|DFT|",
+   "n": "6",
+   "note": "median",
+   "value": "2333.933 [-7278.282, 5165.652]"
+  }
+ ],
+ "model": "pet-omad-s",
+ "model_level": "mixed",
+ "n_failed": 0,
+ "n_scored": 9,
+ "notes": [
+  "ase:lrbench.adapters:metatomic?path='pet-omad-s.pt'&name='PET-OMAD-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "trimers"
+}

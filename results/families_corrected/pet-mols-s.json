@@ -1,0 +1,74 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "pet-mols-s",
+  "--sets",
+  "all",
+  "--data",
+  "lr-sets",
+  "--normalise",
+  "--conformal",
+  "--equivariance",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--out",
+  "runs/pet-mols-s.json"
+ ],
+ "code_commit": "23994a9",
+ "data": {
+  "groups_sha256": "c1fc20b38e3bb756b92785592a18a47e799eb5571af712f503c1f3c96a698ff0",
+  "jsonl_sha256": "812024d07ad97d6c1b33879d723e1cfa9a1ba6deb43cde6fa8c70ce7eedb1937",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "pet-mols-s",
+ "level_mismatch": false,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": false,
+   "checkpoint": "pet-mols-s.pt",
+   "package": "metatomic-torch",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:metatomic?path='pet-mols-s.pt'&name='PET-MOLS-S'",
+   "version": "0.1.19"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "all ddE slope / MAE (meV)",
+   "n": "188 / 26 groups",
+   "note": "zero model MAE 54.0 meV",
+   "value": "-0.007 [-0.021, 0.009] / 54.5 [29.1, 81.2]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "20 / 10 groups",
+   "note": "zero model MAE 275795.2 meV",
+   "value": "1.004 [1.004, 1.004] / 3954.4 [3834.7, 4073.7]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "261",
+   "note": "absolute; same-level models only",
+   "value": "114.6"
+  }
+ ],
+ "model": "pet-mols-s",
+ "model_level": "mixed",
+ "n_failed": 0,
+ "n_scored": 208,
+ "notes": [
+  "ase:lrbench.adapters:metatomic?path='pet-mols-s.pt'&name='PET-MOLS-S': backend passes no charge/spin; charged structures are evaluated neutral",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "families_corrected"
+}
