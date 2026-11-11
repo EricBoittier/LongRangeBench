@@ -18,13 +18,12 @@ at workspace head da09f8c against this repository at 3405e7a.
   - No mlip.cpp is in this path. See [models.md](models.md#metatomic-exports-and-what-takes-a-charge-is-allowed-to-mean).
 - **The TorchScript profiling executor is now off by default.** With it on, these exports failed on the large,
   far-separated charged geometries ("Global alloc not supported yet"). A partial-failure run now warns, and the
-  result's `notes` name the count. Any PET number produced before this change needs a re-score with `n_failed = 0`
-  checked before it is quoted. That includes the PET-OMol-S tier-A screen in PR #2's discussion, which was scored
-  outside the named-model route.
-- **mlip.cpp GGUF is now only for the long-range-head models.** These are the fine-tunes that add a long-range head
-  and are served as GGUF. They cannot be expressed as a metatomic export today. Their charge must reach the model
-  through `mlipcpp-eval` or the C API, never through the Python bindings, which pass no charge. A dedicated mlip.cpp
-  adapter with its own registry rows is planned as a separate change.
+  result's `notes` name the count. Any number produced through a metatomic export before this change needs a
+  re-score, with `n_failed = 0` checked, before it is quoted.
+- **mlip.cpp GGUF is now only for the long-range-head models.** These are the fine-tunes that add a long-range head,
+  and they are served as GGUF. Their charge must reach the model through `mlipcpp-eval` or the C API, never through
+  the Python bindings, which pass no charge. A dedicated mlip.cpp adapter with its own registry rows is planned as a
+  separate change.
 
 ## (a) What to port
 
