@@ -41,6 +41,8 @@ passed.
 | check | kind | prior it asserts | pass / fail rule |
 |---|---|---|---|
 | `far_field_exponent` | physical | far-field asymptotics: E_int ~ r^-n with n = 1 ion-ion, 2 ion-dipole, 3 dipole-dipole (ion + nonpolar mixes 3 and 4) | per scan, fit n from log\|dE/dr\| on the canonical 10-25 A points (model and DFT on the same geometries); a scan passes if \|n_model - n_DFT\| <= 0.5 with the same sign of dE; a model whose differences are all below its numerical floor where DFT's are not has a missing tail (fail). The check fails if any non-CT class has a pass fraction < 0.8 among DFT-evaluable scans |
+| `virial_tail` | physical | the virial relation in the tail: for E_int ~ A/r^p the model's own force and energy satisfy r F_r / E_int = p, so p = 1 for a Coulomb tail. No reference enters it | fine-scan points at d >= 12 A with \|E_int\| above the model floor and \|F\| > 1e-4 eV/A: per class with >= 4 such points, \|median p - 1\| <= 0.5 for the classes where *both* fragments are charged (monopole-monopole). p is reported but not scored for ion-neutral classes, whose leading terms are charge-dipole (p = 2) and charge-induced-dipole (p = 4). A class whose points all fall below the floors is **not_evaluable, not a pass**: there is no tail to measure |
+| `conservativeness` | model | a conservative potential: F_B.u = -dE_int/dr at every separation, a property of the model alone | central differences of E_int(r) on the fine scans against the reported axial force, median \|F + dE/dr\| / max(\|F\|, 1e-4) <= 0.1 in each of d < 8 A and d >= 8 A, with >= 4 points |
 | `eps_far` | physical | physics-normalised far-field error eps = (dE_model - dE_DFT)/dE_phys (ERM-with-priors; eps = g lambda^2 - 1 for a gated Coulomb head, -1 = tail missing) | dE relative to the scan's longest canonical point, d >= 12 A, dE_phys = E_es_exact + E_mp_ind else E_mp, \|dE_phys\| >= 0.1 meV and above the model floor; per class with >= 3 points: \|median eps\| <= 0.25 |
 | `seam` | physical | smoothness: no plateau where the physical prior has a slope, no ramp/cliff steeper than the prior (switch / cutoff / conditioning-window seams) | fine scans (0.05 A in d = 6-12 A). Plateau: \|dE/dr\| < 0.1 \|dE_Coul/dr\| over >= 0.3 A of r for a pair with \|q_A q_B\| >= 1, followed by a recovery (\|dE/dr\| >= 0.5 \|dE_Coul/dr\|) before d = 20 A (a plateau that never recovers is a missing tail, scored by far_field_exponent). Cliff: \|dE/dr\| > 5 max(\|dE_Coul/dr\|, 0.05 eV/A) and > 0.25 eV/A at d >= 6 A, any class. Fail on any bounded plateau or cliff outside the CT-ambiguous class |
 | `size_consistency` | physical | separability: E(A...B at 100 A) = E(A, q_A) + E(B, q_B) + k q_A q_B / r | residual R = E(AB, d = 100 A) - E(A) - E(B) - 14.40 q_A q_B / r; pass if \|R\| <= 10 meV (+ 4x float floor) for >= 95 % of non-CT pairs. Also reports R at 25 / 50 A and which charge assignment (own, total-charge rows (Q, Q), (Q, 0), (0, Q)) the 100 A energy is closest to |
@@ -120,6 +122,41 @@ suite:
 Note the last two rows, which are not about the model. `offset_free_degeneracy` fails because for a model this flat
 the offset-free error at 8 Å cannot distinguish it from a line — so that metric must not be quoted for it, and the
 check says which one to quote instead. `contamination` is `n/a`, not `pass`, because no `seen_by` file was given.
+
+## Related work: reference-free suites
+
+Two recent suites test potentials without reference data, and both are worth reading alongside this one.
+
+[**Reference-free certification**](https://arxiv.org/abs/2610.00585) (arXiv:2610.00585) defines 14 probes over 64
+pretrained potentials: symmetry and invariance, self-consistency and integrability, statistical-mechanical
+equilibrium, and regularity. Each probe scores `S = exp(-d/lambda)` and the certificate is their **geometric mean**,
+chosen so that a certificate "cannot hide a single failing axis behind many passed gates" — the same construction
+and the same argument as this project's long-range score, arrived at independently. Its fine-tuning series is also
+direct evidence for the premise here: the naively fine-tuned model has the *lowest* held-out force error, 0.055
+eV/A against 0.060 and 0.151, and is the only one whose certificate collapses, to 0.04; in MD it reaches nearly
+2,000 K within 100 steps and returns non-finite coordinates at step 140, where the others run 10,000 steps.
+
+[**MLIP Arena**](https://arxiv.org/abs/2509.20630) (arXiv:2509.20630) scores the *shape* of curves rather than
+agreement with DFT: diatomic potential-energy curves with force-gradient conservation, tortuosity and sign flips;
+equation-of-state monotonicity; MD stability; NVE energy conservation.
+
+**Neither suite contains a long-range test.** Across their 23 tests there is nothing on electrostatics, total
+charge, Coulomb tails, polarisation, or the energy of two fragments as they separate beyond a cutoff. Both say
+why: certification's substrates are "small and elemental by design" (13-atom clusters, a trimer, a four-atom
+cell), and MLIP Arena's diatomic curves stop at 3.1 r_vdW, while its one dispersion-adjacent task adds D3(BJ) to
+every model and so measures MLIP + D3 rather than the model's own far field.
+
+`conservativeness` and `virial_tail` come from reading them. The first is their integrability family, restricted to
+the one geometry these sets already contain and reported separately near and far. The second is the idea their
+substrates cannot reach: a virial identity is a statement about the whole potential, so moving it onto a charged
+pair at 12 A and beyond turns a model-agnostic probe into a long-range diagnostic, and one that needs no reference
+at all. Measured: a model with an explicit Coulomb term recovers p = 0.996 on like-charged pairs, while two purely
+local models return *not evaluable* — they have no tail to form the ratio from.
+
+Their trimer probe overlaps task **D1**: the same three-body term, required to fall monotonically to zero by 12 A.
+Theirs adds a total-variation penalty for a non-monotone approach, which D1 does not have. Adding it needs a denser
+apex sweep than the current `trimers` set carries (three distinct distances, 9/11/14 A), so it is a data change
+rather than a code change.
 
 ## Known limitations
 

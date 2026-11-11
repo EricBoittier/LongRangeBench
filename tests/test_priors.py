@@ -22,7 +22,7 @@ INTENDED = {
     "SepOffset": {"size_consistency", "charge_offset_by_Q"},
     "QBlind": {"charge_conditioning", "charge_state"},
     "IPShift": {"charge_state"},
-    "NonConservative": {"energy_force"},
+    "NonConservative": {"energy_force", "conservativeness"},
     "Discontinuous": {"energy_force", "seam"},
     "NonInvariant": {"invariance"},
     "Noisy": {"determinism"},
@@ -33,11 +33,16 @@ ALLOWED = {
     "SpuriousLR": {"far_field_exponent", "eps_far", "offset_free_degeneracy"},  # the 1/r term cancels Na+-H2O's span
     "NonConservative": {"nve_short"},
     "NonInvariant": {"periodic_open"},  # boxing translates the structure
-    "Noisy": {"far_field_exponent", "energy_force", "invariance", "locality", "charge_conditioning", "precision"},
+    # Noise breaks the gradient relation as surely as it breaks everything else it touches.
+    "Noisy": {"far_field_exponent", "energy_force", "invariance", "locality", "charge_conditioning",
+              "precision", "conservativeness", "virial_tail"},
     "QBlind": {"charge_offset_by_Q"},
     "Caching": {"charge_state"},
     "Discontinuous": {"nve_short", "size_consistency"},  # the jump persists to 100 A and kicks the NVE pair
-    "SepOffset": {"energy_force"},  # the offset switches on when the clusters split at 3 A: itself a jump
+    # The offset switches on when the clusters split at 3 A: itself a jump. virial_tail sees it too,
+    # because a constant offset on the separated fragments stops E_int decaying to zero, so r F / E_int
+    # is measured against the wrong denominator. That is a real sensitivity, not a false alarm.
+    "SepOffset": {"energy_force", "virial_tail"},
     "Leaky": {"far_field_exponent", "eps_far", "charge_offset_by_Q"},  # cached states give IP = EA = 0 (the GSCDB IP/EA pairs the upet bug hit)
 }
 
@@ -237,3 +242,45 @@ def test_cli_and_probe_files(tmp_path, ipea, sepframes):
     assert R["checks"]["charge_state"]["status"] == PASS
     assert R["checks"]["charge_offset_by_Q"]["status"] == FAIL
     assert "**FAIL**" in open(tmp_path / "p.md").read()
+
+
+def test_virial_recovers_the_coulomb_exponent_and_abstains_without_a_tail(dimers):
+    """r F_r / E_int = p, so a Coulomb tail reads 1 — measured from the model alone, with no reference.
+
+    The two outcomes that matter are a number and a refusal. An exact point-charge model must recover p = 1 on the
+    classes where both fragments are charged, which is the only family whose leading term is monopole-monopole. A
+    flat model must come back *not evaluable*: beyond the cutoff it returns neither a force nor an energy to form
+    the ratio from, and calling that a pass would turn an absence of physics into a clean bill of health.
+    """
+    r = run(_ctx(S.PointCharge(), dimers), ["virial_tail"], log=lambda s: None)["virial_tail"]
+    assert r["status"] == PASS, r["summary"]
+    scored = {c: v for c, v in r["by_class"].items() if v["scored"] and v["n_points"] >= 4}
+    assert scored, r["by_class"]
+    for cls, v in scored.items():
+        assert abs(v["median_p"] - 1.0) < 0.2, (cls, v)
+        assert v["expected_p"] == 1
+    # an ion against a neutral molecule is charge-dipole or charge-induced-dipole, so p = 1 is not expected there
+    # and those classes are reported without being scored
+    assert any(not v["scored"] for v in r["by_class"].values())
+
+    flat = run(_ctx(S.Flat(), dimers), ["virial_tail"], log=lambda s: None)["virial_tail"]
+    assert flat["status"] == NE, flat
+    assert "no tail" in flat["summary"] or "flat tail" in flat["summary"]
+
+
+def test_conservativeness_separates_a_gradient_from_a_scaled_force(dimers):
+    """The check exists to tell a conservative model from one whose forces are a separate head.
+
+    `NonConservative` returns 1.2x the true gradient, so |F + dE/dr| / |F| sits at 1/6 -- well above the
+    threshold -- while an exact model sits at numerical noise.
+    """
+    good = run(_ctx(S.PointCharge(), dimers), ["conservativeness"], log=lambda s: None)["conservativeness"]
+    assert good["status"] == PASS, good["summary"]
+    for region, v in good["by_region"].items():
+        if v["n_points"]:
+            assert v["median_rel_deviation"] < 0.02, (region, v)
+
+    bad = run(_ctx(S.NonConservative(), dimers), ["conservativeness"], log=lambda s: None)["conservativeness"]
+    assert bad["status"] == FAIL, bad
+    worst = max(v["median_rel_deviation"] for v in bad["by_region"].values() if v["n_points"])
+    assert worst > 0.1, bad["by_region"]

@@ -36,6 +36,17 @@ def is_ion_class(cls: str) -> bool:
     return not (cls or "").startswith("neutral")
 
 
+def is_monopole_pair(cls: str) -> bool:
+    """Both fragments carry a net charge, so the leading far-field term is monopole-monopole and E ~ 1/r exactly.
+
+    This is the only family for which p = 1 is the right expectation. An ion against a neutral polar molecule is
+    charge-dipole, p = 2; against a nonpolar one it is charge-induced-dipole, p = 4. Demanding 1 of those would
+    fail a correct model for having the right physics.
+    """
+    c = (cls or "").lower()
+    return c.startswith("ion_pair") or c.startswith("same_sign")
+
+
 def _boot_median(x, groups, n=1000, seed=0):
     x, groups = np.asarray(x, float), np.asarray(groups)
     u = np.unique(groups)
@@ -200,6 +211,114 @@ def far_field_exponent(ctx: Ctx):
     st = FAIL if fails else PASS
     return outcome(st, "; ".join(fails) if fails else "exponents match DFT in every class",
                    by_class=rows, scans=scans_out)
+
+
+#: Forces below this (eV/A) are indistinguishable from a model that returns nothing in the tail.
+FORCE_FLOOR = 1e-4
+
+
+def _tail_mask(o, dmin):
+    """Fine-scan points beyond ``dmin`` where the model's own E_int and axial force are both above their floors.
+
+    Both floors matter and for different reasons. Below the energy floor the ratio below is 0/0. Below the force
+    floor there is no force to compare anything with -- which is the finding for a flat model, and it must be
+    reported as *not evaluable* rather than as a pass.
+    """
+    import numpy as _np
+    f, E, noise = o["fB"], o["Eint"], o["noise"]
+    ok = _np.isfinite(f) & _np.isfinite(E) & (o["d"] >= dmin - 1e-6)
+    return ok & (_np.abs(E) > _np.maximum(ABS_FLOOR, 4 * noise)) & (_np.abs(f) > FORCE_FLOOR)
+
+
+@check("conservativeness", "model", "a conservative potential: the axial force equals minus the energy gradient, "
+       "F_B.u = -dE_int/dr, at every separation. This is a property of the model alone -- no reference enters it",
+       "fine closest-contact scans, rigid translation of B along the axis so dr = dd. Central differences of "
+       "E_int(r) against the reported force, scored as the median |F + dE/dr| / max(|F|, force floor), near "
+       "(d < 8 A) and far (d >= 8 A) separately: median relative deviation <= 0.1 in each region with >= 4 points",
+       "direct-force architectures, whose forces are a separate head rather than a gradient, and any model whose "
+       "tail force and tail energy disagree")
+def conservativeness(ctx: Ctx):
+    if (e := _need_dimers(ctx)):
+        return e
+    regions = {"near": (0.0, 8.0), "far": (8.0, np.inf)}
+    acc = {k: [] for k in regions}
+    rows = []
+    for o in scans(ctx):
+        k = np.argsort(o["r"])                      # one ordering, applied to every array together
+        r, E, f, d = o["r"][k], o["Eint"][k], o["fB"][k], o["d"][k]
+        good = np.isfinite(E) & np.isfinite(f)
+        if good.sum() < 4:
+            continue
+        r, E, f, d = r[good], E[good], f[good], d[good]
+        # central differences on a possibly uneven grid; the endpoints are dropped rather than taken one-sided, so
+        # a scan's two extreme points cannot dominate the median through a worse derivative estimate
+        dEdr = (E[2:] - E[:-2]) / (r[2:] - r[:-2])
+        fm, d_m = f[1:-1], d[1:-1]
+        scale = np.maximum(np.abs(fm), FORCE_FLOOR)
+        rel = np.abs(fm + dEdr) / scale
+        for name, (lo, hi) in regions.items():
+            m = (d_m >= lo) & (d_m < hi)
+            if m.sum() >= 1:
+                acc[name].extend(rel[m].tolist())
+        rows.append({"template": getattr(o["t"], "name", None) or str(getattr(o["t"], "cls", "")),
+                     "cls": getattr(o["t"], "cls", None), "n": int(len(rel)),
+                     "median_rel": _r(np.median(rel), 4)})
+    out, fails = {}, []
+    for name in regions:
+        v = np.array(acc[name], float)
+        v = v[np.isfinite(v)]
+        out[name] = {"n_points": int(v.size), "median_rel_deviation": _r(np.median(v), 4) if v.size else None}
+        if v.size >= 4 and np.median(v) > 0.1:
+            fails.append(f"{name} median |F + dE/dr|/|F| = {np.median(v):.3f}")
+    if not any(out[n]["n_points"] for n in regions):
+        return outcome(NE, "no scan with four finite energy and force points", by_region=out)
+    st = FAIL if fails else PASS
+    return outcome(st, "; ".join(fails) if fails else "forces agree with the energy gradient everywhere measured",
+                   by_region=out, scans=rows[:40])
+
+
+@check("virial_tail", "physical", "the virial relation in the tail: for E_int ~ A/r^p the model's own force and "
+       "energy satisfy r F_r / E_int = p, so p = 1 for a Coulomb tail. The expected value is known without any "
+       "reference, which is what makes this measurable at separations where DFT would be prohibitive",
+       "fine-scan points at d >= 12 A with |E_int| above the model floor and |F| > 1e-4 eV/A: per class with >= 4 "
+       "such points, |median p - 1| <= 0.5 for the classes where *both* fragments are charged, the only ones whose "
+       "leading term is monopole-monopole; p is reported but not scored for ion-neutral classes, whose leading "
+       "terms are charge-dipole (p = 2) and charge-induced-dipole (p = 4). A class whose points all fall below "
+       "those floors is not evaluable, not a pass: there is no tail to measure",
+       "a flat tail (no force to measure), a tail of the wrong power, and a tail whose force and energy imply "
+       "different exponents (which a reference-based exponent fit cannot see)")
+def virial_tail(ctx: Ctx):
+    if (e := _need_dimers(ctx)):
+        return e
+    dmin = float(ctx.opts.get("virial_dmin", 12.0))
+    by = collections.defaultdict(list)
+    floored = collections.Counter()
+    for o in scans(ctx):
+        cls = getattr(o["t"], "cls", None) or "all"
+        m = _tail_mask(o, dmin)
+        n_far = int((o["d"] >= dmin - 1e-6).sum())
+        if not m.any():
+            floored[cls] += n_far
+            continue
+        p = o["r"][m] * o["fB"][m] / o["Eint"][m]
+        by[cls].extend(p[np.isfinite(p)].tolist())
+        floored[cls] += n_far - int(m.sum())
+    rows, fails = {}, []
+    for cls in sorted(set(by) | set(floored)):
+        v = np.array(by.get(cls, []), float)
+        rows[cls] = {"n_points": int(v.size), "n_below_floor": int(floored[cls]),
+                     "scored": bool(is_monopole_pair(cls) and not is_ct(cls)),
+                     "expected_p": 1 if is_monopole_pair(cls) else None,
+                     "median_p": _r(np.median(v), 3) if v.size else None,
+                     "iqr_p": [_r(np.percentile(v, 25), 3), _r(np.percentile(v, 75), 3)] if v.size >= 4 else None}
+        if v.size >= 4 and is_monopole_pair(cls) and not is_ct(cls) and abs(np.median(v) - 1.0) > 0.5:
+            fails.append(f"{cls} p = {np.median(v):.2f}")
+    if not any(r["n_points"] for r in rows.values()):
+        return outcome(NE, f"no point beyond {dmin:g} A with both |E_int| and |F| above their floors "
+                           "(a flat tail has no virial to measure)", by_class=rows)
+    st = FAIL if fails else PASS
+    return outcome(st, "; ".join(fails) if fails else "r F / E_int = 1 in every charged class measured",
+                   by_class=rows, d_min=dmin)
 
 
 @check("eps_far", "physical", "physics-normalised far-field error eps = (dE_model - dE_DFT)/dE_phys "
@@ -1201,7 +1320,8 @@ def distribution_shift(ctx: Ctx):
                    table=table, n_train_rows=len(ctx.train_coverage))
 
 
-ORDER = ["far_field_exponent", "eps_far", "seam", "size_consistency", "energy_force", "nve_short", "invariance",
+ORDER = ["far_field_exponent", "virial_tail", "eps_far", "seam", "size_consistency", "energy_force",
+         "conservativeness", "nve_short", "invariance",
          "charge_state", "charge_offset_by_Q", "fragment_charges", "periodic_open", "locality",
          "charge_conditioning", "determinism", "precision", "contamination", "level_of_theory",
          "ct_unbound_labelled", "offset_free_degeneracy", "distribution_shift"]
