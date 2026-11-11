@@ -51,21 +51,33 @@ def _(EMBEDDED):
     import numpy as np
     import pandas as pd
 
+    # Three cases, in order. The import is attempted *only* when a run directory is actually on disk: a bare
+    # `import lrbench` that fails makes marimo try to install it from PyPI, which is wrong everywhere (the
+    # distribution is `longrangebench`, it is not published, and it needs scipy and ase). In WebAssembly and on
+    # molab there is no run directory, so this notebook must carry its data or say plainly that it has none.
+    _runs = os.environ.get("LRBENCH_RUNS", "runs")
+    R, P, CHEM, VIEWS = {}, {}, {}, []
     if EMBEDDED:
         _d = json.loads(EMBEDDED)
         R, P, SOURCE = _d["results"], _d["priors"], _d.get("source", "frozen at build time")
         CHEM, VIEWS = _d.get("chemiscope", {}), _d.get("views", [])
-    else:
-        import importlib
+    elif os.path.isdir(_runs):
+        try:
+            import importlib
 
-        _d = importlib.import_module("lrbench.diagnostics").collect(os.environ.get("LRBENCH_RUNS", "runs"))
-        R, P, SOURCE = _d["results"], _d["priors"], _d["source"]
-        CHEM, VIEWS = {}, []
+            _d = importlib.import_module("lrbench.diagnostics").collect(_runs)
+            R, P, SOURCE = _d["results"], _d["priors"], _d["source"]
+        except Exception as _e:
+            SOURCE = f"lrbench is not importable here ({type(_e).__name__}), so no results were loaded"
+    else:
+        SOURCE = ("no data in this notebook — this is the generator. Build the frozen copy with "
+                  "`python tools/build_diagnostics_site.py RUNS`, and open **that** on molab.")
 
     KE = 14.399645            # e^2/(4 pi eps0), eV Å — so k q_A q_B / r is in eV for r in Å
     SET = "dimers"
     CLS = "ion_pair"          # the headline class: two formally charged fragments, the clearest long-range test
-    return CHEM, CLS, KE, P, R, SET, SOURCE, VIEWS, io, mo, np, pd
+    DDE_SET = "families_fixedq"   # the quartets live in their own set, not in dimers
+    return CHEM, CLS, DDE_SET, KE, P, R, SET, SOURCE, VIEWS, io, mo, np, pd
 
 
 @app.cell
@@ -357,8 +369,14 @@ def _(P, R, SOURCE, mo):
 
 
 @app.cell
-def _(mo):
-    mo.md(
+def _(R, SOURCE, mo):
+    _empty = mo.callout(
+        mo.md(f"**This copy carries no results.** {SOURCE}\n\nEvery section below will be empty. The build "
+              "script writes a frozen notebook with the data (and the chemiscope datasets) inside it; that is the "
+              "one to open on molab or export to WebAssembly."),
+        kind="warn") if not R else mo.md("")
+
+    mo.vstack([_empty, mo.md(
         r"""
         # Does this model have any long-range physics?
 
@@ -375,12 +393,12 @@ def _(mo):
 
         The *oracle* row is the ceiling the physics allows — the fragments' own DFT multipoles, nothing learned.
         """
-    )
+    )])
     return
 
 
 @app.cell
-def _(CLS, R, SET, mo, pd):
+def _(CLS, DDE_SET, R, SET, mo, pd):
     def _v(t, n=3):
         return None if not t or t[0] is None else round(t[0], n)
 
@@ -395,7 +413,8 @@ def _(CLS, R, SET, mo, pd):
         _rows.append({
             "model": _r["label"][:38],
             "long range": "ceiling" if _oracle else ("yes" if _r["has_lr"] else "no"),
-            "tail fraction": _v(_c.get("tail")), "ε": _e, "ΔΔE slope": _v(_S.get("ddE"), 4),
+            "tail fraction": _v(_c.get("tail")), "ε": _e,
+            "ΔΔE slope": _v((_r["sets"].get(DDE_SET) or {}).get("ddE"), 4),
             "8 Å MAE (meV)": _v(_c.get("off8"), 1), "≥12 Å MAE (meV)": _v(_c.get("far12"), 1),
             "F MAE (meV/Å)": _v(_S.get("F_mae"), 1),
             "level": _r["level"][:22] + ("  ⚠" if _r["mismatch"] else ""),
@@ -437,8 +456,8 @@ def _(R, SET, matrix, mo):
 
 
 @app.cell
-def _(CLS, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slider, rc_slider, slopegraph, sparklines,
-      w_slider):
+def _(CLS, DDE_SET, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slider, rc_slider, slopegraph,
+      sparklines, w_slider):
     def _rows(metric):
         out = []
         for r in R.values():
@@ -447,8 +466,8 @@ def _(CLS, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slider, rc_sl
                 out.append((r["label"][:34], *c[metric], r["has_lr"]))
         return out
 
-    _ddE_rows = [(r["label"][:34], *r["sets"][SET]["ddE"], r["has_lr"]) for r in R.values()
-                 if SET in r["sets"] and r["sets"][SET]["ddE"][0] is not None]
+    _ddE_rows = [(r["label"][:34], *r["sets"][DDE_SET]["ddE"], r["has_lr"]) for r in R.values()
+                 if DDE_SET in r["sets"] and r["sets"][DDE_SET]["ddE"][0] is not None]
     _tail_fig, _slope, _eps = demo_tail(g_slider.value, rc_slider.value, w_slider.value)
     _ddE_fig, _ddE_slope = demo_ddE(rc2_slider.value, w_slider.value)
 
@@ -536,7 +555,7 @@ def _(CLS, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slider, rc_sl
         mo.md(f"**Toy slope {_ddE_slope:.3f}.** Note how little the cutoff has to bite: the response is already "
               "small at 8 Å, so a cutoff well outside the scored range still flattens it."),
         dotplot(_ddE_rows, good=1.0, floor=0.0, xlabel="ΔΔE slope", fmt="{:.4f}", title="The real models",
-                subtitle=f"{SET} · fixed-charge quartets") or mo.md("_no ΔΔE groups_"),
+                subtitle=f"{DDE_SET} · fixed-charge quartets") or mo.md("_no ΔΔE groups_"),
     ])
 
     mo.vstack([
