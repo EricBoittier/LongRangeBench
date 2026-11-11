@@ -101,12 +101,62 @@ class MultipoleOracle(Backend):
                     note="E_int differences only; absolute energies/forces of the oracle are not meaningful")
 
 
-def from_spec(spec: str) -> MultipoleOracle:
+class RefsOracle(Backend):
+    """The dataset's own physical prior, as a pseudo-model: ``E_int(d) = refs.E_es_exact + refs.E_mp_ind`` where the
+    exact electrostatics are stored, else ``refs.E_mp``, for dimer points at d >= ``rcut``.
+
+    This is what :class:`MultipoleOracle` with ``order=2&ind=1`` reproduces (to 1e-12 meV), and it is the same
+    quantity the normalised eps divides by -- so it is the achievable-tail ceiling for a model that knows the
+    monomers' moments. Unlike that oracle it needs no fragment-moments file, because the prior travels with the
+    records, so it can be the ceiling row of any table on any dataset that ships ``refs``. Every other record is
+    returned as failed: only dimer differences are meaningful.
+    """
+    name = "oracle"
+    passes_charge_spin = True
+
+    def __init__(self, rcut: float = 8.0, key: str = "auto"):
+        self.rcut, self.key = float(rcut), key
+        self.table: Dict[str, float] = {}
+        self.sources: Dict[str, int] = {}
+
+    def bind(self, ds):
+        for r in ds.records:
+            d = r.get("distance")
+            if ds.name != "dimers" or d is None or float(d) < self.rcut - 1e-6 or not r.get("fragment_id"):
+                continue
+            refs = r.get("refs") or {}
+            es, ind, mp = refs.get("E_es_exact"), refs.get("E_mp_ind"), refs.get("E_mp")
+            if self.key in ("auto", "E_es_exact") and es is not None:
+                e, src = float(es) + float(ind or 0.0), "E_es_exact+E_mp_ind"
+            elif self.key in ("auto", "E_mp") and mp is not None:
+                e, src = float(mp), "E_mp"
+            else:
+                continue
+            self.table[r["id"]] = e
+            self.sources[src] = self.sources.get(src, 0) + 1
+
+    def predict(self, structs) -> List[dict]:
+        out = []
+        for s in structs:
+            rid, _, frag = s.key.partition("#")
+            e = (0.0 if frag else self.table[rid]) if rid in self.table else None
+            out.append({"energy": e, "forces": None, "charges": None,
+                        "error": None if e is not None else "outside the oracle's domain (not a dimer point >= rcut)"})
+        return out
+
+    def info(self):
+        return dict(super().info(), oracle="refs", rcut=self.rcut, prior=dict(self.sources),
+                    note="the dataset's own multipole+induction prior; E_int differences only")
+
+
+def from_spec(spec: str):
     kind, _, q = spec[len("oracle:"):].partition("?")
-    if kind != "multipole":
-        raise ValueError(f"unknown oracle {kind!r} (only oracle:multipole)")
     kw = dict(p.split("=", 1) for p in q.split("&") if "=" in p)
-    return MultipoleOracle(**kw)
+    if kind == "multipole":
+        return MultipoleOracle(**kw)
+    if kind == "refs":
+        return RefsOracle(**kw)
+    raise ValueError(f"unknown oracle {kind!r} (oracle:multipole or oracle:refs)")
 
 
 def pulled_energies(points: List[dict], frames_xyz: str, monomers: str, rcut_min: float = 0.0):

@@ -19,3 +19,6 @@ results/
 figs/
 *.results.json
 perf.json
+
+# marimo session caches
+__marimo__/

@@ -90,6 +90,38 @@ not.
 `--distance-unit A|bohr` and `--energy-unit meV|eV|Eh|kBT` apply to the absolute numbers in this block only;
 everything else stays in meV.
 
+## Offset-free shapes
+
+When an absolute E_int carries an offset that has nothing to do with long-range physics — a model's separated
+charge-state offset, or a reference computed in a periodic cell — only differences along a curve are scored:
+ΔE(d) = E_int(d) − E_int(d_last), with d_last the curve's longest point. The tail fraction and ε are both built on
+that difference, which is why neither is disturbed by a constant error.
+
+Two consequences worth stating:
+
+- The offset-free MAE is reported **next to the flat-model MAE** (|ΔE_ref|), because at a single distance the
+  offset-free error is degenerate for a flat model: a model with no tail at all scores the same as one whose tail is
+  merely shifted. `lrbench priors` has a check for exactly this (`offset_free_degeneracy`) which names the metric to
+  quote instead.
+- For a reference computed in a finite cell (`ext_biodimers`, HSE06+MBD-NL in a 30 Å box), the cell's r² term is
+  removed from like-charge curves before any shape is fitted, and absolute energies are not scored at all.
+
+## Seeds, and what counts as a claim
+
+A claim needs **four seeds**. One or two seeds are a screen, and are labelled as such wherever they appear. The
+hierarchical bootstrap resamples curves (the `group`) and then points inside them, so points on one curve are never
+treated as independent samples. Where entries share an ion across groups — some GSCDB subsets do — the intervals
+are too narrow, and that is stated where those numbers are reported.
+
+## End-to-end versus surrogate error
+
+A score against a CCSD(T) or HSE06 reference is **end-to-end**: the model's error plus the gap between its training
+functional and that reference. It is never called "the ML error". Where both are available, the two targets are
+reported separately and never interchanged:
+
+- **surrogate fidelity** — the model against a relabel at its own level of theory;
+- **end-to-end** — the model against the published reference.
+
 ## Levels of theory
 
 Every record carries `level`. The model's training level comes from `--model-level`, or is inferred (`.gguf` / `.pt`

@@ -24,12 +24,22 @@ The generally useful ones first.
 | `periodic_box.py` | total-charge-zero dimer scans in large cubic boxes, for models whose long range needs a cell |
 | `scans.py` | geometry scans for `lrbench predict` and their analysis (size consistency, SN2 cutoff scan, box scan) |
 | `ko4g.py` | the Ko et al. 2021 4G-HDNNP subsample through `lrbench predict` |
+| `ext_gscdb_nc.py` | all 45 noncovalent GSCDB137 subsets → the canonical set `ext_gscdb_nc` |
+| `ext_ncia.py` | NCI Atlas (IHB100x10, HB375x10, HB300SPXx10, SH250x10, D442x10, D1200, R739x5) → `ext_ncia` |
+| `ext_biodimers.py` | BFDB side-chain dimer scans → `ext_biodimers`, with the periodic-cell term handled |
+| `ext_biodimer_relabel.py` | parse the open-boundary ORCA relabel of the biodimer tier-A curves → `ext_biodimers_wb97mv` |
+| `ext_biodimer_pbc_check.py` | what the 30 Å reference cell does to the curves (r² fit, Ewald sign) |
+| `ext_gscdb_census.py`, `ext_biodimer_census.py` | what is in each source before converting it |
+| `priors_ipea.py`, `priors_sepframes.py` | build the IP/EA and separated-frame probes `lrbench priors` can take |
 
 ## Scoring and reporting
 
 | script | what it does |
 |---|---|
 | `score_frames.py` | score externally computed predictions on a set, with the same scorer and result schema as `lrbench eval` — the way to submit numbers from a model that cannot be driven from Python |
+| `ext_summary.py` | subset × distance-band tables for the `ext_*` sets |
+| `ext_biodimer_score.py` | offset-free shape scores on the biodimer curves |
+| `priors_table.py` | several `lrbench priors` JSONs → one check × model table |
 | `headline_table.py` | transpose selected rows of an `lrbench compare` table into a compact models-as-rows table |
 | `gscdb_report.py` | tables and figures for a GSCDB137 score |
 | `gscdb_campaign.py` | calculation list and cost estimate for a GSCDB137 labelling campaign |
@@ -54,6 +64,9 @@ These were written for particular runs of particular models. They are kept becau
 numbers were produced, and several are useful templates, but they reference campaigns whose raw output is not in this
 repository: `nve.py`, `p2_compare.py`, `p2_parse.py`, `merge_preds.py`, `omolval_summary.py`, `so3lr_terms.py`,
 `so3lr_charges.py`, `tauri_heldout.py`, `tauri_table2.py`, `props_tauri_dipoles.py`, `lorem_scan.py`.
+
+The `ext_*` converters are smoke-run, not unit-tested, and they have no `--help`: their usage lines are in the
+docstrings. That is the main known gap in `tools/`.
 
 If one of them is nearly what you need, say so in an issue — generalising a script is usually a small change, and it
 is better done once here than copied.

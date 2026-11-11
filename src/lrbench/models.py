@@ -22,13 +22,19 @@ from typing import Dict, List, Optional
 OMOL = "wB97M-V/def2-TZVPD"
 SO3LR_ENV = "so3lr"
 MACE_ENV = "mace"
+ORB_ENV = "orb"
+DEEPMD_ENV = "deepmd"
+FAIRCHEM_ENV = "fairchem"
+GRACE_ENV = "grace"
 
 # What each environment needs. One venv per environment: JAX (SO3LR) and torch (MACE) are not installed together.
 ENVS: Dict[str, dict] = {
     SO3LR_ENV: {
         "probe": "so3lr",  # module whose import tells whether the environment can run these models
         "python": ">=3.12,<3.14",
-        "install": ['uv pip install "so3lr[cuda12] @ git+https://github.com/general-molecular-simulations/so3lr@v0.2.0"',
+        # There is no v0.2.0 *tag* upstream, only a release/v0.2.0 branch: install the pinned commit, not the tag.
+        "install": ['uv pip install "so3lr[cuda12] @ git+https://github.com/general-molecular-simulations/so3lr'
+                    '@2a7480cb38cb0c75bc89784f32f8e253c1a70153"',
                     'uv pip install -e ".[test]"'],
         "notes": "JAX < 0.11 with CUDA 12 (jaxlib 0.11.1 hangs in the PME scatter on CPU). Checkpoints ship inside "
                  "the package (no download). x64 is switched on by the adapter (float64).",
@@ -40,6 +46,34 @@ ENVS: Dict[str, dict] = {
         "notes": "torch with CUDA matching the node. Checkpoints are downloaded by mace-torch on first use to "
                  "~/.cache/mace: pre-fetch on a login node (compute nodes may have no internet), or set "
                  "XDG_CACHE_HOME to shared storage.",
+    },
+    ORB_ENV: {
+        "probe": "orb_models.forcefield.pretrained",
+        "python": ">=3.10",
+        "install": ['uv pip install orb-models', 'uv pip install -e ".[test]"'],
+        "notes": "torch with CUDA matching the node. Checkpoints are downloaded from Orbital Materials' public S3 "
+                 "bucket on first use (~100 MB each) and cached by orb-models.",
+    },
+    DEEPMD_ENV: {
+        "probe": "deepmd.calculator",
+        "python": ">=3.10",
+        "install": ['uv pip install "deepmd-kit[torch]" ase', 'uv pip install -e ".[test]"'],
+        "notes": "torch with CUDA matching the node. The DPA4 OMol25 checkpoints are downloaded separately from "
+                 "huggingface.co/deepmodelingcommunity/DPA4-OMol; set LRBENCH_DPA4_DIR to where they are.",
+    },
+    FAIRCHEM_ENV: {
+        "probe": "fairchem.core",
+        "python": ">=3.10",
+        "install": ['uv pip install fairchem-core', 'uv pip install -e ".[test]"'],
+        "notes": "The weights are gated: accept the licence on huggingface.co/facebook/UMA and log in (hf auth "
+                 "login) before the first run. Checkpoints are cached in ~/.cache/fairchem (uma-s is ~2.3 GB).",
+    },
+    GRACE_ENV: {
+        "probe": "tensorpotential.calculator",
+        "python": ">=3.10",
+        "install": ['uv pip install tensorpotential', 'uv pip install -e ".[test]"'],
+        "notes": "TensorFlow; set TF_FORCE_GPU_ALLOW_GROWTH=true so it does not take the whole device. Models are "
+                 "downloaded on first use to ~/.cache/grace (GRACE_CACHE overrides).",
     },
 }
 
@@ -108,6 +142,58 @@ MODELS.update({m.name: m for m in [
                "CACE-LES water (Cheng group)", "RPBE-D3 (water, CACE-LES training set)", LES_ENV,
                "MLIPs/CACE-LES/water/caceles-r-4.5-nl-1-nu-2/best_model.pth, " + _LESFIT, "CC BY-NC 4.0",
                "none: neutral only; H and O only", "Latent Ewald Summation", aliases=["cace-les", "caceles"]),
+]})
+
+# OrbMol (Orbital Materials) and the released DeePMD DPA4 checkpoints: both trained on OMol25, i.e. the same level
+# as our sets, and both take a total charge. OrbMol v1 -> v2 is the cleanest control we have: one architecture with
+# and without an explicit Coulomb term.
+_DPA4 = _os.environ.get("LRBENCH_DPA4_DIR", _os.path.expanduser("~/.cache/lrbench/dpa4"))
+MODELS.update({m.name: m for m in [
+    NamedModel("orbmol", "ase:lrbench.adapters:orbmol?model='orbmol-v2'", "OrbMol-v2 (learnable electrostatics)",
+               OMOL, ORB_ENV, "orb-models download (orbmol-v2-*.ckpt, Orbital Materials S3)", "Apache-2.0",
+               "atoms.info charge + spin (2S+1)",
+               "latent charges constrained to the total charge + Coulomb (bare 1/r in vacuum, PME in a cell)",
+               aliases=["orbmol-v2", "orb-mol", "orbmol2"]),
+    NamedModel("orbmol-v1", "ase:lrbench.adapters:orbmol?model='orbmol-v1'", "OrbMol v1 conservative",
+               OMOL, ORB_ENV, "orb-models download (orb-v3-conservative-omol-*.ckpt)", "Apache-2.0",
+               "atoms.info charge + spin (2S+1)", "none (local message passing, 6 A cutoff)",
+               aliases=["orbmol1", "orb-v3-omol"]),
+    NamedModel("dpa4-plus", f"ase:lrbench.adapters:deepmd?model='{_DPA4}/DPA4-Plus-OMol25-100M-v20260820.pt'"
+               "&name='DPA4-Plus-OMol25-100M'", "DPA4-Plus, OMol25 100M (8.8 M params)", OMOL, DEEPMD_ENV,
+               "huggingface.co/deepmodelingcommunity/DPA4-OMol", "CC BY-NC 4.0",
+               "atoms.info charge_spin = [Q, 2S+1], FiLM-conditioned descriptor",
+               "none (local, 6 A cutoff); the total charge only conditions the descriptor",
+               aliases=["dpa4", "deepmd", "dpa4-omol"]),
+    NamedModel("dpa4-air", f"ase:lrbench.adapters:deepmd?model='{_DPA4}/DPA4-Air-OMol25-100M-v20260820.pt'"
+               "&name='DPA4-Air-OMol25-100M'", "DPA4-Air, OMol25 100M (5.1 M params)", OMOL, DEEPMD_ENV,
+               "huggingface.co/deepmodelingcommunity/DPA4-OMol", "CC BY-NC 4.0",
+               "as dpa4-plus", "as dpa4-plus"),
+]})
+
+# Meta FAIR's OMol25 models: the same level as our sets, charge- and spin-aware, and local. They are the control
+# that any long-range claim has to beat beyond the cutoff.
+MODELS.update({m.name: m for m in [
+    NamedModel("uma-s", "ase:lrbench.adapters:fairchem?model='uma-s-1p2p1'&task='omol'", "UMA-S 1.2.1, omol task",
+               OMOL, FAIRCHEM_ENV, "huggingface.co/facebook/UMA (gated)",
+               "Meta FAIR Chemistry model licence", "atoms.info charge + spin (2S+1), as an embedding",
+               "none (local message passing)", aliases=["uma", "uma-small"]),
+    NamedModel("esen-omol", "ase:lrbench.adapters:fairchem?model='esen-sm-conserving-all-omol'",
+               "eSEN-SM conserving, all of OMol25", OMOL, FAIRCHEM_ENV,
+               "fairchem-core download (gated on Hugging Face)", "Meta FAIR Chemistry model licence",
+               "atoms.info charge + spin (2S+1), as an embedding", "none (local message passing)",
+               aliases=["esen", "esen-sm"]),
+]})
+
+# GRACE (graph ACE): a materials model at PBE/PAW with no charge input. It is here for the ACE family and as a
+# floor row; its energies are not comparable with ours and its charge-blindness is recorded, not inferred.
+MODELS.update({m.name: m for m in [
+    NamedModel("grace-2l", "ase:lrbench.adapters:grace?model='GRACE-2L-OMAT'", "GRACE-2L-OMAT (two-layer semi-local)",
+               "PBE/PAW (OMat24)", GRACE_ENV, "grace_models download / tensorpotential auto-download (~/.cache/grace)",
+               "Academic Software License", "none: no total-charge or spin input",
+               "none (local, 6 A cutoff)", aliases=["grace", "ace", "grace-2l-omat"]),
+    NamedModel("grace-1l", "ase:lrbench.adapters:grace?model='GRACE-1L-OMAT'", "GRACE-1L-OMAT (one-layer local)",
+               "PBE/PAW (OMat24)", GRACE_ENV, "tensorpotential auto-download", "Academic Software License",
+               "none: no total-charge or spin input", "none (local, 6 A cutoff)"),
 ]})
 
 # The four models of the external comparison, in table order.

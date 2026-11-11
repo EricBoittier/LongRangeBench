@@ -30,9 +30,13 @@ Worth stating first, because they shape every decision below.
 - [x] BSD-3 code / CC0 data split, docs, contributing guide
 - [ ] **next** — Release the canonical sets as a public HuggingFace dataset (CC0) with a dataset card, per-set
       provenance and a Zenodo DOI. Further sets to follow from the CSCS runs.
-- [ ] **next** — `lrbench fetch <set>`: download and convert each public external set (GSCDB137, DES370K, SAPT10k,
-      PLA15, Ko et al. 4G) with recorded checksums, so `--data` works from one command instead of a paragraph of
-      instructions
+- [x] Converters for the public external sets: GSCDB137 noncovalent (45 subsets), NCI Atlas, the BFDB biodimers and
+      the dimer overlays, each recording its own licence, reference level and checksums
+- [x] `lrbench priors`: twenty pass/fail checks of physical, model and data assumptions, with planted-defect tests
+- [ ] **next** — `lrbench fetch <set>`: wrap those converters so the download, the checksum and the conversion are
+      one command instead of a paragraph of instructions
+- [ ] **next** — make the level-of-theory refusal fire for reference-only sets (count records referenced by groups,
+      not only records carrying an `energy`), so `ext_*` cannot be scored cross-level without the explicit flag
 - [ ] **next** — PyPI release (`pip install longrangebench`) and tagged versions
 - [ ] **in progress** — CI on 3.11–3.13 plus a weekly job that checks every adapter still imports against current
       upstream releases (adapters rot silently otherwise)
@@ -93,6 +97,8 @@ obvious gaps, each of which needs its own oracle and pathology audit before it i
   If your model takes a total charge or carries an explicit Coulomb term, it belongs here.
 - **Adversarial review of a metric.** If a diagnostic gives a model a score you can demonstrate is wrong, that is a
   bug in the benchmark. Those issues are the most valuable ones we can receive.
+- **A new prior, with the defect that breaks it.** `lrbench priors` takes a check plus a synthetic model that
+  violates it; both are small, and the pair is what makes the check trustworthy.
 - **Reference data.** A long-range set with a defensible level of theory, a documented protocol and a licence that
   permits redistribution — especially condensed-phase.
 - **Independent reruns.** Taking a published submission and reproducing it on your own hardware.
