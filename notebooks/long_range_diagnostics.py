@@ -434,7 +434,7 @@ def _(CLS, DDE_SET, R, SCORES, SET, mo, pd):
             "model": _r["label"][:38],
             "LRS": _sc.get("lrs"), "decay": _rd("decay"), "scale": _rd("scale"),
             "response": _rd("response"), "accuracy": _rd("accuracy"),
-            "long range": "ceiling" if _oracle else ("yes" if _r["has_lr"] else "no"),
+            "long range": "ceiling" if _oracle else {True: "yes", False: "no"}.get(_r["has_lr"], "?"),
             "tail fraction": _v(_c.get("tail")), "ε": _e,
             "ΔΔE slope": _v((_r["sets"].get(DDE_SET) or {}).get("ddE"), 4),
             "8 Å MAE (meV)": _v(_c.get("off8"), 1), "≥12 Å MAE (meV)": _v(_c.get("far12"), 1),

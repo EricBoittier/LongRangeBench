@@ -18,6 +18,8 @@ import math
 import os
 from typing import Optional, Tuple
 
+from .models import long_range_flag
+
 Triple = Tuple[Optional[float], Optional[float], Optional[float]]
 
 
@@ -40,6 +42,19 @@ def est(v) -> Triple:
 DDE_RESPONSE_FAMILY = "wire_disc_near_vs_far"
 
 
+
+def _charge_spin(m: dict) -> str:
+    """How the member was told the total charge: the adapter's description, else the backend's own flag (mlip.cpp
+    GGUF members carry a boolean and no description), else '?'."""
+    ext = m.get("external_model") or {}
+    if ext.get("charge_spin"):
+        return str(ext["charge_spin"])
+    cs = m.get("charge_spin")
+    if isinstance(cs, bool):
+        return "total charge + spin" if cs else "none: the backend passes no charge or spin"
+    return "?"
+
+
 def distil(name: str, J: dict) -> dict:
     """One ``lrbench eval`` result -> model provenance plus per-set, per-class diagnostics."""
     m = (J.get("members") or [{}])[0]
@@ -51,9 +66,9 @@ def distil(name: str, J: dict) -> dict:
         "level": (J.get("level") or {}).get("model_level", "?"),
         "mismatch": bool((J.get("level") or {}).get("mismatch")),
         "long_range": lr,
-        # "has an explicit long-range term" is the adapter's own declaration, not a guess from the name
-        "has_lr": not lr.lower().startswith(("none", "?")),
-        "charge_spin": str(ext.get("charge_spin", "?")),
+        # True / False / None ("cannot tell"), from the registries and the model file -- never a default
+        "has_lr": long_range_flag(m),
+        "charge_spin": _charge_spin(m),
         "licence": str(ext.get("licence", "?")),
         "package": f"{ext.get('package', '')} {ext.get('version', '')}".strip(),
         "wall_s": J.get("wall_s"),

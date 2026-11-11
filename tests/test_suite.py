@@ -93,3 +93,35 @@ def test_cli_takes_names():
     _resolve_names(a)
     assert a.model == "ase:lrbench.adapters:so3lr?model='so3lr-tauri-m-2606'" and a.label == "tauri"
     assert a.ensemble == "ase:lrbench.adapters:so3lr?model='so3lr',x.gguf"
+
+
+def test_long_range_flag_has_one_source_and_no_default():
+    """Every registry model declares whether it has an explicit long-range term; GGUF members read it from the GGUF
+    registry (derived from the file's keys); a member nobody can classify is None ("?"), never False ("no")."""
+    assert set(M.HAS_LR) == set(M.MODELS), "every registry model needs a has_lr entry"
+    yes = {n for n, v in M.HAS_LR.items() if v}
+    assert {"mace-polar", "mace-polar-l", "so3lr", "so3lr-tauri", "aimnet2", "maceles-off", "orbmol"} <= yes
+    assert not yes & {"mace-h", "mace-omol", "pet-omol-s", "pet-mad", "orbmol-v1", "dpa4-plus", "grace-2l"}
+    # the adapter's prose agrees with the flag wherever the prose says "none"
+    for n, m in M.MODELS.items():
+        if m.long_range.lower().startswith("none"):
+            assert not m.has_lr, n
+    from lrbench.gguf_registry import registry
+    R = registry()
+    assert all(isinstance(e.get("has_lr"), bool) for e in R["models"].values())
+    flag = M.long_range_flag
+    assert flag({"gguf_registry": {"name": "FTq14"}, "spec": "x/model.gguf"}) is True
+    assert flag({"gguf_registry": {"name": "FTB13"}, "spec": "x/model.gguf"}) is False
+    assert flag({"gguf_registry": {"name": "pet-omol-s-gguf"}}) is False
+    assert flag({"spec": M.MODELS["mace-polar"].spec}) is True
+    assert flag({"spec": M.MODELS["mace-omol"].spec}) is False
+    assert flag({"spec": "some/unregistered.gguf"}) is None
+    assert flag({"spec": "x", "has_lr": False}) is False
+
+
+def test_distil_does_not_default_lr_or_charge(tmp_path):
+    from lrbench.diagnostics import distil
+    d = distil("FTq14", {"members": [{"spec": "m.gguf", "gguf_registry": {"name": "FTq14"}, "charge_spin": True}]})
+    assert d["has_lr"] is True and d["charge_spin"] == "total charge + spin"
+    d = distil("x", {"members": [{"spec": "unknown.gguf"}]})
+    assert d["has_lr"] is None and d["charge_spin"] == "?"
