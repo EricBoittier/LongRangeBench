@@ -315,6 +315,10 @@ def score_components(r: dict) -> dict:
     s["lrs"] = None if len(have) < 2 else round(
         100.0 * (math.prod(have) ** (1.0 / len(have))), 1)
     s["n_components"] = len(have)
+    # The geometric mean is not a stylistic choice. Hanseroth and Dressler reach the same aggregation for their
+    # reference-free certificate (arXiv:2610.00585) from the same premise -- it "cannot hide a single failing axis
+    # behind many passed gates" -- having scored 64 pretrained potentials. Independent convergence on the rule is
+    # worth more than the argument for it.
     # A geometric mean over three components is not comparable with one over four: a model that was never asked
     # the response question scores as though it had passed it. Consumers must show this, so it travels with the
     # score rather than being left for them to look up.
