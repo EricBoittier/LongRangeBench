@@ -26,6 +26,7 @@ HERE = pathlib.Path(__file__).resolve().parent.parent
 NOTEBOOK = HERE / "notebooks" / "long_range_diagnostics.py"
 BEGIN = "    # --- BEGIN EMBEDDED DATA"
 END = "    # --- END EMBEDDED DATA ---"
+LIVE_BEGIN, LIVE_END = "    # --- BEGIN LIVE ONLY ---", "    # --- END LIVE ONLY ---"
 
 
 #: The loader used by a frozen notebook. It replaces the live one wholesale, so that a notebook carrying its data
@@ -82,6 +83,12 @@ def freeze(notebook: pathlib.Path, data: dict, out: pathlib.Path) -> pathlib.Pat
                       "$LRBENCH_RUNS\n", "")
     src = src.replace("# The same system as the explorer page (lrbench.palette), with the values inlined because "
                       "this notebook also", "# The project's colour system, inlined because this notebook also")
+    # blocks that read local files (the internal-only multivalent sets) exist only in the live notebook: a frozen
+    # copy carries no code that could reach for them, and no import of the package
+    while LIVE_BEGIN in src:
+        a = src.index(LIVE_BEGIN)
+        b = src.index(LIVE_END, a) + len(LIVE_END) + 1
+        src = src[:a] + "    pass  # live-only block removed from this frozen copy\n" + src[b:]
     live_score = src[src.index("    def _score(name, r):"):src.index("    def _v(t, n=3):")]
     src = src.replace(live_score, "    def _score(name, r):\n        return SCORES.get(name, {})\n\n")
 
@@ -102,14 +109,17 @@ def main(argv=None) -> int:
     ap.add_argument("--open", action="store_true", help="open the result in a browser when it is built")
     ap.add_argument("--also-static", action="store_true",
                     help="additionally write <out>-static.html: one scroll, no runtime needed")
-    ap.add_argument("--data", default=None, help="dataset dir for the chemiscope views (default: RUNS/../lr-sets)")
+    ap.add_argument("--data", default=None, help="dataset dir for the chemiscope views and the multivalent / charge-transfer "
+                    "panels (default: RUNS/../lr-sets)")
     ap.add_argument("--no-chemiscope", action="store_true", help="skip the embedded chemiscope datasets")
     a = ap.parse_args(argv)
 
     sys.path.insert(0, str(HERE / "src"))
     from lrbench.diagnostics import collect
 
-    data = collect(a.runs)
+    # the per-point tables of the multivalent / charge-transfer panels read the sets from --data; anything under
+    # $LRBENCH_PRIVATE_IONS is refused there, so internal-only data never reaches the frozen copy
+    data = collect(a.runs, data=a.data)
     if not data["results"]:
         sys.exit(f"no results in {a.runs!r}: nothing to build")
 
