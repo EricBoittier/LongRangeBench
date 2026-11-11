@@ -1,0 +1,137 @@
+{
+ "argv": [
+  "eval",
+  "--model",
+  "so3lr-tauri-l",
+  "--label",
+  "so3lr-tauri-l",
+  "--device",
+  "cuda",
+  "--save-predictions",
+  "--allow-level-mismatch",
+  "--data",
+  "data",
+  "--out",
+  "runs/canon/so3lr-tauri-l.json",
+  "--sets",
+  "dimers,families_fixedq,trimers",
+  "--normalise",
+  "--conformal"
+ ],
+ "code_commit": "a14f9f4f3b96c93da190af6d7a0888097a37ba0a",
+ "data": {
+  "groups_sha256": "8113345604eb115f3910d8ed5d55093b67bcac133a72d6c780472e5d3f861006",
+  "jsonl_sha256": "2d2061b2de7757b37369ad43242558c7234adfae46a1b1b3fa85c614979b7aec",
+  "revision": null
+ },
+ "date": "2026-11-11",
+ "evidence": "screen",
+ "label": "so3lr-tauri-l",
+ "level_mismatch": true,
+ "lrbench_version": "0.1.0",
+ "members": [
+  {
+   "backend": "ase",
+   "charge_spin": true,
+   "checkpoint": null,
+   "package": "so3lr",
+   "sha256": null,
+   "spec": "ase:lrbench.adapters:so3lr?model='so3lr-tauri-l-2606'",
+   "version": "0.2.0"
+  }
+ ],
+ "metrics": [
+  {
+   "metric": "tail fraction, ion_pair (d >= 8 A)",
+   "n": "216 pts / 36 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.861 [0.825, 0.899]"
+  },
+  {
+   "metric": "tail fraction, same_sign (d >= 8 A)",
+   "n": "66 pts / 11 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "1.007 [1.002, 1.011]"
+  },
+  {
+   "metric": "tail fraction, ion_polar (d >= 8 A)",
+   "n": "126 pts / 21 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.865 [0.771, 0.957]"
+  },
+  {
+   "metric": "tail fraction, ion_nonpolar (d >= 8 A)",
+   "n": "90 pts / 15 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.221 [-0.208, 1.007]"
+  },
+  {
+   "metric": "tail fraction, neutral_polar_control (d >= 8 A)",
+   "n": "72 pts / 12 scans",
+   "note": "slope through 0 of model dE on DFT dE; 1 = follows DFT, 0 = flat",
+   "value": "0.970 [0.915, 0.999]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, ion_pair (meV)",
+   "n": "36",
+   "note": "flat model 979.1 meV",
+   "value": "158.0 [134.4, 183.7]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, ion_pair (meV)",
+   "n": "144",
+   "note": "DFT mean |E_int| 786.6 meV",
+   "value": "800.6 [613.5, 1005.2]"
+  },
+  {
+   "metric": "offset-free dE error at 8 A, same_sign (meV)",
+   "n": "11",
+   "note": "flat model 964.6 meV",
+   "value": "8.7 [5.5, 12.7]"
+  },
+  {
+   "metric": "|E_int| error >= 12 A, same_sign (meV)",
+   "n": "44",
+   "note": "DFT mean |E_int| 786.8 meV",
+   "value": "144.8 [39.8, 295.8]"
+  },
+  {
+   "metric": "all dE slope / MAE (meV)",
+   "n": "501 / 36 groups",
+   "note": "zero model MAE 266.2 meV",
+   "value": "0.899 [0.845, 0.956] / 34.5 [20.4, 50.1]"
+  },
+  {
+   "metric": "force MAE (meV/A)",
+   "n": "1254",
+   "note": "absolute; same-level models only",
+   "value": "29.8"
+  },
+  {
+   "metric": "normalised tail eps, ion_pair (d >= 8 A)",
+   "n": "180",
+   "note": "median; 0 exact, -1 tail missing; tail error 2.59 k_BT (300 K)",
+   "value": "-0.116 [-0.188, -0.103]"
+  },
+  {
+   "metric": "normalised tail eps, same_sign (d >= 8 A)",
+   "n": "55",
+   "note": "median; 0 exact, -1 tail missing; tail error 0.06 k_BT (300 K)",
+   "value": "0.004 [0.002, 0.007]"
+  }
+ ],
+ "model": "so3lr-tauri-l",
+ "model_level": "PBE0+MBD-NL",
+ "n_failed": 0,
+ "n_scored": 1254,
+ "notes": [
+  "LEVEL MISMATCH (allowed): model PBE0+MBD-NL vs labels {'dimers': ['wB97M-V/def2-TZVPD'], 'families_fixedq': ['wB97M-V/def2-TZVPD'], 'trimers': ['wB97M-V/def2-TZVPD']}; energy metrics compare different levels of theory",
+  "per-element energy offsets (fit) added to every model energy; affects only absolute energies and composition-changing differences"
+ ],
+ "reference_level": [
+  "wB97M-V/def2-TZVPD"
+ ],
+ "schema": "lrbench-row/1",
+ "seeds": 1,
+ "set": "dimers"
+}
