@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import glob
 import json
+import math
 import os
 from typing import Optional, Tuple
 
@@ -206,3 +207,49 @@ def collect(runs: str = "runs", with_points: bool = True, max_points: int = 1200
         if "checks" in J:
             priors[os.path.basename(p)[:-5]] = distil_priors(os.path.basename(p)[:-5], J)
     return {"results": results, "priors": priors, "source": os.path.abspath(runs)}
+
+
+# ----------------------------------------------------------------------------------------- the long-range score
+#
+# One number, built only from quantities that already have a known-correct value, and never shown without its
+# parts. Each component is mapped to [0, 1] where 1 is correct and 0 is the no-long-range floor:
+#
+#     decay      s1 = clip(tail fraction, 0, 1)        the fraction of the r-dependence reproduced
+#     scale      s2 = 1 - min(|eps|, 1)                how much of the physical magnitude is captured
+#     response   s3 = clip(ddE slope, 0, 1)            the reply to a charge that is far away
+#     accuracy   s4 = 1 - min(E_8A / E_8A(flat), 1)    the offset-free error against a flat model's
+#
+# LRS = 100 (s1 s2 s3 s4)^(1/4). The *geometric* mean is the point: a model that scores zero on any one of these
+# has no long-range physics, and no amount of credit elsewhere should disguise that. An arithmetic mean would give
+# a model with no tail at all a respectable 50 for doing well on the other three.
+#
+# It is a summary of these four tests on these sets, not a ranking of models in general, and it is always printed
+# beside the bars it is made of.
+COMPONENTS = [("decay", "tail fraction"), ("scale", "|ε|"), ("response", "ΔΔE slope"),
+              ("accuracy", "8 Å error vs flat")]
+
+
+def _clip01(x):
+    return None if x is None else max(0.0, min(1.0, float(x)))
+
+
+def score_components(r: dict) -> dict:
+    """The four sub-scores and the long-range score for one distilled result, or Nones where a test did not run."""
+    S = r["sets"].get("dimers") or {}
+    c = (S.get("classes") or {}).get("ion_pair") or {}
+    ddE = (r["sets"].get("families_fixedq") or {}).get("ddE")
+    tail = (c.get("tail") or [None])[0]
+    eps = (c.get("eps") or [None])[0]
+    off8 = (c.get("off8") or [None])[0]
+    flat8 = c.get("flat8")
+    s = {
+        "decay": _clip01(tail),
+        "scale": None if eps is None else _clip01(1.0 - min(abs(eps), 1.0)),
+        "response": _clip01((ddE or [None])[0]),
+        "accuracy": None if (off8 is None or not flat8) else _clip01(1.0 - min(off8 / flat8, 1.0)),
+    }
+    have = [v for v in s.values() if v is not None]
+    s["lrs"] = None if len(have) < 2 else round(
+        100.0 * (math.prod(have) ** (1.0 / len(have))), 1)
+    s["n_components"] = len(have)
+    return s

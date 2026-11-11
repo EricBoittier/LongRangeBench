@@ -342,10 +342,10 @@ def _(P, R, SOURCE, mo):
         mo.md(
             """
             - [Ranking](#ranking)
-            - [By class](#byclass)
-            - [The three tests](#tests)
-            - [Where the error lives](#explore)
-            - [Atoms and charges](#atoms)
+            - [Decay by class](#byclass)
+            - [The priors](#tests)
+            - [Structure by structure](#explore)
+            - [Charges](#atoms)
             - [Physical priors](#priors)
             - [Caveats](#caveats)
             """
@@ -399,6 +399,13 @@ def _(R, SOURCE, mo):
 
 @app.cell
 def _(CLS, DDE_SET, R, SET, mo, pd):
+    import importlib
+
+    try:   # the same score the explorer page uses, so the two can never disagree
+        _score = importlib.import_module("lrbench.diagnostics").score_components
+    except Exception:
+        _score = None
+
     def _v(t, n=3):
         return None if not t or t[0] is None else round(t[0], n)
 
@@ -410,8 +417,12 @@ def _(CLS, DDE_SET, R, SET, mo, pd):
         _c = _S["classes"].get(CLS, {})
         _oracle = "oracle" in _name
         _e = _v(_c.get("eps"))
+        _sc = _score(_r) if _score else {}
+        _rd = lambda k: None if _sc.get(k) is None else round(_sc[k], 2)  # noqa: E731
         _rows.append({
             "model": _r["label"][:38],
+            "LRS": _sc.get("lrs"), "decay": _rd("decay"), "scale": _rd("scale"),
+            "response": _rd("response"), "accuracy": _rd("accuracy"),
             "long range": "ceiling" if _oracle else ("yes" if _r["has_lr"] else "no"),
             "tail fraction": _v(_c.get("tail")), "ε": _e,
             "ΔΔE slope": _v((_r["sets"].get(DDE_SET) or {}).get("ddE"), 4),
@@ -419,13 +430,21 @@ def _(CLS, DDE_SET, R, SET, mo, pd):
             "F MAE (meV/Å)": _v(_S.get("F_mae"), 1),
             "level": _r["level"][:22] + ("  ⚠" if _r["mismatch"] else ""),
             "scans": _c.get("n_scans"),
-            "_k": (0 if _oracle else 1, abs(_e) if _e is not None else 9e9),
+            "_k": (0 if _oracle else 1, -(_sc.get("lrs") if _sc.get("lrs") is not None else -1)),
         })
     _df = (pd.DataFrame(_rows).sort_values("_k").drop(columns="_k").reset_index(drop=True)
            if _rows else pd.DataFrame())
     mo.vstack([
-        mo.md(f'<a id="ranking"></a>\n## The ranking\n\n{SET} · {CLS} · ordered by |ε|, the dimensionless measure '
-              "of how much of the physical tail is missing. Click any column to re-sort."),
+        mo.md(r"""<a id="ranking"></a>
+## The long-range score
+
+$$\mathrm{LRS} = 100\\left(\\prod_j s_j\\right)^{1/n}, \\qquad s_j \\in [0,1],\; 1 = \\text{correct}$$
+
+Four quantities that each have a value right by construction, mapped so **1** is correct and **0** is the
+no-long-range floor: the fraction of the $r$-dependence reproduced, how much of the physical magnitude is
+captured, the reply to a distant charge, and the offset-free error against what a flat model would score. The
+*geometric* mean is the point — a model scoring zero on any one of them has no long-range physics, and credit
+elsewhere should not disguise it."""),
         mo.ui.table(_df, selection=None, page_size=25) if not _df.empty else mo.md("_no results yet_"),
         mo.md("<small style='color:#767676'>⚠ trained at a different level of theory from the reference data: read "
               "the dimensionless columns, not the energies.</small>"),
@@ -443,10 +462,15 @@ def _(R, SET, matrix, mo):
             _tail[(_r["label"][:26], _c)] = _d["tail"][0]
             _eps[(_r["label"][:26], _c)] = _d["eps"][0]
     mo.vstack([
-        mo.md('<a id="byclass"></a>\n## Every class at once\n\nA model can have a perfect ion-pair tail and nothing '
-              "for neutral polar pairs, so the classes are shown together rather than one at a time. Shading is "
-              "distance from the correct value; the number is in every cell, so nothing depends on reading a "
-              "colour."),
+        mo.md(r"""<a id="byclass"></a>
+## The decay exponent is not one number
+
+$$E_{\rm int}(r) \sim r^{-1}\ \text{(ion–ion)},\quad r^{-2}\ \text{(ion–dipole)},\quad
+r^{-3}\ \text{(dipole–dipole)}$$
+
+Each class has its own asymptotic law, so a model can reproduce one and miss another: a perfect ion-pair tail
+says nothing about neutral polar pairs. Shading is distance from the correct value, and the number is in every
+cell, so nothing rests on reading a colour."""),
         matrix(_models, _classes, _tail, good=1.0, floor=0.0, title="Tail fraction by class",
                subtitle="1 = follows the reference, 0 = flat") or mo.md("_no data_"),
         matrix(_models, _classes, _eps, good=0.0, floor=-1.0, title="Normalised error ε by class",
@@ -559,12 +583,12 @@ def _(CLS, DDE_SET, R, SET, demo_ddE, demo_tail, dotplot, g_slider, mo, rc2_slid
     ])
 
     mo.vstack([
-        mo.md('<a id="tests"></a>\n## The three tests\n\nEach opens into its definition and a toy model you drive, '
-              "so the number in the table has a mechanism behind it."),
+        mo.md('<a id="tests"></a>\n## The priors, one at a time\n\nEach opens into the physical statement it '
+              "tests and a toy model you drive, so the number in the table has a mechanism behind it."),
         mo.accordion({
-            "### Tail fraction — does the interaction keep falling off?": tail_panel,
-            "### ε — how much of the physical tail is missing?": eps_panel,
-            "### ΔΔE — does a distant charge change the local energy?": ddE_panel,
+            r"### Asymptotic decay — does $E_{\rm int}$ keep falling as $r^{-1}$?": tail_panel,
+            r"### The physical scale — what fraction of $\Delta E^{\rm phys}$ is missing?": eps_panel,
+            r"### Fixed-charge response — $\Delta\Delta E \propto R^{-2}$": ddE_panel,
         }, multiple=True),
     ])
     return
@@ -612,10 +636,10 @@ const B = "__BLOB__", S = __SETTINGS__;
 def _(VIEWS, chemiscope_view, mo):
     _global = [v for v in VIEWS if not v["key"].endswith("-atoms")]
     mo.vstack(
-        [mo.md('<a id="explore"></a>\n## Where the error lives\n\nEvery scored structure, its reference value and '
-               "each model's answer on it. These views start pointed at a question and then they are yours: "
-               "chemiscope's own controls change the axes, the colour, the point size and the atom colouring, so "
-               "any property here can be plotted against any other. Click a point to see the pair itself.")]
+        [mo.md('<a id="explore"></a>\n## Structure by structure\n\nEvery scored structure, its reference value '
+               "and each model's answer on it. A class is an identity, so it is carried by marker shape; a signed "
+               "error by a diverging palette centred on zero; a magnitude by a sequential ramp. Each view starts "
+               "pointed at a question and is then yours.")]
         + [x for v in _global for x in (mo.md(f"**{v['title']}** — {v['prose']}"), chemiscope_view(v))]
         if _global else
         [mo.md('<a id="explore"></a>\n## Where the error lives\n\n_no chemiscope datasets in this build — run '
@@ -628,11 +652,14 @@ def _(VIEWS, chemiscope_view, mo):
 def _(VIEWS, chemiscope_view, mo):
     _atomic = [v for v in VIEWS if v["key"].endswith("-atoms")]
     mo.vstack(
-        [mo.md('<a id="atoms"></a>\n## Atoms and charges\n\nThe same structures with the map switched to '
-               "**per-atom** properties — one point per atomic environment, so selecting one highlights that atom "
-               "in the structure. This is where the long-range story becomes physical: the DFT Löwdin charge is "
-               "what the electrons actually do, the formal charge is what a model is *told*, and the gap between "
-               "them is what every charge-equilibration scheme is trying to predict.")]
+        [mo.md(r"""<a id="atoms"></a>
+## Charge conservation and the Löwdin reference
+
+$$\sum_{i \in f} q_i = Q_f, \qquad \mu = \sum_i q_i \mathbf{r}_i$$
+
+One point per atomic environment, so selecting one highlights that atom. Formal charges are integers by
+construction; the real charges spread around them, and that spread is the polarisation and charge transfer a
+model has to reproduce.""")]
         + [x for v in _atomic for x in (mo.md(f"**{v['title']}** — {v['prose']}"), chemiscope_view(v))]
         if _atomic else [mo.md('<a id="atoms"></a>\n## Atoms and charges\n\n_no atomic dataset in this build_')]
     )
