@@ -222,6 +222,8 @@ def cmd_eval(args):
         # reported as though it had been scored on everything. Say so loudly, once, per member and per set.
         for s_, per_set in per.items():
             n_bad = sum(1 for p_ in per_set.values() if p_.get("energy") is None)
+            fl = out.setdefault("failures", {}).setdefault(s_, {"n_structures": len(per_set), "n_failed": 0})
+            fl["n_failed"] = max(fl["n_failed"], n_bad)
             if n_bad:
                 frac = n_bad / max(1, len(per_set))
                 msg = (f"{spec}: {n_bad} of {len(per_set)} predictions failed on {s_} ({frac:.0%}); those "
@@ -231,6 +233,9 @@ def cmd_eval(args):
                 err = next((p_.get("error") for p_ in per_set.values() if p_.get("error")), None)
                 if err:
                     out["notes"].append(f"{spec}: first error on {s_}: {err}")
+    # A run with failed structures is marked incomplete; each set block also carries its failed count
+    # (sets.<set>.failures), which `lrbench results` turns into the row's n_failed.
+    out["complete"] = not any(v["n_failed"] for v in out.get("failures", {}).values())
     off = element_offsets(data, preds, args.element_offsets)
     if off:
         apply_offsets(data, preds, off)
@@ -254,6 +259,8 @@ def cmd_eval(args):
             out["sets"][s] = props_score(ds, P)
         else:
             out["sets"][s] = SetScorer(ds, P, n_boot=args.n_boot, conformal_on=args.conformal, normalise=norm).run()
+        if s in out.get("failures", {}):
+            out["sets"][s]["failures"] = out["failures"][s]["n_failed"]
         if args.save_predictions:
             out["sets"][s]["predictions"] = {t: [None if m[s][t].get("energy") is None else m[s][t]["energy"]
                                                  for m in preds] for t in preds[0][s]}

@@ -321,7 +321,10 @@ def resolve(spec: str) -> str:
     if not spec or spec.startswith(("ase:", "oracle:", "mlipcpp-capi:")) or spec.endswith((".gguf", ".pt")):
         return spec
     m = lookup(spec)
-    return m.spec if m else spec
+    if m:
+        return m.spec
+    from .gguf_registry import resolve as gguf_resolve  # mlip.cpp GGUFs bound to their build (configs/gguf_models.json)
+    return gguf_resolve(spec) or spec
 
 
 def expand(names: str) -> List[str]:

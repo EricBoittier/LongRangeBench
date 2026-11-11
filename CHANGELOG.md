@@ -23,6 +23,18 @@ Notable changes to LongRangeBench. Newest first.
     named-model table, which had fallen behind the registry.
   - A test fails if any of them is stale.
 - `lrbench eval` records `code_commit`, and hashes the checkpoint an `ase:` adapter spec names (`path=` / `model=`).
+- `lrbench.gguf_registry` and `configs/gguf_models.json`: named mlip.cpp GGUF models, each bound to the mlip.cpp
+  commit it was trained with, with the sha256 of its weights and its companion GGUFs (`q.gguf`, ...). A registered
+  name runs with its own build. A binary from another commit, a binary missing a metadata key the build of record
+  reads, or a missing or changed companion is refused (`LRBENCH_ALLOW_BINARY_MISMATCH=1` records it instead). The
+  helpers are `check`, `smoke` and `add`.
+- Result JSON: `failures` (per set: structures, failed), `sets.<set>.failures` (the failed count, read by
+  `results`) and `complete`.
+
+### Fixed
+
+- `mlipcpp-eval` frames with a non-finite energy or force count as failed predictions. Before, they were scored as
+  numbers.
 
 ## 0.1.0 — 2026-11-11
 
