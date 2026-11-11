@@ -28,6 +28,18 @@ def est(v) -> Triple:
     return (v, None, None) if isinstance(v, (int, float)) else (None, None, None)
 
 
+#: The ΔΔE family that *is* task B1 — the fixed-charge quartet of PROTOCOL_B: two local arrangements, one charge
+#: far away, differenced twice so composition and total charge cancel.
+#:
+#: Naming it is the point. ``families_fixedq`` holds several ΔΔE families whose reference magnitudes differ by more
+#: than an order of magnitude, and a single slope fitted through the pooled points is dominated by the few largest
+#: and describes none of them. Measured on the real runs, models that predict *nothing* on the 90-group fixed-charge
+#: family (median |ΔΔE| of 0.000–0.001 meV, per-family slope 0.0000) scored a pooled slope of 0.43–0.85, while two
+#: models that genuinely respond (per-family slope 0.87 and 1.03) were pulled *down* to 0.72 and 0.77. The pooled
+#: value is therefore unusable as the response component in either direction.
+DDE_RESPONSE_FAMILY = "wire_disc_near_vs_far"
+
+
 def distil(name: str, J: dict) -> dict:
     """One ``lrbench eval`` result -> model provenance plus per-set, per-class diagnostics."""
     m = (J.get("members") or [{}])[0]
@@ -59,6 +71,12 @@ def distil(name: str, J: dict) -> dict:
             "n_failed": (E.get("n_failed") or 0) + (S.get("n_prediction_errors") or 0),
             "ddE": est((S.get("ddE") or {}).get("slope")),
             "ddE_mae": est((S.get("ddE") or {}).get("mae")),
+            # every family separately, so a pooled number can never be the only one available
+            "ddE_by_family": {k: est(v.get("slope"))
+                              for k, v in (((S.get("ddE") or {}).get("by_family")) or {}).items()},
+            "ddE_response": est((((S.get("ddE") or {}).get("by_family")) or {})
+                                .get(DDE_RESPONSE_FAMILY, {}).get("slope")),
+            "ddE_response_family": DDE_RESPONSE_FAMILY,
             "F_mae": est(((S.get("energy_force") or {}).get("all") or {}).get("F_mae_meV_A")),
             "E_mae": est(((S.get("energy_force") or {}).get("all") or {}).get("E_mae_meV_atom")),
             "charges_skipped": charges.get("skipped") if isinstance(charges, dict) else None,
@@ -244,7 +262,11 @@ def score_components(r: dict) -> dict:
     """The four sub-scores and the long-range score for one distilled result, or Nones where a test did not run."""
     S = r["sets"].get("dimers") or {}
     c = (S.get("classes") or {}).get("ion_pair") or {}
-    ddE = (r["sets"].get("families_fixedq") or {}).get("ddE")
+    # The response component is the fixed-charge family alone, never the pooled slope across families. If that
+    # family did not run there is no response measurement, and None (which marks the score partial) is the honest
+    # answer -- falling back to the pooled value would reinstate exactly the error this avoids.
+    fq = r["sets"].get("families_fixedq") or {}
+    ddE = fq.get("ddE_response") or (fq.get("ddE_by_family") or {}).get(DDE_RESPONSE_FAMILY)
     tail = (c.get("tail") or [None])[0]
     eps = (c.get("eps") or [None])[0]
     off8 = (c.get("off8") or [None])[0]

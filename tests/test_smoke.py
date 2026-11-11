@@ -191,3 +191,33 @@ def test_normalise(datadir, tmp_path):
     assert "normalised tail eps" in markdown([json.load(open(flat))])
     from lrbench.normalise import energy_factor
     assert abs(1 / energy_factor("kBT", 300) - 25.852) < 0.01
+
+
+def test_response_component_is_the_fixed_charge_family_not_a_pooled_slope():
+    """A model that is flat on task B1 must score zero response, whatever other ΔΔE families do.
+
+    ``families_fixedq`` holds several ΔΔE families whose reference magnitudes differ by more than an order of
+    magnitude. A single slope fitted through the pooled points is dominated by the few largest, so on the real runs
+    models whose median predicted ΔΔE was 0.000–0.001 meV over the 90-group fixed-charge family — flat, no response
+    at all — collected pooled slopes of 0.43 to 0.85, while two models that genuinely respond were pulled *down*.
+    The component therefore reads the named family and nothing else.
+    """
+    from lrbench.diagnostics import DDE_RESPONSE_FAMILY, score_components
+
+    def result(pooled, per_family):
+        return {"sets": {"dimers": {"classes": {"ion_pair": {
+                    "tail": [0.9], "eps": [-0.1], "off8": [10.0], "flat8": 100.0}}},
+                "families_fixedq": {"ddE": (pooled, None, None),
+                                    "ddE_by_family": {k: (v, None, None) for k, v in per_family.items()}}}}
+
+    flat = result(0.85, {DDE_RESPONSE_FAMILY: 0.0, "zwit_ene_rel48": 4.5})
+    assert score_components(flat)["response"] == 0.0, "a pooled slope must not buy credit for a flat model"
+    assert score_components(flat)["lrs"] == 0.0, "no response at all means no long-range score"
+
+    real = result(0.72, {DDE_RESPONSE_FAMILY: 1.03, "zwit_ene_rel48": 1.75})
+    assert score_components(real)["response"] == 1.0, "a responding model must not be dragged down by pooling"
+    assert score_components(real)["lrs"] > 0
+
+    # the family missing is "not measured", not "passed": the score says so by being partial
+    absent = score_components(result(0.9, {"zwit_ene_rel48": 4.5}))
+    assert absent["response"] is None and absent["partial"] is True

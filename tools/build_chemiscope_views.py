@@ -32,7 +32,7 @@ import numpy as np
 HERE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "src"))
 
-from lrbench.diagnostics import score_components  # noqa: E402  (after the path insert)
+from lrbench.diagnostics import DDE_RESPONSE_FAMILY, score_components  # noqa: E402  (after the path insert)
 from lrbench import palette as pal  # noqa: E402
 
 MEV = 1.0e3
@@ -1047,10 +1047,13 @@ TASK_ROWS = [
 KEY = """<section id="key">
 <p class="eyebrow">notation</p>
 <h2>Model colour key</h2>
+<details class="disc">
+<summary>the family hues, and how members of a family are told apart</summary>
 <p class="sub">Models are grouped by family, which shares a hue; members of a family are told apart by marker.
 The same colours are used wherever a model appears. Hue carries the family and shape carries the member, so
 neither channel is load-bearing on its own.</p>
 <div class="keywrap">{families}</div>
+</details>
 </section>
 """
 
@@ -1106,7 +1109,7 @@ details.disc > summary { font-family:var(--sans); font-size:13px; font-weight:60
 details.disc > summary::-webkit-details-marker { display:none; }
 details.disc > summary::before { content:"+"; position:absolute; left:4px; top:6px; font-family:var(--mono);
   font-size:14px; color:var(--mut); }
-details.disc[open] > summary::before { content:"\2212"; }
+details.disc[open] > summary::before { content:"\\2212"; }   /* U+2212 minus, doubled: a non-raw quote would read it as an octal escape */
 details.disc > summary:hover { color:var(--fg); }
 details.disc[open] > summary { color:var(--fg); }
 details.disc.proto > summary { border-top:none; }
@@ -1155,7 +1158,10 @@ table.rank td[data-k].tint { border-radius:2px; }
 #: The interactive layer. It owns three things the static page could not do: the score is computed here rather than
 #: baked in, so taking a task out or re-weighting a term is answerable without a rebuild; every number gets a wash
 #: from the ramp its column's *kind* implies; and the formula re-renders to match whatever is currently being asked.
-EXTRA_JS = """
+# NOTE: raw string. Every backslash below is LaTeX on its way into a JS string literal, so it must survive
+# import intact; a non-raw quote would strip one layer and KaTeX would be handed "mathrm" and a carriage
+# return instead of "\\mathrm" and "\\right".
+EXTRA_JS = r"""
 (() => {
   const SEQ2 = PAL.seq, DIV2 = PAL.div;
   const mix = (stops, t) => {
@@ -1567,7 +1573,8 @@ def main(argv=None) -> int:
             {"k": "lr", "t": "LR term"},
             {"k": "tail", "t": "tail", "h": "tail fraction: 1 follows the reference, 0 flat"},
             {"k": "eps", "t": "ε", "h": "0 exact, −1 the whole tail missing"},
-            {"k": "ddE", "t": "ΔΔE", "h": "fixed-charge response slope"},
+            {"k": "ddE", "t": "ΔΔE", "h": "fixed-charge response slope, on the B1 family alone (1 = follows the "
+                                          "reference, 0 = no response); never pooled across ΔΔE families"},
             {"k": "off8", "t": "8 Å MAE", "h": "offset-free error at 8 Å, meV"},
             {"k": "far12", "t": "≥12 Å", "h": "absolute E_int error beyond 12 Å, meV"},
             {"k": "fmae", "t": "F MAE", "h": "force MAE, meV/Å"},
@@ -1579,8 +1586,10 @@ def main(argv=None) -> int:
             c = S["classes"].get("ion_pair", {})
             g = lambda tp, n=3: None if not tp or tp[0] is None else round(tp[0], n)  # noqa: E731
             eps = g(c.get("eps"))
-            # the fixed-charge quartets live in their own set, not in dimers
-            ddE = r["sets"].get("families_fixedq", {}).get("ddE")
+            # The fixed-charge quartets live in their own set, not in dimers -- and the column must show the same
+            # quantity the score uses: the B1 family alone, not the slope pooled over families of different scale.
+            _fq = r["sets"].get("families_fixedq", {})
+            ddE = _fq.get("ddE_response") or (_fq.get("ddE_by_family") or {}).get(DDE_RESPONSE_FAMILY)
             sc = score_components(r)
             st = pal.style_of(name, list(_d["results"]))
             rank["rows"].append({
