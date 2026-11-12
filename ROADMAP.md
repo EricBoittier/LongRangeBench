@@ -42,6 +42,89 @@ Worth stating first, because they shape every decision below.
       upstream releases (adapters rot silently otherwise)
 - [ ] **later** — A docs site built from `docs/` rather than a folder of Markdown
 
+## Near term — checks a model cannot pass by accident (next)
+
+**Why.** In November 2026 an LR model with a link-state mixture (PET-OMol-S plus a long-range head whose Coulomb
+term is masked by a backbone link-state mixture; internal name FC3b) passed every check this suite runs on it, yet
+it had defects found only outside the suite:
+
+- **Wrong-sign mean force on NH₄⁺···Gdm⁺.** Under thermal sampling at 8.5 Å centre-of-mass separation, the mean
+  force is −0.25 ± 0.09 and −0.15 ± 0.08 eV/Å for two training seeds. Bare Coulomb is +0.20 eV/Å. All 8 of 8
+  replicas have the wrong sign.
+- **The checks it passed:** `conservativeness` (median 0.010), `seam`, `energy_force`, `nve_short`, and its own
+  single-orientation rigid scan (+0.19 eV/Å at that separation).
+- **Cause: a static, orientation-dependent error.** In a 200-orientation rigid scan, a backbone link joins the two
+  cations in 68 % of orientations at 8.5 Å, where the link switches on. Linked orientations average −0.13 /
+  −0.06 eV/Å and unlinked ones +0.19. About half of all orientations have the wrong sign. The error is the
+  derivative of the link mask acting on the masked Coulomb energy, so it is a property of the energy surface, not
+  of the dynamics.
+- **One orientation and a median cannot see it.** The fine scans use one orientation and score medians. Every
+  median, of the conservativeness ratio and of the scan force, lands on the unlinked majority or on a scan that
+  happens to stay unlinked.
+
+**The same models show defects that no check here exercises:**
+
+- **A localised seam in a model without the mixture (FTq13).** Its NH₄⁺···Gdm⁺ rigid scan at 11–11.5 Å
+  centre-of-mass separation has f·r²/(k q_A q_B) jumping to −12.6 and +12.7, against 1 for Coulomb. Thermal
+  integration there leaves the plotted range at 10.5 and 12.75 Å. A median over a scan does not see a spike
+  this narrow.
+- **Code path and topology.**
+  - In a 5k-atom open droplet, the energy jumps by ±0.49 eV whenever a molecule splits off. The cause: the
+    model's general path sums the energy in fp32 and its cached path in double. They differ by up to 0.19 eV on
+    the same 3,000-atom geometry, while the forces agree.
+  - Two Na⁺(H₂O)ₙ ··· Cl⁻(H₂O)ₙ droplets (902 atoms) drift by +0.75 [0.66, 0.85] meV/ps/atom (FTq13). The drift
+    arrives as repeated ±0.1 eV single steps.
+  - Nothing in this suite evaluates more than two fragments, the same structure through two code paths, or a
+    fragment leaving a cluster.
+- **Condensed phase.** In water at 1.00 and 0.30 g/cm³, in 1 M NaCl(aq) and in rock salt, the link graph
+  percolates and the model's long-range term is exactly zero. No set here would notice that.
+
+**Proposals.** Each has its own issue. They run in the order **A → B → C → D**, while the Phase 0/1 release work
+continues alongside.
+
+- [ ] **A (1 + 5)**, **next**: **oracle-scored orientation sampling, plus hardening of the existing checks**
+  ([#28](https://github.com/EricBoittier/LongRangeBench/issues/28), [#29](https://github.com/EricBoittier/LongRangeBench/issues/29)).
+  - **Orientation sets.**
+    - Sample hundreds of rigid orientations per dimer pair at centre-of-mass separations of 10–12 Å and
+      beyond, scored against `oracle:multipole`. The oracle gives a reference for any orientation without new
+      DFT.
+    - Add thermal snapshots.
+  - **Metrics.** Wrong-sign fraction of the inter-fragment force, and the q95 and maximum error, not only the
+    median.
+  - **Adversarial search.**
+    - Maximise |F_model − F_oracle| over rigid-body orientation and distance.
+    - Output the worst geometry as extxyz, so a failure arrives with its witness.
+  - **8–10 Å.** The oracle is validated against DFT on a subset first. DFT is added only where the two disagree.
+  - **Hardening (5).**
+    - Report q95 and max per class beside every median in `conservativeness`, `seam` and `virial_tail`.
+    - `nve_short` with molecular ions, several orientations, and launches through switching windows. It scores
+      the largest single-step energy jump as well as the drift.
+    - `energy_force` and `seam` on the proposal-1 orientation sets.
+- [ ] **B (3)**: **reference-free topology and many-fragment checks**
+  ([#30](https://github.com/EricBoittier/LongRangeBench/issues/30)).
+  - **Dilute ion gas.** k = 2…20 charged fragments, each at least 12 Å from the others. The exact energy is the sum
+    of the monomer energies plus the Coulomb sum.
+  - **Split/merge continuity.** A fragment pulled out of a cluster, and two droplets merging. The energy must be
+    continuous and the work must close.
+  - **Code-path consistency.** The same structure must give the same answer whether evaluated alone, with a
+    distant spectator, batched or permuted.
+- [ ] **C (2)**: **a thermal mean-force task** ([#31](https://github.com/EricBoittier/LongRangeBench/issues/31)).
+  - **Systems.** NH₄⁺···Gdm⁺ plus one opposite-charge pair.
+  - **Protocol.** 7 constrained windows (6.6, 7.2, 7.9, 8.5, 9.2, 12.75 and 15 Å centre-of-mass separation),
+    1 ps each, forward and backward sweeps, 2 seeds.
+  - **Scored.** Mean force against Coulomb, sweep hysteresis, path-work residual and temperature.
+  - **Cost.** About 20 minutes per model. It is the test that found the defect above, and it needs no DFT.
+- [ ] **D (4)**: **condensed phase with known physics** ([#32](https://github.com/EricBoittier/LongRangeBench/issues/32)).
+  - **Finite-size slope.** The energy of a charged periodic system, against −ξq²/(2εL).
+  - **Stillinger–Lovett.** The small-k behaviour of S_ZZ(k).
+  - **Internal consistency of ε.** The finite-size slope against dipole fluctuations.
+  - **Charged slab.** The field across it.
+- [ ] **Protocol v1, the public data release and the contamination declaration (Phase 0/1)**
+  ([#33](https://github.com/EricBoittier/LongRangeBench/issues/33)).
+  - **v1 freeze.** Freeze v1 once A and B have landed, so that their thresholds are part of v1 rather than the
+    first reason for a v2.
+  - **Data release.** The HuggingFace dataset and DOI do not depend on A–D and can go first.
+
 ## Phase 1 — results are comparable (next)
 
 A benchmark whose metric definitions drift is a benchmark whose numbers cannot be compared across papers. The fix is
@@ -81,10 +164,14 @@ Every hand-maintained leaderboard dies. This one should be generated from files 
 The current sets cover vacuum dimers, fixed-charge wires, trimers, charge parity and electrostatic properties. The
 obvious gaps, each of which needs its own oracle and pathology audit before it is worth scoring:
 
-- [ ] Condensed phase: periodic boxes where truncation and Ewald disagree, and the dielectric response that follows
+- [ ] Condensed phase: periodic boxes where truncation and Ewald disagree, and the dielectric response that follows.
+      The first, reference-free part of it is proposal **D** above: finite-size slope, Stillinger–Lovett, ε
+      consistency, and the field across a charged slab
 - [ ] Interfaces and slabs; solvated ions beyond the first shell
-- [ ] Many-body beyond three fragments; cooperative polarisation
-- [ ] Dynamics-level consequences: NVE energy drift, PMFs for ion pairing from short MD
+- [ ] Many-body beyond three fragments; cooperative polarisation. The reference-free dilute ion gas and the
+      split/merge checks are proposal **B** above; referenced many-body sets follow them
+- [ ] Dynamics-level consequences: NVE energy drift, PMFs for ion pairing from short MD. The thermal mean-force
+      task is proposal **C** above. Longer PMFs, solvated ion pairs and drift at scale follow from it
 - [ ] Element and charge-state coverage: transition metals, multiply charged species, open shells
 - [ ] Response to an external field, beyond the finite-field polarisabilities already in `props`
 
