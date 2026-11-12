@@ -32,7 +32,7 @@ Worth stating first, because they shape every decision below.
       provenance and a Zenodo DOI. Further sets to follow from the CSCS runs.
 - [x] Converters for the public external sets: GSCDB137 noncovalent (45 subsets), NCI Atlas, the BFDB biodimers and
       the dimer overlays, each recording its own licence, reference level and checksums
-- [x] `lrbench priors`: twenty pass/fail checks of physical, model and data assumptions, with planted-defect tests
+- [x] `lrbench priors`: twenty-four pass/fail checks of physical, model and data assumptions, with planted-defect tests
 - [ ] **next** — `lrbench fetch <set>`: wrap those converters so the download, the checksum and the conversion are
       one command instead of a paragraph of instructions
 - [x] Make the level-of-theory refusal fire for reference-only sets: records referenced by a group with a `ref` count,

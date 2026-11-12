@@ -6,6 +6,8 @@ Optional probe inputs (extxyz; builders in tools/priors_*.py):
   --seen FILE        seen_by JSON (tools/seen_by.py; {"seen_by": {"dimers": {id: [sources]}}})
   --train-coverage   JSON list / JSONL of training rows with g (or d) and qa/qb (or cls)
   --baseline FILE    an earlier priors JSON (paired checks, e.g. IP damage vs PET-OMol-S)
+  --moments FILE     fragment DFT moments (frags.json of the dimer build; $LRBENCH_FRAG_MOMENTS), for the
+                     oracle-scored orientation checks
 """
 from __future__ import annotations
 
@@ -147,6 +149,12 @@ def cmd_priors(args):
               train_coverage=load_coverage(args.train_coverage) if args.train_coverage else None, ref_backend=ref,
               baseline=json.load(open(args.baseline)) if args.baseline else None, cutoff=cut, declared_local=local,
               opts={"cutoff_source": src, "ref_model": args.ref_model, **ctx_opts})
+    mom = args.moments or os.environ.get("LRBENCH_FRAG_MOMENTS")
+    if mom:
+        from ..oracle import load_frags
+        ctx.moments = load_frags(mom)
+    ctx.opts.update(orient_n=args.orient_n, orient_seed=args.orient_seed, scan_orients=args.scan_orientations,
+                    orient_out=args.orient_out)
     if args.noise_rel is not None:
         ctx.noise_rel = args.noise_rel
     if args.max_pairs:
@@ -156,7 +164,8 @@ def cmd_priors(args):
            "backend": be.info(), "model_level": ctx.model_level, "cutoff_A": cut, "cutoff_source": src,
            "declared_local": local, "data": ds.source if ds is not None else None,
            "inputs": {k: getattr(args, k) for k in ("ipea", "sep_frames", "seen", "train_coverage", "baseline",
-                                                    "ref_model")},
+                                                    "ref_model", "moments", "orient_n", "orient_seed",
+                                                    "scan_orientations")},
            "env": {k: os.environ.get(k) for k in ("GGML_CUDA_NO_TF32", "MLIPCPP_PAD_EXACT", "MLIPCPP_TF32",
                                                    "MLIPCPP_RAGGED", "NVIDIA_TF32_OVERRIDE")}}
     res["checks"] = run(ctx, names, log=lambda s: print(s, file=sys.stderr, flush=True))
@@ -192,6 +201,12 @@ def add_parser(sub, common):
     p.add_argument("--cutoff", type=float, help="model cutoff (A) when the backend does not report one")
     p.add_argument("--noise-rel", type=float, help="relative float floor of total energies (default 1.2e-7, fp32)")
     p.add_argument("--max-pairs", type=int, default=0, help="limit the scan templates (smoke runs)")
+    p.add_argument("--moments", help="fragment DFT moments, frags.json (oracle-scored orientation checks)")
+    p.add_argument("--orient-n", type=int, default=128, help="random rigid orientations per pair (orientation_far)")
+    p.add_argument("--orient-seed", type=int, default=2026)
+    p.add_argument("--orient-out", help="extxyz of the worst geometry per pair and band (orientation_adversarial)")
+    p.add_argument("--scan-orientations", type=int, default=0,
+                   help="also run seam / energy_force / conservativeness on K random rigid orientations per pair")
     common(p)
     p.set_defaults(func=cmd_priors)
     return p

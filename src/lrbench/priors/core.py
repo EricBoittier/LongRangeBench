@@ -69,6 +69,7 @@ class Ctx:
     train_coverage: Optional[List[dict]] = None
     ref_backend: object = None
     baseline: Optional[dict] = None  # an earlier priors result JSON (paired checks)
+    moments: Optional[dict] = None  # fragment DFT moments (oracle.load_frags) for the orientation checks
     cutoff: Optional[float] = None
     declared_local: Optional[bool] = None
     opts: dict = field(default_factory=dict)

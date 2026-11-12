@@ -6,6 +6,13 @@ Notable changes to LongRangeBench. Newest first.
 
 ### Added
 
+- `lrbench priors`: `orientation_far` and `orientation_adversarial`, oracle-scored orientation sampling with an
+  adversarial search for witness geometries, plus the `OrientPatch` planted defect.
+  - Needs `--moments`. Options: `--orient-n`, `--orient-out` and `--scan-orientations`.
+  - `conservativeness`, `virial_tail` and `seam` now report q95 and max beside their medians. Their rules are
+    unchanged.
+  - The synthetic dimer set gains a charged molecular pair, `NaW_Cl`.
+  - See [docs/priors.md](docs/priors.md#orientations-and-the-tail-of-the-distribution).
 - `results/`: committed result rows (`results/<set>/<model>.json`, schema `lrbench-row/1`). Each row carries:
   - the model's registry name;
   - the weights sha256, or the package version;

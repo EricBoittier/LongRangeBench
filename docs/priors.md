@@ -1,7 +1,7 @@
 # Priors and assumptions (`lrbench priors`)
 
 `lrbench eval` answers *how wrong* a model is. `lrbench priors` answers a different question: **does the model
-violate something that cannot be true of any correct potential?** Twenty checks, each with a pass/fail rule fixed
+violate something that cannot be true of any correct potential?** Twenty-four checks, each with a pass/fail rule fixed
 before the run, in three families:
 
 - **physical** — a law or asymptotic form the true energy surface obeys (far-field exponent, separability, F = −dE/dR,
@@ -43,6 +43,8 @@ passed.
 | `far_field_exponent` | physical | far-field asymptotics: E_int ~ r^-n with n = 1 ion-ion, 2 ion-dipole, 3 dipole-dipole (ion + nonpolar mixes 3 and 4) | per scan, fit n from log\|dE/dr\| on the canonical 10-25 A points (model and DFT on the same geometries); a scan passes if \|n_model - n_DFT\| <= 0.5 with the same sign of dE; a model whose differences are all below its numerical floor where DFT's are not has a missing tail (fail). The check fails if any non-CT class has a pass fraction < 0.8 among DFT-evaluable scans |
 | `virial_tail` | physical | the virial relation in the tail: for E_int ~ A/r^p the model's own force and energy satisfy r F_r / E_int = p, so p = 1 for a Coulomb tail. No reference enters it | fine-scan points at d >= 12 A with \|E_int\| above the model floor and \|F\| > 1e-4 eV/A: per class with >= 4 such points, \|median p - 1\| <= 0.5 for the classes where *both* fragments are charged (monopole-monopole). p is reported but not scored for ion-neutral classes, whose leading terms are charge-dipole (p = 2) and charge-induced-dipole (p = 4). A class whose points all fall below the floors is **not_evaluable, not a pass**: there is no tail to measure |
 | `conservativeness` | model | a conservative potential: F_B.u = -dE_int/dr at every separation, a property of the model alone | central differences of E_int(r) on the fine scans against the reported axial force, median \|F + dE/dr\| / max(\|F\|, 1e-4) <= 0.1 in each of d < 8 A and d >= 8 A, with >= 4 points |
+| `orientation_far` | physical | the far field holds in every orientation, not only the one a scan happens to use: the force between two fragments has the sign and size of the point-multipole oracle (the fragments' own DFT moments, O2 + induction) at any rigid orientation | per dimer pair with moments (--moments frags.json), 128 uniformly random rigid orientations of both fragments at COM separations r = 7.5-9.5 A (mid, d_min >= 4 A) and 10, 12, 15 A (far). Axial force on B against the oracle's -dE/dr; sign trusted only where \|F_O\| >= max(2 meV/A, 3 sigma_O), sigma_O the oracle's last two terms (quadrupole, induction); a model force below 5 % of the oracle's is a missing tail, not a wrong sign. eps_F = (F_model - F_O)/rms_orient(F_O) per pair and r; dE_orient = energy error minus its orientation median. Per class, far band: fail if the wrong-sign fraction > 0.02 (>= 20 trusted points), or, for monopole pairs, q95 \|eps_F\| > 0.5 or q95 \|dE_orient\| > k_BT (300 K). Mid band: the same rule gives warn (oracle not validated against DFT there). Median, q95 and max are all reported |
+| `orientation_adversarial` | physical | no rigid orientation and separation in the far field where the model's force disagrees with the multipole oracle in sign (a witness geometry, found by search, not by sampling) | per pair with moments, in each band (far r = 10-15 A; mid r = 7.5-10 A, d_min >= 4 A): Nelder-Mead over (rotation of A, rotation of B, r) maximising \|eps_F\|, from the 3 worst sampled orientations of orientation_far plus 3 random starts, <= 40 model calls each. Far band: fail if any search ends on a wrong-sign point where the oracle's sign is trusted, or, for monopole pairs, at \|eps_F\| > 1. Mid band: warn on the same. The worst geometry per pair and band is reported (and written as extxyz with --orient-out) |
 | `eps_far` | physical | physics-normalised far-field error eps = (dE_model - dE_DFT)/dE_phys (ERM-with-priors; eps = g lambda^2 - 1 for a gated Coulomb head, -1 = tail missing) | dE relative to the scan's longest canonical point, d >= 12 A, dE_phys = E_es_exact + E_mp_ind else E_mp, \|dE_phys\| >= 0.1 meV and above the model floor; per class with >= 3 points: \|median eps\| <= 0.25 |
 | `seam` | physical | smoothness: no plateau where the physical prior has a slope, no ramp/cliff steeper than the prior (switch / cutoff / conditioning-window seams) | fine scans (0.05 A in d = 6-12 A). Plateau: \|dE/dr\| < 0.1 \|dE_Coul/dr\| over >= 0.3 A of r for a pair with \|q_A q_B\| >= 1, followed by a recovery (\|dE/dr\| >= 0.5 \|dE_Coul/dr\|) before d = 20 A (a plateau that never recovers is a missing tail, scored by far_field_exponent). Cliff: \|dE/dr\| > 5 max(\|dE_Coul/dr\|, 0.05 eV/A) and > 0.25 eV/A at d >= 6 A, any class. Fail on any bounded plateau or cliff outside the CT-ambiguous class |
 | `size_consistency` | physical | separability: E(A...B at 100 A) = E(A, q_A) + E(B, q_B) + k q_A q_B / r | residual R = E(AB, d = 100 A) - E(A) - E(B) - 14.40 q_A q_B / r; pass if \|R\| <= 10 meV (+ 4x float floor) for >= 95 % of non-CT pairs. Also reports R at 25 / 50 A and which charge assignment (own, total-charge rows (Q, Q), (Q, 0), (0, Q)) the 100 A energy is closest to |
@@ -66,7 +68,7 @@ passed.
 ## Probe inputs
 
 Most checks build their own probes from the canonical dimer records (fine scans, rotations, growing boxes, charge
-states). Four take extra input, and say `not_evaluable` without it:
+states). Several take extra input, and say `not_evaluable` without it:
 
 | flag | what it supplies | builder |
 |---|---|---|
@@ -76,6 +78,7 @@ states). Four take extra input, and say `not_evaluable` without it:
 | `--train-coverage FILE` | training rows (gap distance × charge class), for `distribution_shift` | your own training metadata |
 | `--baseline FILE` | an earlier priors JSON, for paired checks (e.g. IP/EA damage against the base model) | a previous run |
 | `--ref-model SPEC` | a second backend for `precision` (fp32 vs fp64, CPU vs GPU) | — |
+| `--moments FILE` | fragment DFT moments (`frags.json` of the dimer build, or `$LRBENCH_FRAG_MOMENTS`), for `orientation_far` and `orientation_adversarial` | the dimer build |
 
 `tools/priors_table.py` turns several priors JSONs into one check × model table.
 
@@ -83,10 +86,11 @@ states). Four take extra input, and say `not_evaluable` without it:
 
 The checks are validated the way the benchmark asks models to be validated: by planting defects and requiring that
 each is caught, and that **nothing else fires**. `src/lrbench/priors/synthetic.py` holds a clean analytic
-point-charge model and thirteen subclasses that each break exactly one prior — a plateau in the gap window, a global
+point-charge model and fourteen subclasses that each break exactly one prior — a plateau in the gap window, a global
 charge-equilibration leak, no tail beyond the cutoff, a spurious long-range term between neutral fragments, a
 separated-charge offset, charge blindness, non-gradient forces, an energy step with no force, a broken invariance,
-per-call noise, a box-dependent energy, a shifted IP, and a model that answers from a cache.
+per-call noise, a box-dependent energy, a shifted IP, a model that answers from a cache, and a Coulomb force that
+reverses sign in some orientations only (`OrientPatch`, below).
 
 `tests/test_priors.py` runs the clean model (everything must pass) and each defect (its own check must fail, the
 others must not). If you add a check, add its planted defect too — a check with nothing to catch it has never been
@@ -98,6 +102,72 @@ compares geometry and ignores `atoms.info`, so until it was fixed, two charge st
 from a single evaluation. The fix (`lrbench.backends.drop_ase_cache`) now clears ASE's own result cache before every
 structure, which means the planted defect has to cache *inside* the calculator, where the harness cannot reach it —
 exactly where a real model's cache lives. `charge_conditioning` is the check that catches it.
+
+## Orientations, and the tail of the distribution
+
+The fine scans move fragment B along one axis in one orientation, and the checks that read them report medians.
+Both choices can hide a defect.
+
+An LR model with a link-state mixture shows how. The model is PET-OMol-S with a long-range head whose Coulomb term
+is masked by a backbone link-state mixture.
+- **The defect.** Under thermal sampling, its mean force on NH₄⁺···Gdm⁺ at 8.5 Å centre-of-mass separation has the
+  wrong sign: −0.25 and −0.15 eV/Å for two training seeds, against Coulomb +0.20.
+- **What it passed.** `conservativeness` (median 0.010), `seam`, `energy_force`, `nve_short`, and its own
+  single-orientation scan (+0.19 eV/Å).
+- **Where the error sits.** It is static and depends on orientation. A link joins the two cations in 68 % of rigid
+  orientations at that separation, and about half of all orientations have the wrong sign.
+
+Two checks sample the orientation instead.
+
+- **`orientation_far`.** The sample:
+  - each dimer pair, with both fragments rigid and each turned by its own uniformly random rotation about its centre
+    of mass;
+  - centre-of-mass separations r = 10, 12 and 15 Å (the **far** band, which is ruled) and 7.5–9.5 Å with closest
+    contact ≥ 4 Å (the **mid** band, reported).
+
+  It is scored against the multipole oracle (`oracle:multipole`). The oracle needs only the fragments' own DFT
+  moments, so it gives a reference for any orientation without new DFT.
+
+  The force on B along the axis is compared with the oracle's −dE/dr. Per class, the check reports:
+  - the wrong-sign fraction;
+  - the missing-tail fraction;
+  - the median, q95 and max of ε_F = (F_model − F_oracle) / rms(F_oracle);
+  - the orientation-dependent energy error.
+
+  The sign is trusted only where the oracle's last two terms, the quadrupole and classical induction, cannot flip
+  it.
+- **`orientation_adversarial`.** It searches for a witness rather than sampling.
+  - **Search.** Nelder–Mead over the rotation of each fragment and r, maximising |ε_F|. The starts are the worst
+    sampled orientations plus random restarts.
+  - **Output.** The worst geometry per pair and band goes to the JSON, and with `--orient-out` to extxyz, with the
+    model and oracle forces in `info`.
+
+**The mid band is not ruled.**
+- **Why.** At 7.5–10 Å the oracle leaves out charge penetration, exchange and charge transfer, and it has not yet
+  been validated against DFT there.
+- **How it is reported.** A violation in the mid band is a `warn`. `dft_stage` lists the geometries a validation
+  should start from: per pair, the largest model–oracle disagreements and the largest oracle truncation spreads.
+- **Sign versus size.** For two charged fragments the monopole term dominates at these separations, so the sign of
+  the force is much better determined than its size.
+
+Both checks need `--moments frags.json`, the fragment moments of the dimer build. Without it they are
+`not_evaluable`.
+
+`--scan-orientations K` runs `seam`, `energy_force` and `conservativeness` on K extra random rigid orientations of
+every pair as well as on orientation 0. These three checks need no reference at the scanned geometry.
+
+Every median those checks report now has its q95 and max beside it:
+- `conservativeness`: per region;
+- `virial_tail`: |p − 1| per class;
+- `seam`: the slope ratio |dE/dr| / |dE_Coul/dr| per class, in d = 6–12 Å.
+
+These are reported, not ruled: the pass/fail rules are unchanged until protocol v1.
+
+The planted defect is `OrientPatch`.
+- **The defect.** The Coulomb term between a charged molecular cluster and its partner reverses sign when the
+  molecule's first atom faces the partner.
+- **The canonical orientation.** That atom faces away, so every scan-based check passes the model, and the test
+  matrix asserts it. Only the orientation checks catch it.
 
 ## Reading a report
 

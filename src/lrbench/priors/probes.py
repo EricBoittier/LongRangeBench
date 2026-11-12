@@ -103,3 +103,22 @@ def boxed(s: Structure, L: float) -> Structure:
     x = np.asarray(s.positions, float)
     x = x - x.mean(0) + L / 2
     return replace(s, key=f"{s.key}|box{L:g}", positions=x, cell=np.eye(3) * L, pbc=(True, True, True))
+
+
+def oriented_templates(T: List[Template], k: int, seed: int = 2026) -> List[Template]:
+    """k copies of every template with both fragments turned rigidly about their own centroids by uniformly random
+    rotations (orient = 1000 + j, so scan ids stay distinct). The centroid axis is unchanged, so ``ab(d)`` scans the
+    same closest-contact grid along it."""
+    from scipy.spatial.transform import Rotation
+    out = []
+    for i, t in enumerate(T):
+        RA = Rotation.random(k, random_state=seed + 2 * i)
+        RB = Rotation.random(k, random_state=seed + 2 * i + 1)
+        x0 = np.asarray(t.rec["positions"], float)
+        for j in range(k):
+            x = x0.copy()
+            for idx, R in ((t.ia, RA[j]), (t.ib, RB[j])):
+                c = x0[idx].mean(0)
+                x[idx] = R.apply(x0[idx] - c) + c
+            out.append(replace(t, orient=1000 + j, rec={**t.rec, "positions": x.tolist()}))
+    return out

@@ -27,15 +27,20 @@ INTENDED = {
     "NonInvariant": {"invariance"},
     "Noisy": {"determinism"},
     "BoxDependent": {"periodic_open"},
+    # clean at orientation 0 by construction: every scan-based check passes it, only the orientation checks see it
+    "OrientPatch": {"orientation_far", "orientation_adversarial"},
 }
 ALLOWED = {
-    "Flat": {"size_consistency"},  # no Coulomb at 100 A
+    # no Coulomb at 100 A; and none at r >= 10 A in any orientation, which the oracle-scored orientation checks see
+    "Flat": {"size_consistency", "orientation_far", "orientation_adversarial"},
+    # the plateau window (gap 7.5-9 A) reaches r_COM >= 10 A for the molecular ion, in every orientation
+    "Switched": {"orientation_far", "orientation_adversarial"},
     "SpuriousLR": {"far_field_exponent", "eps_far", "offset_free_degeneracy"},  # the 1/r term cancels Na+-H2O's span
     "NonConservative": {"nve_short"},
     "NonInvariant": {"periodic_open"},  # boxing translates the structure
     # Noise breaks the gradient relation as surely as it breaks everything else it touches.
     "Noisy": {"far_field_exponent", "energy_force", "invariance", "locality", "charge_conditioning",
-              "precision", "conservativeness", "virial_tail"},
+              "precision", "conservativeness", "virial_tail", "eps_far"},
     "QBlind": {"charge_offset_by_Q"},
     "Caching": {"charge_state"},
     "Discontinuous": {"nve_short", "size_consistency"},  # the jump persists to 100 A and kicks the NVE pair
@@ -43,7 +48,8 @@ ALLOWED = {
     # because a constant offset on the separated fragments stops E_int decaying to zero, so r F / E_int
     # is measured against the wrong denominator. That is a real sensitivity, not a false alarm.
     "SepOffset": {"energy_force", "virial_tail"},
-    "Leaky": {"far_field_exponent", "eps_far", "charge_offset_by_Q"},  # cached states give IP = EA = 0 (the GSCDB IP/EA pairs the upet bug hit)
+    # a leaked charge on the water adds a monopole term that flips the ion-water force in most orientations
+    "Leaky": {"far_field_exponent", "eps_far", "charge_offset_by_Q", "orientation_far", "orientation_adversarial"},  # cached states give IP = EA = 0 (the GSCDB IP/EA pairs the upet bug hit)
 }
 
 
@@ -96,8 +102,10 @@ def sepframes():
 
 def _ctx(model, dimers, **kw):
     kw.setdefault("ref_backend", ASEBackend(model, label="self"))  # precision: the model against itself
+    kw.setdefault("moments", S.moments())  # the oracle's fragment moments, exact for the point-charge model
+    opts = {"orient_n": 32, "adv_maxfev": 25, **kw.pop("opts", {})}  # a smaller orientation sample keeps CI fast
     return Ctx(backend=ASEBackend(model, label=type(model).__name__), dimers=dimers, model_level=LEVEL,
-               noise_rel=1e-12, cutoff=8.0, **kw)
+               noise_rel=1e-12, cutoff=8.0, opts=opts, **kw)
 
 
 def _matrix(name, dimers, ipea, sepframes):
@@ -284,3 +292,50 @@ def test_conservativeness_separates_a_gradient_from_a_scaled_force(dimers):
     assert bad["status"] == FAIL, bad
     worst = max(v["median_rel_deviation"] for v in bad["by_region"].values() if v["n_points"])
     assert worst > 0.1, bad["by_region"]
+
+
+def test_orientation_patch_is_found_and_witnessed(dimers, tmp_path):
+    """A defect that lives only in some orientations is invisible to every scan, and found by the oracle-scored sample.
+
+    `OrientPatch` reverses the Coulomb force between the charged molecular cluster and its partner when the
+    molecule's first atom faces the partner. In the canonical orientation it faces away, so the scans see the clean
+    model (the planted-defect matrix asserts that no other check fails). The orientation sample must report a
+    wrong-sign fraction in the far band, and the search must return a wrong-sign witness geometry on disk.
+    """
+    from ase.io import read
+    out = tmp_path / "worst.extxyz"
+    r = run(_ctx(S.OrientPatch(), dimers, opts={"orient_out": str(out)}),
+            ["seam", "conservativeness", "orientation_far", "orientation_adversarial"], log=lambda s: None)
+    assert r["seam"]["status"] == PASS and r["conservativeness"]["status"] == PASS
+    far = r["orientation_far"]["bands"]["far"]["ion_pair"]
+    assert r["orientation_far"]["status"] == FAIL and far["wrong_sign_frac"] > 0.1, far
+    assert far["eps_F_q95"] > far["eps_F_median"], far  # the median alone understates it
+    adv = r["orientation_adversarial"]
+    assert adv["status"] == FAIL and adv["far_witnesses"][0]["pair"] == "NaW_Cl", adv["summary"]
+    W = read(str(out), ":")
+    assert W and W[0].info["wrong_sign"] and W[0].info["pair"] == "NaW_Cl" and W[0].info["r_com"] >= 10
+
+
+def test_orientation_checks_clean_and_without_moments(dimers):
+    r = run(_ctx(S.PointCharge(), dimers), ["orientation_far"], log=lambda s: None)["orientation_far"]
+    assert r["status"] == PASS, r["summary"]
+    for band in ("far", "mid"):
+        for cls, v in r["bands"][band].items():
+            assert v["wrong_sign_frac"] in (None, 0.0) and v["eps_F_q95"] < 0.1, (band, cls, v)
+    assert r["dft_stage"] and all(7.5 <= g["r"] < 10 for g in r["dft_stage"])
+    none = run(_ctx(S.PointCharge(), dimers, moments=None), ["orientation_far", "orientation_adversarial"],
+               log=lambda s: None)
+    assert all(v["status"] == NE for v in none.values()), none
+
+
+def test_oriented_scans_and_tail_quantiles(dimers):
+    """--scan-orientations adds rotated copies of every scan to seam / energy_force / conservativeness, and every
+    median those checks report now has its q95 and max beside it."""
+    c = _ctx(S.PointCharge(), dimers, opts={"scan_orients": 2})
+    r = run(c, ["seam", "conservativeness", "virial_tail"], log=lambda s: None)
+    assert all(v["status"] == PASS for v in r.values()), {k: v["summary"] for k, v in r.items()}
+    assert r["seam"]["n_scans"] == 3 * len(S.PAIRS)
+    assert all({"median", "q95", "max"} <= set(v) for v in r["seam"]["slope_ratio_by_class"].values())
+    reg = r["conservativeness"]["by_region"]["far"]
+    assert reg["q95_rel_deviation"] >= reg["median_rel_deviation"] and reg["max_rel_deviation"] >= reg["q95_rel_deviation"]
+    assert any(v.get("q95_abs_p_minus_1") is not None for v in r["virial_tail"]["by_class"].values())
