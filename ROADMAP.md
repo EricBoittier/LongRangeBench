@@ -82,7 +82,8 @@ it had defects found only outside the suite:
 **Proposals.** Each has its own issue. They run in the order **A → B → C → D**, while the Phase 0/1 release work
 continues alongside.
 
-- [ ] **A (1 + 5)**, **next**: **oracle-scored orientation sampling, plus hardening of the existing checks.**
+- [ ] **A (1 + 5)**, **next**: **oracle-scored orientation sampling, plus hardening of the existing checks**
+  ([#28](https://github.com/EricBoittier/LongRangeBench/issues/28), [#29](https://github.com/EricBoittier/LongRangeBench/issues/29)).
   - **Orientation sets.**
     - Sample hundreds of rigid orientations per dimer pair at centre-of-mass separations of 10–12 Å and
       beyond, scored against `oracle:multipole`. The oracle gives a reference for any orientation without new
@@ -99,25 +100,27 @@ continues alongside.
     - `nve_short` with molecular ions, several orientations, and launches through switching windows. It scores
       the largest single-step energy jump as well as the drift.
     - `energy_force` and `seam` on the proposal-1 orientation sets.
-- [ ] **B (3)**: **reference-free topology and many-fragment checks.**
+- [ ] **B (3)**: **reference-free topology and many-fragment checks**
+  ([#30](https://github.com/EricBoittier/LongRangeBench/issues/30)).
   - **Dilute ion gas.** k = 2…20 charged fragments, each at least 12 Å from the others. The exact energy is the sum
     of the monomer energies plus the Coulomb sum.
   - **Split/merge continuity.** A fragment pulled out of a cluster, and two droplets merging. The energy must be
     continuous and the work must close.
   - **Code-path consistency.** The same structure must give the same answer whether evaluated alone, with a
     distant spectator, batched or permuted.
-- [ ] **C (2)**: **a thermal mean-force task.**
+- [ ] **C (2)**: **a thermal mean-force task** ([#31](https://github.com/EricBoittier/LongRangeBench/issues/31)).
   - **Systems.** NH₄⁺···Gdm⁺ plus one opposite-charge pair.
   - **Protocol.** 7 constrained windows (6.6, 7.2, 7.9, 8.5, 9.2, 12.75 and 15 Å centre-of-mass separation),
     1 ps each, forward and backward sweeps, 2 seeds.
   - **Scored.** Mean force against Coulomb, sweep hysteresis, path-work residual and temperature.
   - **Cost.** About 20 minutes per model. It is the test that found the defect above, and it needs no DFT.
-- [ ] **D (4)**: **condensed phase with known physics.**
+- [ ] **D (4)**: **condensed phase with known physics** ([#32](https://github.com/EricBoittier/LongRangeBench/issues/32)).
   - **Finite-size slope.** The energy of a charged periodic system, against −ξq²/(2εL).
   - **Stillinger–Lovett.** The small-k behaviour of S_ZZ(k).
   - **Internal consistency of ε.** The finite-size slope against dipole fluctuations.
   - **Charged slab.** The field across it.
-- [ ] **Protocol v1, the public data release and the contamination declaration (Phase 0/1).**
+- [ ] **Protocol v1, the public data release and the contamination declaration (Phase 0/1)**
+  ([#33](https://github.com/EricBoittier/LongRangeBench/issues/33)).
   - **v1 freeze.** Freeze v1 once A and B have landed, so that their thresholds are part of v1 rather than the
     first reason for a v2.
   - **Data release.** The HuggingFace dataset and DOI do not depend on A–D and can go first.
