@@ -154,7 +154,7 @@ def cmd_priors(args):
         from ..oracle import load_frags
         ctx.moments = load_frags(mom)
     ctx.opts.update(orient_n=args.orient_n, orient_seed=args.orient_seed, scan_orients=args.scan_orientations,
-                    orient_out=args.orient_out)
+                    orient_out=args.orient_out, orient_rows=args.orient_rows)
     if args.noise_rel is not None:
         ctx.noise_rel = args.noise_rel
     if args.max_pairs:
@@ -205,6 +205,7 @@ def add_parser(sub, common):
     p.add_argument("--orient-n", type=int, default=128, help="random rigid orientations per pair (orientation_far)")
     p.add_argument("--orient-seed", type=int, default=2026)
     p.add_argument("--orient-out", help="extxyz of the worst geometry per pair and band (orientation_adversarial)")
+    p.add_argument("--orient-rows", help="JSON lines of every sampled orientation (orientation_far), for analysis")
     p.add_argument("--scan-orientations", type=int, default=0,
                    help="also run seam / energy_force / conservativeness on K random rigid orientations per pair")
     common(p)

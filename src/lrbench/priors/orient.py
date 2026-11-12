@@ -181,7 +181,23 @@ def sample(ctx: Ctx) -> List[dict]:
             g["eps_F"] = (g["F_m"] - g["F_O2+ind"]) / s if s > 0 else np.nan
             g["dE_orient"] = x - off
     ctx.opts["_orient_rows"] = rows
+    if ctx.opts.get("orient_rows"):
+        write_rows(ctx.opts["orient_rows"], rows)
     return rows
+
+
+ROW_KEYS = ("pair", "cls", "k", "r", "d_min", "band", "F_m", "F_O2+ind", "F_O2", "F_O1+ind", "E_m", "E_O2+ind",
+            "sigma_O", "robust", "missing", "wrong_sign", "F_scale", "eps_F", "dE_orient", "rot_a", "rot_b")
+
+
+def write_rows(path: str, rows: List[dict]):
+    """Every sampled point as JSON lines (rotation vectors included, so each geometry can be rebuilt)."""
+    import json
+    conv = lambda v: (v.tolist() if hasattr(v, "tolist") else
+                      (None if isinstance(v, float) and not np.isfinite(v) else v))
+    with open(path, "w") as f:
+        for r in rows:
+            f.write(json.dumps({k: conv(r.get(k)) for k in ROW_KEYS}) + "\n")
 
 
 def _q(v, q):

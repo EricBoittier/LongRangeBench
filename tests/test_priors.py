@@ -304,7 +304,7 @@ def test_orientation_patch_is_found_and_witnessed(dimers, tmp_path):
     """
     from ase.io import read
     out = tmp_path / "worst.extxyz"
-    r = run(_ctx(S.OrientPatch(), dimers, opts={"orient_out": str(out)}),
+    r = run(_ctx(S.OrientPatch(), dimers, opts={"orient_out": str(out), "orient_rows": str(tmp_path / "rows.jsonl")}),
             ["seam", "conservativeness", "orientation_far", "orientation_adversarial"], log=lambda s: None)
     assert r["seam"]["status"] == PASS and r["conservativeness"]["status"] == PASS
     far = r["orientation_far"]["bands"]["far"]["ion_pair"]
@@ -312,6 +312,8 @@ def test_orientation_patch_is_found_and_witnessed(dimers, tmp_path):
     assert far["eps_F_q95"] > far["eps_F_median"], far  # the median alone understates it
     adv = r["orientation_adversarial"]
     assert adv["status"] == FAIL and adv["far_witnesses"][0]["pair"] == "NaW_Cl", adv["summary"]
+    rows = [json.loads(line) for line in open(tmp_path / "rows.jsonl")]
+    assert rows and any(x["wrong_sign"] for x in rows if x["pair"] == "NaW_Cl" and x["band"] == "far")
     W = read(str(out), ":")
     assert W and W[0].info["wrong_sign"] and W[0].info["pair"] == "NaW_Cl" and W[0].info["r_com"] >= 10
 
