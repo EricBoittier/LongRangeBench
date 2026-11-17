@@ -1,0 +1,591 @@
+{
+"models": [
+{
+"id": "pet-omol-s",
+"name": "PET-OMol-S (base)",
+"kind": "program+benchmark",
+"mdstab": "PET-OMol-S",
+"permit": "PET",
+"recipe": "Pretrained PET-OMol-S, no fine-tune. Program numbers (type-held-out gate, MD, permittivity) use the mlip.cpp GGUF export (fp32, ragged, no TF32); benchmark rows use the metatomic-torch checkpoint through ASE. These are two builds of one model, and the claims name the build.",
+"labels": [
+"PETOMOLS"
+],
+"rep": "PETOMOLS",
+"bench": "pet-omol-s"
+},
+{
+"id": "ORIG",
+"name": "Route B, Bq4m3_c01 (ORIG)",
+"kind": "program",
+"mdstab": "Bq4m3_c01",
+"recipe": "Amendment 23: Bq4m2_c01 plus the cluster-ladder training records; global total-charge conditioning, LES latent-charge Coulomb term (erf, sigma 2.5 A). Cut at step 12,000 of a 14,170-step cosine, no EMA, no IPR4 row weighting. One seed (13), H100.",
+"labels": [
+"ORIG"
+],
+"rep": "ORIG",
+"bench": null
+},
+{
+"id": "C0",
+"name": "C0 (seam control)",
+"kind": "program",
+"recipe": "Amendment A29a control: from Bq4_K1, data4m3 (226,734 rows), IPR4 pair rows x4, batch 16, 12,000 steps cosine, EMA 0.999 with warm-up. Seed 13 on H100; seeds 13r (same-seed replicate), 14, 15, 16 on GH200 (A34). C0 differs from ORIG by EMA, IPR4 and the full anneal together.",
+"labels": [
+"C0_s13_ema",
+"C0_s13_raw",
+"C0_s13_step3000_ema",
+"C0_s13_step3000_raw",
+"C0_s13r_ema",
+"C0_s13r_raw",
+"C0_s14_ema",
+"C0_s14_raw",
+"C0_s15_ema",
+"C0_s15_raw",
+"C0_s16_ema",
+"C0_s16_raw"
+],
+"rep": "C0_s13_ema",
+"bench": null
+},
+{
+"id": "P",
+"name": "P (seam band prior)",
+"kind": "program",
+"recipe": "C0 recipe plus 32,760 oracle-labelled charged-pair rows (data5p; fixed ESP charges, not DFT; no Mg2+, Li+F-, Na+Cl- or K+Gdm+). Seeds as C0. W* of the A30 rule under the pairs-gate reading.",
+"labels": [
+"P_s13_ema",
+"P_s13_raw",
+"P_s13_step3000_ema",
+"P_s13_step3000_raw",
+"P_s13r_ema",
+"P_s13r_raw",
+"P_s14_ema",
+"P_s14_raw",
+"P_s15_ema",
+"P_s15_raw",
+"P_s16_ema",
+"P_s16_raw"
+],
+"rep": "P_s13_ema",
+"bench": null
+},
+{
+"id": "C0H",
+"name": "C0H (held lr, EMA 0.9995)",
+"kind": "program",
+"recipe": "Amendment A35: C0 recipe with the lr held at 30 % of peak and EMA 0.9995 without warm-up. Seeds 13r, 14, 15, 16, GH200. The raw file is a non-annealed iterate.",
+"labels": [
+"C0H_s13r_ema",
+"C0H_s13r_raw",
+"C0H_s14_ema",
+"C0H_s14_raw",
+"C0H_s15_ema",
+"C0H_s15_raw",
+"C0H_s16_ema",
+"C0H_s16_raw"
+],
+"rep": "C0H_s13r_ema",
+"bench": null
+},
+{
+"id": "A0",
+"name": "A0 (N = 16 neighbours, from P)",
+"kind": "program",
+"recipe": "Amendment A30 GO 1: init P seed-13 EMA, 16 attention neighbours, data5p, 6,000 steps, EMA 0.999. Seed 13 H100; 13r, 14, 15, 16 GH200.",
+"labels": [
+"A0_s13r_ema",
+"A0_s13r_raw",
+"A0_s14_ema",
+"A0_s14_raw",
+"A0_s15_ema",
+"A0_s15_raw",
+"A0_s16_ema",
+"A0_s16_raw",
+"A0_s13_ema"
+],
+"rep": "A0_s13_ema",
+"bench": null
+},
+{
+"id": "A1",
+"name": "A1 (N = 32 neighbours, from P)",
+"kind": "program",
+"recipe": "A0 with 32 attention neighbours (training step x1.5). Seeds as A0. Each file is scored at its own N.",
+"labels": [
+"A1_s13r_ema",
+"A1_s13r_raw",
+"A1_s14_ema",
+"A1_s14_raw",
+"A1_s15_ema",
+"A1_s15_raw",
+"A1_s16_ema",
+"A1_s16_raw",
+"A1_s13_ema"
+],
+"rep": "A1_s13_ema",
+"bench": null
+},
+{
+"id": "CEIL-A",
+"name": "CEIL-A (no global Q, charges + potentials)",
+"kind": "program",
+"recipe": "Amendment A36 ceiling arm: global total-charge embedding replaced by the Q = 0 row and frozen; energy tower fed local charges and smoothed potentials from a frozen 3-layer charge pass; otherwise C0 recipe. Seed 13 only, GH200 (screen).",
+"labels": [
+"CEIL-A_s13_ema",
+"CEIL-A_s13_raw"
+],
+"rep": "CEIL-A_s13_ema",
+"bench": null
+},
+{
+"id": "CEIL-B",
+"name": "CEIL-B (no global Q, charges only)",
+"kind": "program",
+"recipe": "A36 arm B: as CEIL-A with local charges only. Seed 13 only (screen).",
+"labels": [
+"CEIL-B_s13_ema",
+"CEIL-B_s13_raw"
+],
+"rep": "CEIL-B_s13_ema",
+"bench": null
+},
+{
+"id": "CEIL-C",
+"name": "CEIL-C (control, global Q kept)",
+"kind": "program",
+"recipe": "A36 control: CEIL-A features and init with the global Q embedding kept. Seed 13 only (screen).",
+"labels": [
+"CEIL-C_s13_ema",
+"CEIL-C_s13_raw"
+],
+"rep": "CEIL-C_s13_ema",
+"bench": null
+},
+{
+"id": "AL",
+"name": "AL (CEIL-A, 2x steps, 3x lr)",
+"kind": "program",
+"recipe": "A36 arm AL: CEIL-A with peak lr 3e-5 and 24,000 steps. Seeds 13-16 (seeds 14-16 are the four-seed repeat of amendment A38). The 1-D scans use seed 13 only.",
+"labels": [
+"AL_s13_ema",
+"AL_s13_raw",
+"AL_s14_ema",
+"AL_s14_raw",
+"AL_s15_ema",
+"AL_s15_raw",
+"AL_s16_ema",
+"AL_s16_raw"
+],
+"rep": "AL_s13_ema",
+"bench": null
+},
+{
+"id": "PAL",
+"name": "PAL (P's band-prior rows + AL recipe)",
+"kind": "program",
+"recipe": "Amendment A39: P's data5p charged-pair rows with AL's Q-free ceiling tower, peak lr 3e-5 and 24,000 steps; seeds 13-16, GH200. Pre-registered 'adds up' reading: PAL within P's 4-seed spread on the NH4+Gdm+ 7.5 A overshoot and Gdm+Gdm+ LES-off dmin rms, within AL's spread on the Na+/Cl- ladder slopes, val500 upper 95 % <= 42.0 meV/A, ion shells <= 0.2 e.",
+"labels": [
+"PAL_s13_ema",
+"PAL_s13_raw",
+"PAL_s14_ema",
+"PAL_s14_raw",
+"PAL_s15_ema",
+"PAL_s15_raw",
+"PAL_s16_ema",
+"PAL_s16_raw"
+],
+"rep": "PAL_s13_ema",
+"bench": null
+},
+{
+"id": "Bq3_K1",
+"name": "Bq3 K1",
+"kind": "program, earlier arm",
+"recipe": "Earlier route-B arm (section 5): global conditioning, conditioning force in training. Seed 13.",
+"labels": [
+"Bq3_K1_s13_raw",
+"Bq3_K1_s14_raw"
+],
+"rep": "Bq3_K1_s13_raw",
+"mdstab": "Bq3_K1",
+"permit": null,
+"bench": null
+},
+{
+"id": "Bq4m3L_c01",
+"name": "Bq4m3L",
+"kind": "program, earlier arm",
+"recipe": "Amendment 26: Bq4m3_c01 with peak lr 3e-5 and 24,000 steps. Seed 13.",
+"labels": [
+"Bq4m3L_c01_s13_raw"
+],
+"rep": "Bq4m3L_c01_s13_raw",
+"mdstab": "Bq4m3L_c01",
+"permit": null,
+"bench": null
+},
+{
+"id": "CTLc",
+"name": "CTLc (control)",
+"kind": "program, earlier arm",
+"recipe": "Matched control fine-tune of the route-B program, no long-range head. Seed 13.",
+"labels": [
+"CTLc_s13_raw",
+"CTLc_s14_raw"
+],
+"rep": "CTLc_s13_raw",
+"mdstab": "CTLc",
+"permit": null,
+"bench": null
+},
+{
+"id": "SB_K1",
+"name": "SB K1 (local conditioning)",
+"kind": "program, earlier arm",
+"recipe": "Bq3 setup with local conditioning and the conditioning force in training. Seed 13.",
+"labels": [
+"SB_K1_s13_raw"
+],
+"rep": "SB_K1_s13_raw",
+"mdstab": "SB_K1",
+"permit": null,
+"bench": null
+},
+{
+"id": "FC3b13",
+"name": "FC3b (frozen charges)",
+"kind": "program, earlier arm",
+"recipe": "Frozen-charge arm (lrc = 1, padded path). Seed 13.",
+"labels": [],
+"rep": null,
+"mdstab": "FC3b13",
+"permit": null,
+"bench": null
+},
+{
+"id": "FTq13",
+"name": "FTq (frozen charges)",
+"kind": "program, earlier arm",
+"recipe": "Frozen-charge arm (lrc = 1, padded path). Seed 13.",
+"labels": [],
+"rep": null,
+"mdstab": "FTq13",
+"permit": null,
+"bench": null
+},
+{
+"id": "RS_c01",
+"name": "RS (range-separated Coulomb)",
+"kind": "program, earlier arm",
+"recipe": "Amendment 24: erf kernel times a C2 switch 6-9 A. Seed 13; open structures only.",
+"labels": [
+"RS_c01_s13_raw"
+],
+"rep": "RS_c01_s13_raw",
+"mdstab": "RS_c01",
+"permit": "RS",
+"bench": null
+},
+{
+"id": "HY",
+"name": "HY (hybrid conditioning)",
+"kind": "program, earlier arm",
+"recipe": "Amendment 25: global + gated local conditioning, g learned from 0. Seed 13.",
+"labels": [
+"HY_s13_raw"
+],
+"rep": "HY_s13_raw",
+"mdstab": null,
+"permit": "HY",
+"bench": null
+},
+{
+"id": "HYo",
+"name": "HYo (hybrid, g0 = 0.5)",
+"kind": "program, earlier arm",
+"recipe": "Amendment 28: HY with g initialised at 0.5 (g did not move). Seed 13.",
+"labels": [
+"HYo_s13_raw"
+],
+"rep": "HYo_s13_raw",
+"mdstab": null,
+"permit": "HYo",
+"bench": null
+},
+{
+"id": "aimnet2",
+"name": "aimnet2",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "aimnet2"
+},
+{
+"id": "aimnet2-dsf",
+"name": "aimnet2-dsf",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "aimnet2-dsf"
+},
+{
+"id": "caceles-water",
+"name": "caceles-water",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "caceles-water"
+},
+{
+"id": "dpa4-air",
+"name": "dpa4-air",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "dpa4-air"
+},
+{
+"id": "dpa4-plus",
+"name": "dpa4-plus",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "dpa4-plus"
+},
+{
+"id": "grace-2l",
+"name": "grace-2l",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "grace-2l"
+},
+{
+"id": "mace-h",
+"name": "mace-h",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "mace-h"
+},
+{
+"id": "mace-omol",
+"name": "mace-omol",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "mace-omol"
+},
+{
+"id": "mace-polar",
+"name": "mace-polar",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "mace-polar"
+},
+{
+"id": "mace-polar-l",
+"name": "mace-polar-l",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "mace-polar-l"
+},
+{
+"id": "maceles-off",
+"name": "maceles-off",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "maceles-off"
+},
+{
+"id": "orbmol",
+"name": "orbmol",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "orbmol"
+},
+{
+"id": "orbmol-v1",
+"name": "orbmol-v1",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "orbmol-v1"
+},
+{
+"id": "pet-mols-s",
+"name": "pet-mols-s",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-mols-s"
+},
+{
+"id": "pet-omad-s",
+"name": "pet-omad-s",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-omad-s"
+},
+{
+"id": "pet-omol-l",
+"name": "pet-omol-l",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-omol-l"
+},
+{
+"id": "pet-omol-m",
+"name": "pet-omol-m",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-omol-m"
+},
+{
+"id": "pet-spice-l",
+"name": "pet-spice-l",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-spice-l"
+},
+{
+"id": "pet-spice-s",
+"name": "pet-spice-s",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "pet-spice-s"
+},
+{
+"id": "so3lr",
+"name": "so3lr",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "so3lr"
+},
+{
+"id": "so3lr-tauri",
+"name": "so3lr-tauri",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "so3lr-tauri"
+},
+{
+"id": "so3lr-tauri-l",
+"name": "so3lr-tauri-l",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "so3lr-tauri-l"
+},
+{
+"id": "so3lr-tauri-s",
+"name": "so3lr-tauri-s",
+"kind": "benchmark",
+"recipe": "External or group model evaluated by lrbench on the public sets; see the identity table for checkpoint, package and level of theory.",
+"labels": [],
+"rep": null,
+"mdstab": null,
+"permit": null,
+"bench": "so3lr-tauri-s"
+}
+],
+"built": "from the program's score files, MD-stability and permittivity runs, and results/ (public rows, ext_ sets left out)",
+"rep": {
+"pet-omol-s": "PETOMOLS",
+"Bq3_K1": "Bq3_K1_s13_raw",
+"Bq4m3L_c01": "Bq4m3L_c01_s13_raw",
+"CTLc": "CTLc_s13_raw",
+"SB_K1": "SB_K1_s13_raw",
+"RS_c01": "RS_c01_s13_raw",
+"HY": "HY_s13_raw",
+"HYo": "HYo_s13_raw",
+"ORIG": "ORIG",
+"C0": "C0_s13_ema",
+"P": "P_s13_ema",
+"C0H": "C0H_s13r_ema",
+"A0": "A0_s13_ema",
+"A1": "A1_s13_ema",
+"CEIL-A": "CEIL-A_s13_ema",
+"CEIL-B": "CEIL-B_s13_ema",
+"CEIL-C": "CEIL-C_s13_ema",
+"AL": "AL_s13_ema",
+"PAL": "PAL_s13_ema"
+}
+}

@@ -29,6 +29,13 @@ Planted defects (each subclasses the clean model and breaks one prior):
   ``Noisy``         energy + N(0, 1e-3) eV per call (non-deterministic)
   ``BoxDependent``  energy + 1 eV A / L when a cell is present (periodic result does not converge to open)
   ``IPShift``       charge-state term shifted by +0.5 eV per removed electron (vertical IP error, the fine-tune damage)
+  ``OrientPatch``   the Coulomb term between a charged molecular cluster and another charged cluster reverses sign
+                    when the molecule's first atom faces the partner (c = n.u > 0.2, full at 0.5); zero in the
+                    canonical orientation, conservative (the link-state-mask defect: wrong-sign force in some
+                    orientations only)
+
+``moments()`` returns the exact DFT-style moments (q, mu, Theta about the COM, atomic units, no alpha) of every
+synthetic fragment from the same point charges, so ``oracle:multipole`` can referee the synthetic set.
 """
 from __future__ import annotations
 
@@ -323,6 +330,50 @@ class Discontinuous(PointCharge):
         return (self.jump if _gap_pairs(x, lab)[0] > self.at else 0.0), np.zeros_like(x)
 
 
+class OrientPatch(PointCharge):
+    """Wrong-sign inter-cluster Coulomb in a band of orientations: for a charged cluster a with >= 2 atoms and any
+    other charged cluster b, E += -2 s(c) KE Q_a Q_b / R_ab, where R_ab is the centroid distance, n the unit vector
+    from a's centroid to its first atom, u = (c_b - c_a)/R_ab, c = n.u and s a smoothstep from c = c0 to c0 + 0.3.
+    In the canonical orientations the molecule's first atom faces away from the partner (c ~ -1, s = 0), so every
+    scan-based check sees the clean model. Forces are the central-difference gradient of the patch (conservative)."""
+
+    def __init__(self, c0: float = 0.2, **kw):
+        super().__init__(**kw)
+        self.c0 = c0
+
+    def _patch(self, sp, x, lab, ncl):
+        q0 = np.array([Q0.get(s, 0.0) for s in sp])
+        Qc = [q0[lab == k].sum() for k in range(ncl)]
+        E = 0.0
+        for a in range(ncl):
+            ia = np.where(lab == a)[0]
+            if len(ia) < 2 or abs(Qc[a]) < 0.5:
+                continue
+            ca = x[ia].mean(0)
+            n = x[ia[0]] - ca
+            n = n / np.linalg.norm(n)
+            for b in range(ncl):
+                if b == a or abs(Qc[b]) < 0.5:
+                    continue
+                d = x[lab == b].mean(0) - ca
+                R = np.linalg.norm(d)
+                E -= 2.0 * _smooth((n @ d / R - self.c0) / 0.3) * KE * Qc[a] * Qc[b] / R
+        return E
+
+    def extra(self, sp, x, Q, S, lab, ncl, atoms):
+        if ncl < 2:
+            return 0.0, np.zeros_like(x)
+        E = self._patch(sp, x, lab, ncl)
+        F, h = np.zeros_like(x), 1e-5
+        for i in range(len(x)):
+            for c in range(3):
+                xp, xm = x.copy(), x.copy()
+                xp[i, c] += h
+                xm[i, c] -= h
+                F[i, c] = -(self._patch(sp, xp, lab, ncl) - self._patch(sp, xm, lab, ncl)) / (2 * h)
+        return E, F
+
+
 class BoxDependent(PointCharge):
     def extra(self, sp, x, Q, S, lab, ncl, atoms):
         if atoms is not None and atoms.pbc.any():
@@ -332,7 +383,8 @@ class BoxDependent(PointCharge):
 
 ALL = {"PointCharge": PointCharge, "Switched": Switched, "Leaky": Leaky, "Caching": Caching, "Flat": Flat,
        "SpuriousLR": SpuriousLR, "SepOffset": SepOffset, "QBlind": QBlind, "IPShift": IPShift,
-       "NonConservative": NonConservative, "Discontinuous": Discontinuous, "NonInvariant": NonInvariant, "Noisy": Noisy, "BoxDependent": BoxDependent}
+       "NonConservative": NonConservative, "Discontinuous": Discontinuous, "NonInvariant": NonInvariant, "Noisy": Noisy, "BoxDependent": BoxDependent,
+       "OrientPatch": OrientPatch}
 
 
 # ---------------------------------------------------------------------- synthetic canonical dimer set
@@ -344,7 +396,24 @@ PAIRS = {  # name: (A species, A positions, qA, B species, B positions, qB, cls)
     "H2O_H2O": (["O", "H", "H"], [[0, 0, 0], [0.757, 0.586, 0], [-0.757, 0.586, 0]], 0,
                 ["O", "H", "H"], [[0, 0, 0], [0.757, 0.586, 0], [-0.757, 0.586, 0]], 0, "neutral_polar_control"),
 }
+# a charged molecular cluster: Na+ bound to a water (Na-O 2.4 A, one cluster), against Cl-
+PAIRS["NaW_Cl"] = (["Na", "O", "H", "H"], [[0, 0, -2.4], [0, 0, 0], [0.757, 0.586, 0], [-0.757, 0.586, 0]], 1,
+                   ["Cl"], [[0, 0, 0]], -1, "ion_pair")
 DISTS = [3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0]
+
+
+def moments(pairs=None) -> dict:
+    """Fragment moments of the synthetic set in the oracle's format (``oracle.load_frags``): reference geometry R
+    (A), integer charge, dipole and traceless Buckingham quadrupole about the mass COM in atomic units, from the
+    clean model's point charges; no polarisability (the clean model has none)."""
+    from .. import multipole as MP
+    out = {}
+    for name, (sa, xa, qa, sb, xb, qb, _) in (pairs or PAIRS).items():
+        for frag, sp, x, q in ((name.split("_")[0], sa, xa, qa), (name.split("_")[1], sb, xb, qb)):
+            x = np.asarray(x, float)
+            m = MP.point_moments([Q0.get(e, 0.0) for e in sp], (x - MP.com(sp, x)) / MP.BOHR)
+            out[frag] = dict(R=x, q=float(q), mu=m["mu"], theta=m["theta"], alpha=None)
+    return out
 
 
 def make_dimer_records(calc=None, pairs=None, dists=None, level: str = "wB97M-V/def2-TZVPD"):

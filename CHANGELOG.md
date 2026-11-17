@@ -6,6 +6,20 @@ Notable changes to LongRangeBench. Newest first.
 
 ### Added
 
+- Notebooks: a model scorecard (`notebooks/model_scorecard.py`: pick one model, see every number held for it) next
+  to the diagnostics notebook, which gains a PET-OMol-LR program section (best-case weighting panel, multivalent
+  switch with Mg²⁺ shown apart, 1-D scan quality block, running work with 'not yet scored' entries, 23 chemiscope
+  datasets). Both read one data folder, `notebooks/data/lr_program/`, written by one builder
+  (`tools/build_lr_program_data.py`; `bash tools/rebuild_lr_program.sh` re-reads the score files). The Pages
+  workflow exports both notebooks to WebAssembly, frozen with that folder (`tools/build_notebook_site.py`).
+  Chemiscope maps draw as SVG (no run-time code generation), with a checked mount and a 3Dmol stand-in.
+- `lrbench priors`: `orientation_far` and `orientation_adversarial`, oracle-scored orientation sampling with an
+  adversarial search for witness geometries, plus the `OrientPatch` planted defect.
+  - Needs `--moments`. Options: `--orient-n`, `--orient-out` and `--scan-orientations`.
+  - `conservativeness`, `virial_tail` and `seam` now report q95 and max beside their medians. Their rules are
+    unchanged.
+  - The synthetic dimer set gains a charged molecular pair, `NaW_Cl`.
+  - See [docs/priors.md](docs/priors.md#orientations-and-the-tail-of-the-distribution).
 - `results/`: committed result rows (`results/<set>/<model>.json`, schema `lrbench-row/1`). Each row carries:
   - the model's registry name;
   - the weights sha256, or the package version;

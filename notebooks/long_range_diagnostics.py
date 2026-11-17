@@ -355,6 +355,9 @@ def _(P, R, SOURCE, mo):
             - [Multivalent ions](#multivalent)
             - [Charge transfer](#ct)
             - [Physical priors](#priors)
+            - [PET-OMol-LR program](#program)
+            - [Best case per model](#bestcase)
+            - [Program structures](#lrp-explore)
             - [Caveats](#caveats)
             """
         ),
@@ -460,7 +463,10 @@ captured, the reply to a distant charge, and the offset-free error against what 
 elsewhere should not disguise it."""),
         mo.ui.table(_df, selection=None, page_size=25) if not _df.empty else mo.md("_no results yet_"),
         mo.md("<small style='color:#767676'>⚠ trained at a different level of theory from the reference data: read "
-              "the dimensionless columns, not the energies.</small>"),
+              "the dimensionless columns, not the energies. The LRS is precomputed by the harness on the ion-pair "
+              "class of `dimers` and on the `families_fixedq` quartets. Both sets contain records with a fragment of |q| ≥ 2, and "
+              "the multivalent switch does not remove them from this precomputed score. The program sections and the best-case panel "
+              "below do follow the switch.</small>"),
     ])
     return
 
@@ -613,31 +619,97 @@ def _(CHEM, mo):
 
     _CS = """<!doctype html><html><head><meta charset="utf-8">
 <script src="https://cdn.jsdelivr.net/npm/chemiscope@1.1.0/dist/chemiscope.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.0/3Dmol-min.js"></script>
+<script>
+// chemiscope without eval: SVG map instead of WebGL, a checked mount, and a 3Dmol stand-in (pattern shared with the program's pages)
+(function () {   // chemiscope map: SVG scatter instead of WebGL scattergl (regl needs eval, blocked by the page CSP)
+  try {
+    const PM = window.Chemiscope && Chemiscope.PropertiesMap && Chemiscope.PropertiesMap.prototype;
+    if (!PM || PM._svgPatched) return;
+    const get = PM._getTraces;
+    PM._getTraces = function () { const t = get.apply(this, arguments); for (const x of t) if (x.type === "scattergl") x.type = "scatter"; return t; };
+    PM._svgPatched = true;
+  } catch (e) { console.error("chemiscope SVG map patch failed", e); }
+})();
+const csEvalOK = (() => { try { return Function("return 1")() === 1; } catch (e) { return false; } })();
+function csMapProblem(id) {          // "" when the chemiscope map in #id has drawn, else a reason
+  const root = document.getElementById(id); if (!root) return "the map container is missing";
+  let noGL = false, pts = 0, canv = 0, type = "";
+  const walk = n => { if (!n) return; if (n.shadowRoot) walk(n.shadowRoot);
+    if (n._fullData && n._fullData[0] && !type) type = n._fullData[0].type;
+    if (n.classList) { if (n.classList.contains("no-webgl")) noGL = true; if (n.classList.contains("point")) pts++; }
+    if (n.tagName === "CANVAS") canv++; for (const c of n.children || []) walk(c); };
+  walk(root);
+  if (noGL || (type === "scattergl" && !csEvalOK))
+    return "the map's WebGL renderer cannot run here (it compiles code at run time, which this page's security policy forbids)";
+  if (type === "scatter3d") return canv ? "" : "the 3D map drew nothing";
+  return pts || (type === "scattergl" && canv) ? "" : "the map drew no points";
+}
+function csMount(boxes, data, timeoutMs) {   // load a chemiscope view, then check the map really drew; rejects with a readable Error
+  if (!window.Chemiscope) return Promise.reject(new Error("the chemiscope library did not load from " + "https://cdn.jsdelivr.net/npm/chemiscope@1.1.0 (blocked or offline)"));
+  const t0 = Date.now(), limit = timeoutMs || 6000;
+  return Chemiscope.DefaultVisualizer.load(boxes, data).then(v => new Promise((res, rej) => {
+    let ok = 0;                                 // success only after two clean checks 300 ms apart (Plotly draws asynchronously)
+    const tick = () => { const p = csMapProblem(boxes.map);
+      if (!p && ++ok >= 2) return res(v);
+      if (!p) return setTimeout(tick, 300);
+      ok = 0;
+      if (p.indexOf("WebGL") >= 0 || Date.now() - t0 > limit) { try { v.remove(); } catch (e) {} return rej(new Error(p)); }
+      setTimeout(tick, 250); };
+    tick(); }));
+}
+function csShowError(el, what, err) {          // visible error text instead of a blank panel
+  el.hidden = false; el.textContent = ""; const b = document.createElement("b"); b.textContent = what + " ";
+  el.append(b, String(err && err.message ? err.message : err));
+  if (err && err.stack) console.error(err);
+}
+function csXYZ(s) {                             // chemiscope structure -> XYZ text for a 3Dmol.js fallback viewer
+  const L = [String(s.size), ""];
+  for (let i = 0; i < s.size; i++) L.push(s.names[i] + " " + s.x[i] + " " + s.y[i] + " " + s.z[i]);
+  return L.join("\\n") + "\\n";
+}
+function csFallback(host, structures, note) {   // 3Dmol.js stand-in for a chemiscope view that could not draw: frames from structures[]
+  try {
+    if (!window.$3Dmol) { const p = document.createElement("p"); p.className = "cs-err"; p.textContent = "The 3Dmol fallback viewer did not load either."; host.append(p); return; }
+    const wrap = document.createElement("div"); wrap.className = "cs-fb"; const box = document.createElement("div"); box.className = "cs-fb-box";
+    const row = document.createElement("div"); row.className = "cs-fb-row"; const sl = document.createElement("input"); sl.type = "range"; sl.min = 0; sl.max = Math.max(0, structures.length - 1); sl.value = 0; sl.setAttribute("aria-label", "Frame");
+    const lab = document.createElement("span"); row.append(lab, sl); wrap.append(box, row); host.append(wrap);
+    const v = $3Dmol.createViewer(box, { backgroundColor: "white" });
+    const draw = () => { const i = +sl.value; v.clear(); v.addModel(csXYZ(structures[i]), "xyz"); v.setStyle({}, { stick: { radius: 0.12 }, sphere: { scale: 0.22 } }); v.zoomTo(); v.render(); lab.textContent = "Frame " + (i + 1) + " of " + structures.length + (note ? " · " + note : ""); };
+    sl.addEventListener("input", draw); draw();
+  } catch (e) { console.error(e); const p = document.createElement("p"); p.className = "cs-err"; p.textContent = "The fallback viewer could not draw either: " + e.message; host.append(p); }
+}
+</script>
 <style>body{margin:0;font-family:Georgia,serif;font-size:13px}
 .panes{display:flex;flex-wrap:wrap;gap:8px}.l{flex:1 1 58%;min-width:320px}.r{flex:1 1 38%;min-width:280px}
-#m{height:430px}#s{height:340px}.err{color:#D55E00;font-family:sans-serif}</style></head>
+#m{height:430px}#s{height:340px}.err{color:#D55E00;font-family:sans-serif}/* chemiscope embed (CSP-safe): error text and 3Dmol fallback */ .cs-err { margin: 0; padding: 10px 12px; border: 1px solid #d9dde2; border-left: 3px solid #c0392b; border-radius: 4px; background: #ffffff; color: #14181c; font-size: 0.86rem; max-width: 95ch } .cs-fb { display: flex; flex-direction: column; gap: 6px; margin-top: 8px } .cs-fb-box { position: relative; width: 100%; height: 340px; background: #fff; border: 1px solid #d9dde2; border-radius: 4px } .cs-fb-row { display: flex; gap: 8px; align-items: center; font-size: 0.86rem; flex-wrap: wrap; color: #14181c } .cs-fb-row input { flex: 1 1 200px; min-width: 0 }</style></head>
 <body><div class="panes"><div class="l"><div id="meta"></div><div id="m"></div></div>
 <div class="r"><div id="s"></div><div id="i"></div></div></div>
 <script>
 const B = "__BLOB__", S = __SETTINGS__;
 (async () => {
+  let ds = null;
   try {
     const bin = Uint8Array.from(atob(B), c => c.charCodeAt(0));
     const st = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
-    const ds = JSON.parse(await new Response(st).text());
+    ds = JSON.parse(await new Response(st).text());
     for (const p of Object.values(ds.properties))
       if (p.values.every(v => v === null || typeof v === "number"))
         p.values = p.values.map(v => v === null ? NaN : v);
     if (S && Object.keys(S).length) ds.settings = S;
-    await Chemiscope.DefaultVisualizer.load({map:"m", info:"i", meta:"meta", structure:"s"}, ds);
-  } catch (e) { document.body.innerHTML = '<p class="err">chemiscope could not load: ' + e + '</p>'; }
+    await csMount({map:"m", info:"i", meta:"meta", structure:"s"}, ds, 8000);
+  } catch (e) {
+    const el = document.createElement("p"); el.className = "cs-err"; document.body.prepend(el);
+    csShowError(el, "chemiscope could not draw this view:", e);
+    if (ds && ds.structures) csFallback(document.getElementById("s"), ds.structures, "3Dmol stand-in");
+  }
 })();
 </script></body></html>"""
 
-    def chemiscope_view(v, height="680px"):
+    def chemiscope_view(v, height="680px", chem=None):
         """chemiscope in an iframe: `mo.Html` deliberately does not execute scripts, `mo.iframe` does — and the
-        iframe also keeps chemiscope's CSS out of the notebook's."""
-        blob = CHEM.get(v["key"])
+        iframe also keeps chemiscope's CSS out of the notebook's. `chem` is another {key: blob} store (the program's)."""
+        blob = (CHEM if chem is None else chem).get(v["key"])
         if not blob:
             return mo.md(f"_dataset `{v['key']}` is not embedded in this build_")
         return mo.iframe(_CS.replace("__BLOB__", blob).replace("__SETTINGS__",
@@ -932,7 +1004,7 @@ def _(DIVER, FAINT, GREY, INK, KE, R, VERM, frame, heading, np, pd, plt, svg):
 
 
 @app.cell
-def _(ION, ION_REF, coulomb_parity, mo, mv_curves, np, pd, signed_matrix):
+def _(ION, ION_REF, MV_ON, MV_STATE, coulomb_parity, mo, mv_curves, np, pd, signed_matrix):
     def _mv(df):
         return df[(df["qmax"] >= 2) | df["base"].str.startswith("Li_Na")] if not df.empty else df
 
@@ -958,17 +1030,23 @@ def _(ION, ION_REF, coulomb_parity, mo, mv_curves, np, pd, signed_matrix):
     _rows = list(dict.fromkeys(_sc.sort_values(["has_lr", "label", "set"], ascending=[False, True, True])["row"])) \
         if not _sc.empty else []
     _mats = []
-    for _band, _sel in (("d < 8 Å", lambda d: d < 8), ("d ≥ 8 Å", lambda d: d >= 8)):
+    # every point carries its largest |q| (qmax); multivalent columns are scored only when the switch is on and are
+    # otherwise drawn apart, in their own matrix, labelled as excluded
+    _parts = [("", (lambda q: q >= 0) if MV_ON else (lambda q: q < 2))]
+    if not MV_ON:
+        _parts.append(("excluded from scoring (|q| ≥ 2), shown apart: ", lambda q: q >= 2))
+    for (_ptag, _psel), (_band, _sel) in [(p, b) for p in _parts for b in (("d < 8 Å", lambda d: d < 8),
+                                                                          ("d ≥ 8 Å", lambda d: d >= 8))]:
         _cells, _cols = {}, []
         if not _sc.empty:
-            _b = _sc[_sel(_sc["d"])]
+            _b = _sc[_sel(_sc["d"]) & _psel(_sc["qmax"])]
             for (_lab, _cat, _lv), _g in _b.groupby(["row", "cat", "level"]):
                 _col = _cat + ("" if _lv.startswith("wB97M-V") else f" [{_lv.split('/')[0][:12]}]")
                 _cols.append(_col)
                 _cells[(_lab, _col)] = (float(np.median(_g["err"])), len(_g),
                                         bool(_g["mlevel"].iloc[0] != _lv))
             _cols = sorted(set(_cols), key=lambda c: (c.startswith("Li"), c))
-        _mats.append(signed_matrix(_rows, _cols, _cells, f"Median signed error by charge magnitude, {_band}",
+        _mats.append(signed_matrix(_rows, _cols, _cells, f"{_ptag}Median signed error by charge magnitude, {_band}",
                                    "model − reference (meV); blue too attractive, red too repulsive")
                      or mo.md(f"_no scored points at {_band}_"))
 
@@ -995,6 +1073,8 @@ left out of every median."""),
         coulomb_parity(ION, "The tail against k q_A q_B / r",
                        "d ≥ 5 Å · 1 = bare Coulomb, 0 = no tail · large: |q_A q_B| ≥ 2 · vermillion: CT-labelled "
                        "· clipped to [−1, 3]") or mo.md(""),
+        mo.md(f"**Medians below: {MV_STATE}.** The Li⁺···Na⁺ column is a dication of two monovalent ions and "
+              "counts as monovalent."),
         *_mats,
         mo.md("A row is one model on one set, because two models scored on different sets are not a comparison. "
               "Columns are never pooled across reference levels: a set labelled at another level (CCSD(T) for the "
@@ -1056,7 +1136,8 @@ def _(EMBEDDED, ion_frame, mo, mv_curves, priv_path):
 
 
 @app.cell
-def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, R, VERM, VIK, frame, heading, logx, mo, np, pd, plt, svg):
+def _(BD, BD_STATE, FAINT, GREY, INK, ION, ION_REF, KIND_MARK, R, VERM, VIK, frame, heading, logx, mo, np, pd, plt,
+      svg):
     _FRAC = 0.02      # the dataset's label rule: a fragment within 0.02 e of its formal charge is integer-like
     _FLOOR = 1e-4     # Löwdin sums are stored to 4 decimals; anything smaller is drawn on the floor
 
@@ -1213,6 +1294,49 @@ def _(FAINT, GREY, INK, ION, ION_REF, KIND_MARK, R, VERM, VIK, frame, heading, l
 
     _ctfig, _tiernote = ct_figure(ION_REF) if not ION_REF.empty else (None, "")
     _with = ION[ION["charges"]] if not ION.empty else ION
+
+    def breakdown_table(ref):
+        """Dielectric-breakdown flags per set on the reference points, cross-tabulated with the CT-ambiguous label.
+        physics: |DFT Löwdin fragment sum - formal charge| > threshold on either fragment; points without Löwdin sums
+        are 'no charge labels' (counted, not flagged). CT-ambiguous is its own label, never part of the flag. charge:
+        an electrode-charge column (none in these sets)."""
+        if ref.empty:
+            print(f"[breakdown] diagnostics | {BD['rule']} | {BD['mode']} | no per-point reference data in this copy")
+            return mo.md(f"_Breakdown ({BD_STATE}): no per-point reference data in this copy._")
+        t = ref.copy()
+        cta = np.array([("ct_ambiguous" in str(c)) or any("ct_ambiguous" in str(x) for x in l)
+                        for c, l in zip(t["cls"], t["ct"])])
+        if BD["rule"] == "charge":
+            lab = t["q_electrode"].notna().to_numpy() if "q_electrode" in t else np.zeros(len(t), bool)
+            flag = lab & (t["q_electrode"].fillna(0).to_numpy() >= 1.0) if lab.any() else np.zeros(len(t), bool)
+            src = np.where(flag, "electrode q ≥ +1 e", "")
+        else:
+            dq = _dq(t).to_numpy(float)
+            lab = np.isfinite(dq)
+            flag = lab & (np.nan_to_num(dq) > BD["thr"])
+            src = np.where(flag, "fragment Löwdin − formal", np.where(lab, "", "no charge labels"))
+        t["breakdown"], t["why"], t["ct_ambiguous"] = flag, src, cta
+        keep = {"include": np.ones(len(t), bool), "exclude": ~flag, "only": flag}[BD["mode"]]
+        rows = []
+        for st, g in t.assign(_k=keep).groupby("set"):
+            rows.append({"set": st, "points": len(g), "flagged": int(g["breakdown"].sum()),
+                         "no charge labels": int((g["why"] == "no charge labels").sum()),
+                         "CT-ambiguous": int(g["ct_ambiguous"].sum()), "both": int((g["breakdown"] & g["ct_ambiguous"]).sum()),
+                         "CT-ambiguous, not flagged": int((g["ct_ambiguous"] & ~g["breakdown"]).sum()),
+                         "count in this state": int(g["_k"].sum()),
+                         "CT-ambiguous in this state": int((g["ct_ambiguous"] & g["_k"]).sum())})
+        msg = ("no electrode frames in this set" if BD["rule"] == "charge" and not lab.any() else
+               f"{int(flag.sum())} of {len(t)} points flagged ({int((~lab).sum())} with no charge labels, counted and "
+               f"not flagged), CT-ambiguous {int(cta.sum())} (own label), both {int((flag & cta).sum())}; response "
+               "labels (phi, C0): no labels in this set")
+        print(f"[breakdown] diagnostics | {BD['rule']} | {BD['mode']} | thr {BD['thr']:g} | {msg} | "
+              f"count in state {int(keep.sum())}")
+        return mo.vstack([mo.md(f"### Dielectric breakdown\n\n**{BD_STATE}.** {msg}. The breakdown flag and the "
+                                "CT-ambiguous label are separate; 'both' is their overlap. Reference points only (DFT "
+                                "Löwdin sums); every flagged point stays drawn above. The breakdown mode sets the "
+                                "'count in this state' column only; it does not reach the ion and CT medians and "
+                                "figures in this notebook."),
+                          mo.ui.table(pd.DataFrame(rows), selection=None, page_size=20)])
     _without = sorted({r["label"][:28] for r in R.values() if not r.get("charges")})
     mo.vstack([
         mo.md(r"""<a id="ct"></a>
@@ -1231,6 +1355,7 @@ explicit, point by point."""),
         _ctfig or mo.md("_no reference fragment charges in this copy_"),
         mo.md(_tiernote) if _tiernote else mo.md(""),
         ct_table(ION_REF) if not ION_REF.empty else mo.md(""),
+        breakdown_table(ION_REF),
         mo.md("### (b) Leakage and per-fragment charge"),
         leak_figure(_with) or mo.md("_no model in this copy reports charges on an ion–neutral pair_"),
         conservation_figure(_with, ION_REF) or mo.md(""),
@@ -1267,6 +1392,1192 @@ def _(P, mo, pd):
               "deterministic? A model can have a respectable MAE and fail several of these."),
         *_body,
     ])
+    return
+
+
+@app.cell
+def _(EMBEDDED, mo):
+    # PET-OMol-LR program results: not benchmark result rows (fine-tuned route-B arms scored on the program's own gates), so they
+    # travel as their own payload. A frozen copy carries it in EMBEDDED; the live copy and molab read it from
+    # data/lr_program/ next to this notebook (written by tools/build_lr_program_data.py).
+    import json as _jj
+    import pathlib as _pl
+
+    LRP, LRP_CHEM, LRP_VIEWS, LRP_SRC = {}, {}, [], "no program payload in this copy"
+    _e = _jj.loads(EMBEDDED).get("lr_program") if EMBEDDED else None
+    if _e:
+        LRP, LRP_CHEM, LRP_VIEWS = _e["program"], _e.get("chemiscope", {}), _e.get("views", [])
+        LRP_SRC = "frozen into this notebook at build time"
+    else:
+        _nd = mo.notebook_dir()
+        _dir = _pl.Path(str(_nd) if _nd else ".") / "data" / "lr_program"
+        if (_dir / "program.json").exists():
+            LRP = _jj.loads((_dir / "program.json").read_text())
+            LRP_SRC = "read from data/lr_program/ next to the notebook"
+            if (_dir / "chemiscope.json").exists():
+                _c = _jj.loads((_dir / "chemiscope.json").read_text())
+                LRP_CHEM, LRP_VIEWS = _c["chemiscope"], _c["views"]
+    return LRP, LRP_CHEM, LRP_SRC, LRP_VIEWS
+
+
+@app.cell
+def _(mo):
+    import os as _os
+    mv_switch = mo.ui.switch(value=False, label="include multivalent systems (any species with |q| ≥ 2) in scores "
+                             "and ranks")
+    # dielectric-breakdown toggle (same defaults and env hooks as notebooks/model_scorecard.py)
+    bd_mode = mo.ui.dropdown(options=["include", "exclude", "only"], label="dielectric-breakdown frames",
+                             value=_os.environ.get("LRB_BREAKDOWN", "include"))
+    bd_rule = mo.ui.dropdown(options=["charge", "physics"], label="breakdown rule",
+                             value=_os.environ.get("LRB_BREAKDOWN_RULE", "physics"))
+    bd_thr = mo.ui.number(start=0.01, stop=1.0, step=0.01, label="physics threshold |fragment Löwdin − formal| (e)",
+                          value=float(_os.environ.get("LRB_BREAKDOWN_THR", "0.1")))
+    floor_slider = mo.ui.slider(0.0, 0.16, 0.005, value=0.02, label="minimum weight per test family (floor)",
+                                show_value=True)
+    extra_rows = mo.ui.checkbox(value=False, label="also rank the raw (non-EMA) files and the H100 same-seed replicates")
+    return bd_mode, bd_rule, bd_thr, extra_rows, floor_slider, mv_switch
+
+
+@app.cell
+def _(bd_mode, bd_rule, bd_thr, mv_switch):
+    # Every test item carries its largest |formal charge|. the program decision of 17 Nov 2026 excludes multivalent
+    # systems (|q| >= 2: Mg2+, Ca2+, Zn2+, SO4 2-, ...) from every score, count and rank; they are listed apart.
+    MV_ON = bool(mv_switch.value)
+    MV_STATE = ("multivalent systems INCLUDED (toggle on)" if MV_ON else
+                "multivalent systems (|q| ≥ 2) EXCLUDED (default; decision of 17 Nov 2026)")
+    ION_Q = {"Na": 1, "Cl": 1, "K": 1, "Li": 1, "F": 1, "Br": 1, "Mg": 2, "Ca": 2, "Zn": 2, "SO4": 2, "W": 0,
+             "NaCl_cip": 1, "NaCl_ssip": 1}
+
+    def maxq_ion(ion):
+        return ION_Q.get(str(ion), 1)
+
+    def metric_maxq(key):
+        return 2 if (key.endswith(" Mg") or "Mg2+" in key) else 1
+
+    def counts_in(maxq):
+        return MV_ON or maxq < 2
+    # Dielectric breakdown (de Kam, Rinke, Stein & Loche 2026, LOREM; Bergmann, Reuter & Hörmann, J. Chem. Phys. 164,
+    # 174110 (2026)): default include and flag, because the benchmark emulates DFT, pathologies included. A separate
+    # label from the CT-ambiguous class; the two are cross-tabulated, never merged.
+    BD = dict(mode=bd_mode.value, rule=bd_rule.value, thr=float(bd_thr.value))
+    BD_STATE = ({"include": "breakdown frames INCLUDED and flagged (default)", "exclude": "breakdown frames EXCLUDED",
+                 "only": "breakdown frames ONLY"}[BD["mode"]]
+                + (f"; rule physics, |fragment Löwdin − formal| > {BD['thr']:g} e" if BD["rule"] == "physics"
+                   else "; rule charge, electrode q ≥ +1 e"))
+    return BD, BD_STATE, MV_ON, MV_STATE, counts_in, maxq_ion, metric_maxq
+
+
+@app.cell
+def _(BLUE, FAINT, GREY, INK, VERM, frame, np, plt, svg):
+    import textwrap
+
+    TABP = ["#4E79A7", "#F28E2B", "#59A14F", "#B07AA1", "#76B7B2", "#EDC948", "#9C755F", "#FF9DA7", "#BAB0AC",
+            "#E15759"]
+
+    def row_label(LRP, rk):
+        r = LRP["rows"][rk]
+        return rk + ("" if r["n_seeds"] >= 4 else " · 1 seed")
+
+    def row_style(LRP, rk):
+        """colour = weights (EMA blue, raw / no EMA grey); hollow = a one-seed screen, filled = 4 seeds."""
+        r = LRP["rows"][rk]
+        return (BLUE if r["weights"] == "EMA" else GREY), r["n_seeds"] < 4
+
+    def dotpanels(LRP, rows, specs, title, subtitle=None, ncol=3):
+        """One panel per quantity, rows shared. Dot = mean over seeds, ticks = each seed, bar = min-max over seeds
+        (an asymmetric range, not a symmetric interval). Dotted line = the gate or the correct value."""
+        specs = [s for s in specs if any(v for v in s["values"].values())]
+        if not specs or not rows:
+            return None
+        ncol = min(ncol, len(specs))
+        nrow = int(np.ceil(len(specs) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(2.75 * ncol + 2.3, (0.24 * len(rows) + 0.9) * nrow + 0.5),
+                                 squeeze=False)
+        y = np.arange(len(rows))[::-1]
+        for k, (ax, sp) in enumerate(zip(axes.ravel(), specs)):
+            for yi, rk in zip(y, rows):
+                v = [x for x in sp["values"].get(rk, []) or [] if x is not None]
+                if not v:
+                    continue
+                c, hollow = row_style(LRP, rk)
+                a = np.array(v, float)
+                if len(a) > 1:
+                    ax.hlines(yi, a.min(), a.max(), color=c, lw=1.0, zorder=2)
+                    ax.plot(a, [yi] * len(a), "|", color=c, ms=5, mew=0.9, zorder=2)
+                ax.plot([a.mean()], [yi], "o", ms=5.5, mfc="white" if hollow else c, mec=c, mew=1.1, zorder=3)
+            if sp.get("ref") is not None:
+                for r_ in np.atleast_1d(sp["ref"]):
+                    ax.axvline(r_, color=INK, lw=0.8, ls=(0, (1, 2.5)), zorder=1)
+            ax.set_title(sp["title"], fontsize=9, loc="left", color=VERM if sp.get("excluded") else INK)
+            ax.set_ylim(-0.7, len(rows) - 0.3)
+            ax.set_yticks(y, [row_label(LRP, r) for r in rows] if k % ncol == 0 else [], fontsize=8.3)
+            ax.tick_params(axis="y", length=0)
+            ax.spines["left"].set_visible(False)
+            frame(ax)
+            ax.tick_params(axis="x", labelsize=8)
+        for ax in axes.ravel()[len(specs):]:
+            ax.set_visible(False)
+        _h = fig.get_figheight()
+        _sub = textwrap.wrap(subtitle, 150) if subtitle else []
+        fig.suptitle(title, x=0.01, y=1 - 0.08 / _h, ha="left", va="top", fontsize=12, color=INK)
+        if _sub:
+            fig.text(0.01, 1 - 0.36 / _h, "\n".join(_sub), ha="left", va="top", fontsize=8.8, color=GREY)
+        fig.tight_layout(rect=(0, 0, 1, 1 - (0.45 + 0.17 * len(_sub)) / _h))
+        return svg(fig)
+
+    def metric_spec(LRP, key, ref=None, title=None, excluded=False):
+        M = LRP["metrics"].get(key)
+        if not M:
+            return None
+        return dict(title=(title or M["label"]) + f" ({M['unit']})" + ("  · excluded: |q| ≥ 2" if excluded else ""),
+                    values=M["values"], ref=ref, excluded=excluded)
+
+    def ladder_figure(LRP, rows, ions, title, subtitle=None):
+        """dE(n) error against n per ion: mean over seeds (line) and min-max over seeds (band). DFT = 0."""
+        if not ions:
+            return None
+        fig, axes = plt.subplots(1, len(ions), figsize=(3.3 * len(ions) + 1.0, 3.0), squeeze=False, sharey=False)
+        for ax, (ion, excl) in zip(axes[0], ions):
+            for i, rk in enumerate(rows):
+                L = [x for x in LRP["ladder_err"].get(rk, []) if x and ion in x]
+                if not L:
+                    continue
+                ns = sorted({int(n) for x in L for n in x[ion]})
+                A = np.array([[x[ion].get(str(n), np.nan) for n in ns] for x in L], float)
+                c = TABP[i % len(TABP)]
+                ls = "-" if LRP["rows"][rk]["n_seeds"] >= 4 else (0, (4, 2))
+                if len(A) > 1:
+                    ax.fill_between(ns, np.nanmin(A, 0), np.nanmax(A, 0), color=c, alpha=0.18, lw=0)
+                ax.plot(ns, np.nanmean(A, 0), color=c, ls=ls, lw=1.3, label=row_label(LRP, rk))
+            ax.axhline(0, color=INK, lw=0.8)
+            ax.set_xlabel("waters n")
+            ax.set_title(f"{ion}" + ("  · excluded: |q| ≥ 2" if excl else ""), loc="left", fontsize=10,
+                         color=VERM if excl else INK)
+            frame(ax)
+        axes[0, 0].set_ylabel("dE(n) error, model − DFT (eV)")
+        axes[0, -1].legend(fontsize=7.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
+        _h = fig.get_figheight()
+        _sub = textwrap.wrap(subtitle, 150) if subtitle else []
+        fig.suptitle(title, x=0.01, y=1 - 0.08 / _h, ha="left", va="top", fontsize=12, color=INK)
+        if _sub:
+            fig.text(0.01, 1 - 0.36 / _h, "\n".join(_sub), ha="left", va="top", fontsize=8.8, color=GREY)
+        fig.tight_layout(rect=(0, 0, 1, 1 - (0.45 + 0.17 * len(_sub)) / _h))
+        return svg(fig)
+
+    def bignladder_figure(LRP, ions):
+        B = LRP.get("ladder_big") or {}
+        if not B or not ions:
+            return None
+        fig, axes = plt.subplots(1, len(ions), figsize=(3.2 * len(ions) + 0.8, 2.8), squeeze=False)
+        for ax, (ion, excl) in zip(axes[0], ions):
+            for i, (lab, d) in enumerate(sorted(B.items())):
+                if ion not in d:
+                    continue
+                ns = sorted(int(n) for n in d[ion]["err"])
+                ax.plot(ns, [d[ion]["err"][str(n)] for n in ns], "o-", ms=3, lw=1.1,
+                        color=BLUE if lab.startswith("P") else VERM, alpha=0.9 if lab.endswith("14") else 0.6,
+                        label=f"{lab}: slope {d[ion]['slope']:+.3f}")
+            nn = np.array([0, 4000])
+            for s_ in (0.01, -0.01):
+                ax.plot(nn, s_ * nn, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+            ax.axhline(0, color=INK, lw=0.7)
+            ax.set_xlabel("waters n")
+            ax.set_title(ion + ("  · excluded: |q| ≥ 2" if excl else ""), loc="left", fontsize=10,
+                         color=VERM if excl else INK)
+            ax.legend(fontsize=7, loc="upper left" if ion != "Cl" else "lower left")
+            frame(ax)
+        axes[0, 0].set_ylabel("dE(n) error (eV)")
+        fig.suptitle("Ladders to 4,000 waters (rule 3): P (blue) and C0 (red), EMA, seeds 13r and 14",
+                     x=0.01, ha="left", fontsize=11.5, color=INK)
+        fig.tight_layout(rect=(0, 0, 1, 0.9))
+        return svg(fig)
+
+    def forest(entries, title, subtitle=None, ncol=4):
+        """Paired differences, one panel per metric (own units, linear axis), one row per contrast: mean, the
+        pre-registered 95 % Student-t interval (n = 4, t(3) = 3.182) and each seed. Blue: the interval excludes 0."""
+        entries = [e for e in entries if e]
+        if not entries:
+            return None
+        mets = list(dict.fromkeys(e["metric"] for e in entries))
+        cons = list(dict.fromkeys(e["contrast"] for e in entries))
+        ncol = min(ncol, len(mets))
+        nrow = int(np.ceil(len(mets) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(2.6 * ncol + 1.9, (0.3 * len(cons) + 0.85) * nrow + 0.7),
+                                 squeeze=False)
+        y = np.arange(len(cons))[::-1]
+        for k, (ax, m) in enumerate(zip(axes.ravel(), mets)):
+            for yi, cn in zip(y, cons):
+                e = next((x for x in entries if x["metric"] == m and x["contrast"] == cn), None)
+                if e is None:
+                    continue
+                c = GREY if e.get("excluded") else (BLUE if e["lo"] > 0 or e["hi"] < 0 else INK)
+                ax.hlines(yi, e["lo"], e["hi"], color=c, lw=1.3)
+                ax.plot(e["per_seed"], [yi] * len(e["per_seed"]), "|", color=c, ms=6, mew=1)
+                ax.plot([e["mean"]], [yi], "o", ms=5, color=c)
+            ax.axvline(0, color=INK, lw=0.8)
+            ax.set_title("\n".join(textwrap.wrap(m, 30)), loc="left", fontsize=8.8,
+                         color=VERM if "Mg" in m else INK)
+            ax.set_ylim(-0.6, len(cons) - 0.4)
+            ax.set_yticks(y, cons if k % ncol == 0 else [], fontsize=8.3)
+            ax.tick_params(axis="y", length=0)
+            ax.spines["left"].set_visible(False)
+            frame(ax)
+            ax.tick_params(axis="x", labelsize=7.8)
+        for ax in axes.ravel()[len(mets):]:
+            ax.set_visible(False)
+        _h = fig.get_figheight()
+        _sub = textwrap.wrap(subtitle, 150) if subtitle else []
+        fig.suptitle(title, x=0.01, y=1 - 0.08 / _h, ha="left", va="top", fontsize=12, color=INK)
+        if _sub:
+            fig.text(0.01, 1 - 0.36 / _h, "\n".join(_sub), ha="left", va="top", fontsize=8.8, color=GREY)
+        fig.tight_layout(rect=(0, 0, 1, 1 - (0.45 + 0.17 * len(_sub)) / _h))
+        return svg(fig)
+    return TABP, bignladder_figure, dotpanels, forest, ladder_figure, metric_spec, row_label, row_style
+
+
+@app.cell
+def _(np):
+    # ------------------------------------------------------------------ best-case weighting (numpy only, Pyodide-safe)
+    def _norm(vals, better):
+        """min-max over the rows of the block, 1 = best row, 0 = worst row. 'abs0' scores |x|, 'target1' |x - 1|."""
+        ks = [k for k, v in vals.items() if v is not None and np.isfinite(v)]
+        if not ks:
+            return {}
+        x = np.array([vals[k] for k in ks], float)
+        if better == "abs0":
+            x = np.abs(x)
+        elif better == "target1":
+            x = np.abs(x - 1.0)
+        elif better == "high":
+            x = -x
+        lo, hi = x.min(), x.max()
+        s = np.ones_like(x) if hi - lo < 1e-12 else (hi - x) / (hi - lo)
+        return dict(zip(ks, s))
+
+    def family_matrix(rows, metrics, fams, pick=np.mean):
+        """metrics: {key: dict(family, better, values={row: [per unit]})}. Returns F (rows x families, NaN where a
+        family has no metric for that row), per-metric normalised scores and per-metric row values."""
+        S, V = {}, {}
+        for k, m in metrics.items():
+            v = {r: (float(pick([x for x in m["values"].get(r, []) or [] if x is not None]))
+                     if [x for x in m["values"].get(r, []) or [] if x is not None] else None) for r in rows}
+            V[k] = v
+            # 'raw' metrics are already on a 0-1 scale with 1 = correct (the benchmark's own score components)
+            S[k] = ({r: x for r, x in v.items() if x is not None and np.isfinite(x)} if m.get("raw")
+                    else _norm(v, m["better"]))
+        F = np.full((len(rows), len(fams)), np.nan)
+        for j, f in enumerate(fams):
+            ks = [k for k, m in metrics.items() if m["family"] == f]
+            for i, r in enumerate(rows):
+                xs = [S[k][r] for k in ks if r in S[k]]
+                if xs:
+                    F[i, j] = float(np.mean(xs))
+        return F, S, V
+
+    def ranks_of(scores):
+        """1 + number of rows strictly better (ties share a rank)."""
+        s = np.asarray(scores, float)
+        return 1 + (s[None, :] > s[:, None]).sum(1)
+
+    def simplex_weights(nf, floor, n=20000, seed=0):
+        free = 1.0 - nf * floor
+        rng = np.random.default_rng(seed)
+        U = np.vstack([np.eye(nf), np.full((1, nf), 1.0 / nf), rng.dirichlet(np.ones(nf), n),
+                       rng.dirichlet(np.full(nf, 0.3), n)])
+        return floor + free * U
+
+    def best_case(F, floor, n=20000, seed=0):
+        """For each row the best rank found over the floored simplex (vertices, the centre, 2n Dirichlet samples) and
+        the weights that reach it. A search, not a proof: 'best rank found'."""
+        W = simplex_weights(F.shape[1], floor, n, seed)
+        S = F @ W.T
+        R = 1 + (S[None, :, :] > S[:, None, :]).sum(1)
+        best = R.min(1)
+        # among the weights reaching the best rank, report the one with the largest margin over the next row
+        wit = []
+        for i in range(F.shape[0]):
+            cand = np.where(R[i] == best[i])[0]
+            others = np.delete(S[:, cand], i, axis=0)
+            margin = S[i, cand] - (others.max(0) if len(others) else 0)
+            wit.append(W[cand[int(np.argmax(margin))]])
+        return best, np.array(wit)
+
+    def first_threshold(F, i, f, floor):
+        """Exact: the smallest t such that row i ranks first for EVERY weight vector with w_f >= t (floored simplex),
+        or None. For a rival j with d = F_i - F_j, the worst case at w_f = t puts the floor on every other family and
+        the free mass on i's worst other family: g(t) = floor * sum_{k != f} d_k + t d_f + (1 - t - (n-1) floor) m,
+        m = min_{k != f} d_k. g is linear in t, so it holds on [t, t_max] iff it holds at both ends."""
+        nf = F.shape[1]
+        tmax = 1.0 - (nf - 1) * floor
+        ts = [floor]
+        for j in range(F.shape[0]):
+            if j == i:
+                continue
+            d = F[i] - F[j]
+            o = np.delete(d, f)
+            m = o.min()
+
+            def g(t):
+                return floor * (o.sum() - m * (nf - 1)) + t * d[f] + (1.0 - t) * m
+
+            if g(tmax) <= 0:
+                return None
+            if g(floor) > 0:
+                continue
+            slope = d[f] - m
+            ts.append((-(floor * (o.sum() - m * (nf - 1)) + m)) / slope)
+        t = max(ts)
+        return t if t <= tmax + 1e-12 else None
+
+    def boot_equal_ranks(rows, metrics, fams, B=300, seed=1):
+        """Equal-weight rank under resampling: each (row, metric) list of per-seed (or per-file, per-run) values is
+        resampled with replacement and its mean taken; one-value rows stay fixed. 5-95 % of the rank."""
+        rng = np.random.default_rng(seed)
+        out = np.zeros((B, len(rows)), int)
+        for b in range(B):
+            def pick(v, _r=rng):
+                v = list(v)
+                return float(np.mean([v[k] for k in _r.integers(0, len(v), len(v))])) if len(v) > 1 else v[0]
+            F, _, _ = family_matrix(rows, metrics, fams, pick=pick)
+            ok = ~np.isnan(F).any(1)
+            sc = np.where(ok, np.nanmean(F, 1), -np.inf)
+            out[b] = ranks_of(sc)
+        return np.percentile(out, 5, axis=0), np.percentile(out, 95, axis=0)
+
+    def best_case_block(rows, metrics, fams, floor, k=2):
+        """The whole panel for one block of rows that share a family set."""
+        F, S, V = family_matrix(rows, metrics, fams)
+        miss = [r for i, r in enumerate(rows) if np.isnan(F[i]).any()]
+        keep = [i for i, r in enumerate(rows) if r not in miss]
+        rows_k = [rows[i] for i in keep]
+        F = F[keep]
+        if len(rows_k) < 2:
+            return None
+        eq = ranks_of(F.mean(1))
+        best, wit = best_case(F, floor)
+        lo, hi = boot_equal_ranks(rows_k, metrics, fams)
+        out = []
+        for i, r in enumerate(rows_k):
+            mr = {}
+            for kk in metrics:
+                if r in S[kk]:
+                    vals = [S[kk][x] for x in rows_k if x in S[kk]]
+                    mr[kk] = (int(1 + sum(v > S[kk][r] for v in vals)), len(vals))
+            strong = [metrics[kk]["label"] for kk, (rk, n) in sorted(mr.items(), key=lambda t: t[1][0]) if rk <= k]
+            weak = [metrics[kk]["label"] for kk, (rk, n) in mr.items() if rk > n - k and n > k]
+            cond = []
+            for j, f in enumerate(fams):
+                t = first_threshold(F, i, j, floor)
+                if t is not None:
+                    cond.append(f"first whenever w({f}) ≥ {t:.2f}")
+            out.append(dict(row=r, eq=int(eq[i]), eq_lo=float(lo[i]), eq_hi=float(hi[i]), best=int(best[i]),
+                            weights={f: float(w) for f, w in zip(fams, wit[i])}, strong=strong, weak=weak,
+                            cond=cond, n=len(rows_k)))
+        return dict(rows=out, missing=miss, F=F, fams=fams, rows_k=rows_k)
+    return best_case, best_case_block, family_matrix, first_threshold, ranks_of
+
+
+@app.cell
+def _(BD_STATE, LRP, LRP_SRC, MV_STATE, bd_mode, bd_rule, bd_thr, mo, mv_switch, pd):
+    if not LRP:
+        _out = mo.md('<a id="program"></a>\n## PET-OMol-LR program results\n\n_' + LRP_SRC + ": run "
+                     "`tools/build_lr_program_data.py` to write data/lr_program/._")
+    else:
+        _rows = []
+        for _rk, _r in LRP["rows"].items():
+            _rows.append({"row": _rk, "arm": _r["arm"], "weights": _r["weights"], "seeds": _r["n_seeds"],
+                          "evidence": _r["evidence"], "setup": _r["setup"], "what it is": _r["desc"]})
+        _out = mo.vstack([
+            mo.md(f"""<a id="program"></a>
+## PET-OMol-LR program results
+
+The program fine-tunes PET-OMol-S with an explicit long-range head (route B) and scores every arm on its own
+gates: near-equilibrium accuracy (val500), the seam sign set, charged pairs beyond 8 Å, ion–water cluster ladders,
+condensed-phase cut-outs, charges against DFT, MD stability and permittivity. These are **not benchmark result rows**: they
+are scorecards of unreleased fine-tunes, so they sit in their own section and never enter the long-range score
+above.
+
+**How to read a row.** A row is one arm with one kind of weights in one setup. *EMA* is the exponential moving
+average file and *raw* the final iterate. A 4-seed row (GH200 seeds 13r, 14, 15 and 16) is a claim. A one-seed row is a
+screen and is drawn hollow. The H100 seed-13 files are same-seed replicates of GH200 13r and are never counted as
+a fifth seed. Mid-run (step 3,000) files are superseded and left out.
+
+**Multivalent systems.** By the decision of 17 Nov 2026, any system with a species of |q| ≥ 2 (Mg²⁺, Ca²⁺,
+SO₄²⁻, …) is left out of every score, count and rank unless the switch below is on. Excluded items are drawn apart
+and labelled. Current state: **{MV_STATE}**.
+
+**Dielectric breakdown.** A frame where charge has moved across a boundary a polarisable medium should hold (an
+electrode at q ≥ +1 e for rule *charge*; a fragment whose DFT Löwdin sum is more than the threshold away from its
+formal charge, for rule *physics*; the CT-ambiguous class stays a separate label). Default: include and flag, because the benchmark emulates DFT. The program sub-tests
+(val500, set B, type-held-out pairs, ladders) carry no electrode and no fragment charge labels ("no charge labels":
+counted, not flagged), so both rules flag 0 frames there; these precomputed scores include every frame whatever the breakdown state
+(under *only* they hold no flagged frame and are not a breakdown score). Current state: **{BD_STATE}**.
+
+<small style="color:#767676">{LRP_SRC}; built {LRP.get('built', '?')}.</small>"""),
+            mo.hstack([mv_switch, bd_mode, bd_rule, bd_thr], justify="start", gap=1.5, wrap=True),
+            mo.accordion({"### Every row: arm, weights, seeds, setup": mo.ui.table(pd.DataFrame(_rows),
+                                                                                   selection=None, page_size=30)}),
+        ])
+    _out
+    return
+
+
+@app.cell
+def _(LRP, MV_ON, mo, pd):
+    # Running work, files with no number yet, MD-stability counts, and the 1-D scan block (AL vs PET-OMol-S, P, C0).
+    # Everything is read from program.json; a rebuild (bash tools/rebuild_lr_program.sh) flips 'not yet scored'.
+    import base64 as _b64
+    import io as _io
+
+    def scan_rows(S, include_mv=False):
+        """scan-quality table: one row per metric, one column per model; '[lo, hi]' are 95 % block-bootstrap bounds"""
+        if not S:
+            return []
+        M = S["models"]
+        AG = "AGG (excl. Mg2+)"
+
+        def ci(t, nd=1):
+            return "not yet scanned" if not t else f"{t[0]:.{nd}f} [{t[1]:.{nd}f}, {t[2]:.{nd}f}]"
+
+        def med(d, nd=0):
+            return "not yet scanned" if not d else f"{d['median']:.{nd}f} [{d['lo']:.{nd}f}, {d['hi']:.{nd}f}], max {d['max']:.{nd}f}"
+        spec = [
+            ("type-held-out pairs, F MAE 8–14 Å (meV/Å)", lambda m: ci((S["mae"].get(f"typeheld|{AG}|gate 8-14 A|{m}") or {}).get("F")), "12 scans"),
+            ("type-held-out pairs, F MAE 6–8 Å (meV/Å)", lambda m: ci((S["mae"].get(f"typeheld|{AG}|6-8 A|{m}") or {}).get("F")), "12 scans"),
+            ("type-held-out, net-force error on B, 10–14 Å (meV/Å)", lambda m: ci((S["mae"].get(f"typeheld|{AG}|tail 10-14 A|{m}") or {}).get("netB")), "12 scans"),
+            ("type-held-out, median |ΔE_int| error, 8–14 Å (eV)", lambda m: ci((S["mae"].get(f"typeheld|{AG}|gate 8-14 A|{m}") or {}).get("dEint"), 3), "12 scans"),
+            ("set-B gate pairs, F MAE 8–14 Å (meV/Å)", lambda m: ci((S["mae"].get(f"setB|{AG}|gate 8-14 A|{m}") or {}).get("F")), "18 scans"),
+            ("set-B, net-force error on B, 10–14 Å (meV/Å)", lambda m: ci((S["mae"].get(f"setB|{AG}|tail 10-14 A|{m}") or {}).get("netB")), "18 scans"),
+            ("kink 6–9 Å, type-held-out (meV/Å per step²)", lambda m: med(S["smooth"].get(f"typeheld|AGG|{m}", {}).get("excess_max_cut")), "12 scans"),
+            ("kink 6–9 Å, set B (meV/Å per step²)", lambda m: med(S["smooth"].get(f"setB|AGG|{m}", {}).get("excess_max_cut")), "18 scans"),
+            ("kink 6–9 Å, sign-set cells (meV/Å per step²)", lambda m: med(S["smooth"].get(f"search|AGG|{m}", {}).get("excess_max_cut")), "12 scans"),
+            ("−dE/dr vs force, RMS 6–9 Å, type-held-out (meV/Å)", lambda m: med(S["smooth"].get(f"typeheld|AGG|{m}", {}).get("cons_rms_cut"), 1), "12 scans"),
+            ("−dE/dr vs force, RMS 6–9 Å, set B (meV/Å)", lambda m: med(S["smooth"].get(f"setB|AGG|{m}", {}).get("cons_rms_cut"), 1), "18 scans"),
+            ("right sign, Gdm⁺Gdm⁺ 8 Å (share)", lambda m: ci((S["search"].get(f"Gdm+_Gdm+|8|{m}") or {}).get("sign"), 3), "500 orientations"),
+            ("right sign, K⁺Gdm⁺ 8 Å (share; held out)", lambda m: ci((S["search"].get(f"K+_Gdm+|8|{m}") or {}).get("sign"), 3), "500 orientations"),
+            ("median force / Coulomb, Gdm⁺Gdm⁺ 10 Å", lambda m: ci((S["search"].get(f"Gdm+_Gdm+|10|{m}") or {}).get("med"), 2), "500 orientations"),
+            ("median force / Coulomb, NH₄⁺NH₄⁺ 10 Å", lambda m: ci((S["search"].get(f"NH4+_NH4+|10|{m}") or {}).get("med"), 2), "500 orientations"),
+        ]
+        if include_mv:
+            spec.append(("Gdm⁺Mg²⁺ (multivalent), F MAE 8–14 Å (meV/Å)",
+                         lambda m: ci((S["mae"].get(f"typeheld|Gdm+_Mg2+|gate 8-14 A|{m}") or {}).get("F")), "6 scans"))
+        rows = []
+        for name, fn, n in spec:
+            r = {"metric": name, "n": n}
+            for m in M:
+                r[m + (" (1 seed)" if m == "AL" else "")] = fn(m)
+            rows.append(r)
+        return rows
+
+    _st, _S = LRP.get("status") or {}, LRP.get("scans")
+    _out = []
+    if _st:
+        _run = pd.DataFrame([{"work": r["name"], "state": r["state"], "expected": r["eta"] or "–",
+                              "not yet scored": ", ".join(r["pending"]) or "–", "what": r["what"]}
+                             for r in _st.get("running", [])])
+        _md = _st.get("md_stability") or {}
+        _a, _b = _md.get("without Mg2+"), _md.get("Mg2+ apart")
+        _pend = LRP.get("pending") or {}
+        _out += [mo.md('<a id="running"></a>\n### Running, and what is not yet scored\n\n' + _st.get("not_yet_scored", "")
+                       + ". Rows with no scored file yet: " + (", ".join(k for k in _pend if k not in LRP["rows"]) or "none")
+                       + f". <small>Bundle built {_st.get('built', '?')}.</small>"),
+                 mo.ui.table(_run, selection=None, page_size=10)]
+        _vt = _st.get("verdict_text") or {}
+        if _vt:
+            _out.append(mo.md("**Four-seed verdicts of the latest arms.** " + " ".join(
+                f"\n\n{v}" for v in _vt.values())))
+        if _a:
+            _out.append(mo.md(
+                f"**MD stability** (every program arm and the base model, ion–water clusters, 250–400 K): without Mg²⁺ "
+                f"{_a['n']} runs, **{_a['stable']} stable, {_a['flagged']} flagged, {_a['unstable']} unstable**; Mg²⁺ "
+                f"(multivalent, {'counted: switch on' if MV_ON else 'shown apart'}) {_b['n']} runs, {_b['stable']} stable, "
+                f"{_b['flagged']} flagged, {_b['unstable']} unstable."))
+    if _S:
+        _out += [mo.md('<a id="scans"></a>\n### Scan quality: 1-D scans of AL against PET-OMol-S, P and C0\n\n'
+                       + _S["note"] + " Evidence: " + _S["evidence"] + "."),
+                 mo.ui.table(pd.DataFrame(scan_rows(_S, include_mv=MV_ON)), selection=None, page_size=20)]
+        _figs = {f"Figure: {k}": mo.vstack([mo.image(_io.BytesIO(_b64.b64decode(v["png"])), width="100%"),
+                                            mo.md(f"<small>{v['caption']}</small>")])
+                 for k, v in _S.get("figures", {}).items()}
+        if _figs:
+            _out.append(mo.accordion(_figs, multiple=True))
+        _out.append(mo.md("The three scan sets are in the structure viewers below (section *Program sub-tests*, "
+                          "list entries starting '1-D scans')."))
+    mo.vstack(_out) if _out else mo.md("")
+    return
+
+
+@app.cell
+def _(LRP, mo, pd, plt):
+    # large-n ion-water ladders (n up to 4,000 waters): AL and PAL four seeds against P and C0
+    def ladder_big_rows(LB, arm=None):
+        """large-n ladder table: one row per arm and ion (seed summary) plus the per-seed slopes with frame intervals"""
+        rows = []
+        if not LB:
+            return rows
+        for a in ("AL", "PAL", "P", "C0"):
+            if a not in LB["arms"] or (arm and a != arm):
+                continue
+            for ion in ("Na", "Cl"):
+                x = LB["arms"][a].get(ion)
+                if not x:
+                    continue
+                s = x["summary"]
+                seed_txt = "; ".join(f"s{r['seed']} {r['slope']:+.4f} [{r['lo']:+.4f}, {r['hi']:+.4f}]" for r in x["files"])
+                fr = lambda r: "/".join(str(r["frames"].get(str(n), r["frames"].get(n, 0))) for n in r.get("n_used", []))
+                frames_txt = "; ".join(f"s{r['seed']} n {r.get('n_used', ['?'])[0]}-{r.get('n_used', ['?'])[-1]}, frames {fr(r)}, "
+                                       f"{r.get('records', '?')} records" for r in x["files"])
+                e4 = [r["err_mean"].get("4000", r["err_mean"].get(4000)) for r in x["files"]]
+                e4 = [v for v in e4 if v is not None]
+                arm_txt = (f"{s['mean']:+.4f} [{s['lo']:+.4f}, {s['hi']:+.4f}] (95 % t, {s['n_seeds']} seeds)"
+                           if s["n_seeds"] >= 3 else f"{s['mean']:+.4f} (mean of {s['n_seeds']} seed{'s' if s['n_seeds'] > 1 else ''}; no seed interval)")
+                rows.append({"arm": a, "ion": {"Na": "Na⁺", "Cl": "Cl⁻"}[ion], "seeds": s["n_seeds"],
+                             "slope n = 1,000-4,000 (eV/water)": arm_txt,
+                             "per seed [frame bootstrap]": seed_txt,
+                             "inside ±0.01": "yes" if s["within_0.01"] else "no",
+                             "tail A per seed (DFT " + f"{LB['dft_A'][ion]:.2f}; pass 1.0-2.0)": ", ".join(f"{v:.1f}" for v in s["A"] if v is not None),
+                             "error at n = 4,000 (eV, per-seed range)": (f"{min(e4):+.1f} to {max(e4):+.1f}" if e4 else "n/a"),
+                             "n used, frames per n, records": frames_txt})
+        return rows
+
+
+    def ladder_big_figure(LB, plt):
+        """mean error of dE(n) against n per arm (seed mean; thin lines = seeds), Na⁺ and Cl⁻"""
+        fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.2))
+        col = {"AL": "#C0392B", "PAL": "#8E44AD", "P": "#2C6FAC", "C0": "#7F7F7F"}
+        for ax, ion in zip(axes, ("Na", "Cl")):
+            for a in ("C0", "P", "AL", "PAL"):
+                x = (LB["arms"].get(a) or {}).get(ion)
+                if not x:
+                    continue
+                ns = sorted(int(n) for n in x["files"][0]["err_mean"])
+                for r in x["files"]:
+                    ax.plot(ns, [r["err_mean"][str(n)] if str(n) in r["err_mean"] else r["err_mean"][n] for n in ns],
+                            color=col[a], lw=0.6, alpha=0.5)
+                m = [sum((r["err_mean"].get(str(n)) if str(n) in r["err_mean"] else r["err_mean"][n]) for r in x["files"]) / len(x["files"]) for n in ns]
+                ax.plot(ns, m, "o-", color=col[a], lw=1.6, ms=3, label=f"{a} ({len(x['files'])} seed{'s' if len(x['files']) > 1 else ''})")
+            ax.axhline(0, color="k", lw=0.5)
+            ax.set_xscale("log")
+            ax.set_xlabel("waters n")
+            ax.set_title({"Na": "Na⁺", "Cl": "Cl⁻"}[ion], loc="left", fontsize=10)
+            ax.spines[["top", "right"]].set_visible(False)
+        axes[0].set_ylabel("error of ΔE(n) vs DFT law (eV)")
+        axes[1].legend(frameon=False, fontsize=8)
+        fig.tight_layout()
+        return fig
+
+    _LB = LRP.get("ladder_large_n") if LRP else None
+    if _LB and _LB.get("arms"):
+        _fig = ladder_big_figure(_LB, plt)
+        _o = mo.vstack([
+            mo.md('<a id="ladders-large-n"></a>\n### Ion–water ladders at large n (1,000–4,000 waters)\n\n'
+                  + "\n\n".join(_LB.get("text") or []) + "\n\n<small>" + _LB["note"] + "</small>"),
+            mo.ui.table(pd.DataFrame(ladder_big_rows(_LB)), selection=None, page_size=10),
+            mo.as_html(_fig),
+            mo.md("<small>Mean error per n (thick: seed mean; thin: each seed). An error curve that bends over (concave) "
+                  "gives a smaller slope over 1,000–4,000 waters than over n ≥ 200; it still grows, and n beyond 4,000 "
+                  "is not tested. The tail criterion (A inside [1.0, 2.0]) fails for every arm.</small>"),
+        ])
+        plt.close(_fig)
+    else:
+        _o = mo.md("")
+    _o
+    return
+
+
+@app.cell
+def _(LRP, MV_ON, bignladder_figure, dotpanels, ladder_figure, metric_spec, mo):
+    if not LRP:
+        _o = mo.md("")
+    else:
+        _main = ["C0 EMA", "P EMA", "C0H EMA", "A0 EMA", "A1 EMA", "C0 raw", "P raw", "C0H raw", "A0 raw", "A1 raw",
+                 "ORIG", "P EMA, H100 s13", "C0 EMA, H100 s13", "CEIL-A EMA", "CEIL-B EMA", "CEIL-C EMA", "AL EMA", "PAL EMA"]
+        _main = [r for r in _main if r in LRP["rows"]]
+        _acc = dotpanels(LRP, _main, [metric_spec(LRP, "val500 F MAE", 42.0), metric_spec(LRP, "val500 E MAE"),
+                                      metric_spec(LRP, "val500 F MAE, LES off", 42.0)],
+                         "Near-equilibrium accuracy (val500)",
+                         "500 held-out OMol25-style structures; dotted: the V1 gate, F MAE ≤ 42 meV/Å. Filled = 4 "
+                         "GH200 seeds (dot mean, ticks each seed, bar min–max); hollow = one seed; blue EMA, grey raw.")
+        _cells = []
+        for _c, _lab in (("Gdm+_Gdm+ 8", "Gdm⁺·Gdm⁺ 8 Å"), ("Gdm+_Gdm+ 9", "Gdm⁺·Gdm⁺ 9 Å"),
+                         ("NH4+_NH4+ 8", "NH₄⁺·NH₄⁺ 8 Å"), ("NH4+_Gdm+ 7.5", "NH₄⁺·Gdm⁺ 7.5 Å"),
+                         ("K+_Gdm+ 8", "K⁺·Gdm⁺ 8 Å (apart)")):
+            for _q, _t, _ref in (("att", "attractive share (%)", 10), ("over15", "above 1.5× Coulomb (%)", 10)):
+                _cells.append(dict(title=f"{_lab}: {_t}", ref=_ref, values={
+                    rk: [None if c is None else c[_c][_q] for c in v] for rk, v in LRP["cells"].items()}))
+        _seam = dotpanels(LRP, _main, [metric_spec(LRP, "cells passing", 4)] + _cells
+                          + [metric_spec(LRP, "overshoot NH4 Gdm 7.5", [1.0, 1.5])],
+                          "Seam sign set (rule 4)",
+                          "2,000 orientations per cell; a cell passes with ≥ 90 % repulsive, median ≤ 1.5× k/d² and "
+                          "≤ 10 % above 1.5×; rule 4 counts the 4 scorable cells, K⁺Gdm⁺ apart, NH₄⁺NH₄⁺ 9 Å absent "
+                          "from the search set. Reference: the Coulomb oracle, not DFT.", ncol=4)
+        _pairs = dotpanels(LRP, _main, [metric_spec(LRP, "setB held-out r>=8A F MAE meV/A"),
+                                        metric_spec(LRP, "setB held-out r>=8A F MAE meV/A, pair types not in P rows"),
+                                        metric_spec(LRP, "setB held-out r>=8A F MAE meV/A, LES off"),
+                                        metric_spec(LRP, "setB held-out r>=8A |dE_int| median eV")],
+                           "Charged pairs beyond 8 Å (set-B pairs gate, DFT)",
+                           "216 frames; 162 belong to pair types that are in P's training rows (other geometries); "
+                           "'not in P rows' is H₂O·H₂O only, which sits at the zero-force floor.", ncol=4)
+        _lads = [("Na", False), ("Cl", False)] + ([("Mg", True)] if MV_ON else [])
+        _lspec = [metric_spec(LRP, "ladder slope Na", [-0.02, 0.02]), metric_spec(LRP, "ladder slope Cl", [-0.02, 0.02])]
+        if MV_ON:
+            _lspec.append(metric_spec(LRP, "ladder slope Mg", [-0.02, 0.02], excluded=True))
+        _lad = dotpanels(LRP, _main, _lspec, "Cluster ladders: slope of the error (rule 1)",
+                         "eV per water for n ≥ 24, held-out centres, LES on; gate ±0.02 eV/water (dotted)."
+                         + ("" if MV_ON else " Mg²⁺ excluded (|q| ≥ 2); switch on to show it apart."), ncol=3)
+        _ladc = ladder_figure(LRP, ["C0 EMA", "P EMA", "C0H EMA", "A0 EMA", "A1 EMA", "ORIG", "AL EMA", "PAL EMA"], _lads,
+                              "dE(n) error against cluster size",
+                              "mean over seeds (line), min–max over the 4 seeds (band); dashed = one-seed screen")
+        _big = bignladder_figure(LRP, _lads)
+        _cond = dotpanels(LRP, _main, [metric_spec(LRP, "nacl1m interior F MAE vs DFT meV/A"),
+                                       metric_spec(LRP, "droplet: F MAE + full LES"),
+                                       metric_spec(LRP, "cut-outs interior: F MAE + full LES"),
+                                       metric_spec(LRP, "nacl1m interior Na shell: max abs per-ion error", 0.2),
+                                       metric_spec(LRP, "nacl1m interior Cl shell: max abs per-ion error", 0.2),
+                                       metric_spec(LRP, "frag RMSE"), metric_spec(LRP, "per-atom RMSE"),
+                                       metric_spec(LRP, "nacl1m per-atom q RMSE vs Lowdin")],
+                          "Condensed phase and charges",
+                          "NaCl(aq) 1 m cut-outs (8 DFT frames, interior atoms ≥ 5 Å inside), the nacl1 droplet, and "
+                          "charges against DFT Löwdin; ion-shell gate 0.2 e (dotted). No multivalent ion in these sets.",
+                          ncol=4)
+        _o = mo.vstack([
+            mo.md("### What each arm scores on each gate\n\nEvery panel shares the rows. A number in the text below is "
+                  "a mean over the 4 GH200 seeds unless a row says one seed."),
+            _acc, _seam, _pairs, _lad, _ladc or mo.md(""), _big or mo.md(""),
+            mo.md("<small>Ladders to 4,000 waters: P and C0 EMA files, seeds 13r and 14 only (n = 2 per arm, no "
+                  "interval); dotted lines are ±0.01 eV/water, the large-n limit.</small>"),
+            _cond,
+        ])
+    _o
+    return
+
+
+@app.cell
+def _(FAINT, GREY, INK, LRP, MV_ON, MV_STATE, VERM, forest, frame, mo, np, plt, svg):
+    def _typeheld_fig():
+        _T = (LRP.get("typeheld") or {}).get("scores") or {}
+        _PO = (LRP.get("typeheld") or {}).get("pooled") or {}
+        if not _T:
+            return None
+        files = [("C0", "C0_s13_ema", "C0 H100 s13"), ("C0", "C0_s13r_ema", "C0 13r"), ("C0", "C0_s14_ema", "C0 14"),
+                 ("C0", "C0_s15_ema", "C0 15"), ("C0", "C0_s16_ema", "C0 16"), ("P", "P_s13_ema", "P H100 s13"),
+                 ("P", "P_s13r_ema", "P 13r"), ("P", "P_s14_ema", "P 14"), ("P", "P_s15_ema", "P 15"), ("P", "P_s16_ema", "P 16"),
+                 ("PET", "PETOMOLS", "PET-OMol-S")]
+        panels = [("K+_Gdm+", "K⁺·Gdm⁺", False), ("Gdm+_I-", "Gdm⁺·I⁻", False),
+                  ("pool1", "pooled: K⁺Gdm⁺ + Gdm⁺I⁻", False), ("Gdm+_Mg2+", "Gdm⁺·Mg²⁺ · excluded: |q| ≥ 2", True)]
+        if MV_ON:
+            panels.append(("pool2", "pooled, all three · includes |q| ≥ 2", True))
+        fig, axes = plt.subplots(1, len(panels), figsize=(2.55 * len(panels) + 1.5, 3.6), sharey=True, squeeze=False)
+        y = np.arange(len(files))[::-1]
+        for ax, (key, lab, excl) in zip(axes[0], panels):
+            for yi, (arm, f, name) in zip(y, files):
+                if key == "pool1":
+                    d = _PO.get(f, {}).get("K+Gdm+ and Gdm+I- (Mg2+ excluded)")
+                elif key == "pool2":
+                    d = _PO.get(f, {}).get("all three (incl. Gdm+Mg2+)")
+                else:
+                    d = (_T.get(f, {}).get(key) or {}).get("gate")
+                if not d:
+                    continue
+                c = {"C0": "#E15759", "P": "#4E79A7", "PET": INK}[arm]
+                ax.hlines(yi, d["lo"], d["hi"], color=c, lw=1.0)
+                ax.plot([d["F"]], [yi], "o", ms=5, color=c, mfc="white" if f.endswith("fema") else c)
+                zero = d["zero"]
+            ax.axvline(zero, color=GREY, lw=0.9, ls=(0, (1, 2.5)))
+            ax.annotate("zero-force floor", xy=(zero, -0.9), fontsize=7.5, color=GREY, ha="center", va="top")
+            ax.set_title(lab, loc="left", fontsize=9.2, color=VERM if excl else INK)
+            ax.set_xlabel("F MAE, r_COM ≥ 8 Å (meV/Å)", fontsize=8.5)
+            frame(ax)
+            ax.tick_params(labelsize=8)
+        axes[0, 0].set_yticks(y, [n for _, _, n in files], fontsize=8.3)
+        fig.suptitle("Type-held-out charged pairs (DFT): force error beyond 8 Å", x=0.01, ha="left", fontsize=12)
+        fig.text(0.01, 0.9, "dot: one model file; bar: 95 % cluster bootstrap over the 6 orientation scans of a type "
+                 "(asymmetric); hollow: H100 s13 (same-seed replicate of 13r)", fontsize=8.5, color=GREY)
+        fig.tight_layout(rect=(0, 0, 1, 0.86))
+        return svg(fig)
+
+    def _stats_forest():
+        St = LRP.get("stats") or {}
+        sel = [("A34/A35", "A34 primary: P minus C0, ema, GH200 seeds 13r,14,15,16", "P − C0 (EMA)"),
+               ("A34/A35", "A35 E1: C0H EMA minus C0H raw", "C0H EMA − C0H raw"),
+               ("A34/A35", "A35 E2: C0H EMA minus C0 EMA (GH200)", "C0H EMA − C0 EMA"),
+               ("A30", "A30 primary: A1 minus A0, ema, GH200 seeds 13r,14,15,16 (setup-matched)", "A1 − A0 (EMA)")]
+        want = ["val500 F", "val500 E", "pairs gate F (setB r>=8, on)", "overshoot NH4+Gdm+ 7.5 A",
+                "backbone max rms Gdm+_Gdm+", "ladder slope Na held-out LES on", "ladder slope Cl held-out LES on",
+                "ladder slope Mg held-out LES on", "shell Na max err", "shell Cl max err"]
+        out = []
+        for grp, sec, lab in sel:
+            for e in (St.get(grp, {}).get(sec) or []):
+                if e["metric"] not in want:
+                    continue
+                mg = "Mg" in e["metric"]
+                if mg and not MV_ON:
+                    continue
+                out.append(dict(e, contrast=lab, metric=e["metric"] + ("  · excluded: |q| ≥ 2" if mg else ""),
+                                excluded=mg))
+        return forest(out, "Paired differences over 4 seeds",
+                      "dot: mean; bar: pre-registered 95 % t interval (n = 4, t(3) = 3.182); ticks: each seed; blue: "
+                      "the interval excludes 0")
+
+    _o = mo.md("")
+    if LRP:
+        _T = LRP.get("typeheld") or {}
+        _PO = _T.get("pooled") or {}
+
+        def _pm(arm_files, tag):
+            v = [_PO[f][tag]["F"] for f in arm_files if f in _PO]
+            return (np.mean(v), min(v), max(v)) if v else (np.nan,) * 3
+        _c0 = _pm(["C0_s13r_ema", "C0_s14_ema", "C0_s15_ema", "C0_s16_ema"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
+        _p = _pm(["P_s13r_ema", "P_s14_ema", "P_s15_ema", "P_s16_ema"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
+        _pet = _pm(["PETOMOLS"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
+        _o = mo.vstack([
+            mo.md(f"""### Type-held-out charged pairs (DFT gate)
+
+Three pair types that no training row contains: K⁺·Gdm⁺, Gdm⁺·I⁻ and Gdm⁺·Mg²⁺. Each type has 6 orientation scans
+at 13 separations from 6 to 14 Å, labelled at ωB97M-V/def2-TZVPD with forces (234 pair frames and 4 monomers).
+Gdm⁺ is the common partner of all three types, and the other partner is a single atom, so the variety is the Gdm⁺
+rotation only. Each arm has 4 independent seeds (GH200 13r, 14, 15, 16). The H100 seed-13 file is a same-seed
+replicate of 13r: it is drawn, but never counted as a fifth seed.
+
+**{LRP.get("typeheld_pdiff_text", "")}** Pooled over K⁺Gdm⁺ and Gdm⁺I⁻ ({MV_STATE}), seed means: C0 {_c0[0]:.1f}
+meV/Å (seeds {_c0[1]:.1f}–{_c0[2]:.1f}), P {_p[0]:.1f} ({_p[1]:.1f}–{_p[2]:.1f}), PET-OMol-S {_pet[0]:.1f}, one file. The
+zero-force floor is 39.2 meV/Å. The C0 − P gap of {_c0[0] - _p[0]:.1f} meV/Å is {(_c0[0] - _p[0]) / 9.2:.0%} of the
+9.2 meV/Å gap on the in-distribution set-B gate. Gdm⁺·Mg²⁺ is drawn apart
+(|q| ≥ 2, excluded from scoring). No arm learns that pair: every file is at or above its zero-force floor of 77.5 meV/Å.
+This is one gate with 6 scans per type, so it is a screen and not a claim."""),
+            _typeheld_fig() or mo.md(""),
+            mo.md("### Paired statistics (pre-registered, 4 seeds)"),
+            _stats_forest() or mo.md(""),
+            mo.md("<small>Ladder slopes are signed. The Cl⁻ slope is negative in every arm, so a negative Cl "
+                  "difference moves Cl further from 0, and a positive one moves it closer. The pre-registered cell count in these files uses 5 cells on the z axis. It is not "
+                  "repeated here: the program decision of 17 Nov counts 4 scorable cells, and the panel above uses that "
+                  "denominator. The intervals carry no multiplicity correction. Only val500 and the "
+                  "named claims C1–C3 and E1–E3 were pre-registered; the other rows are descriptive. EMA: in the C0H run EMA "
+                  "lowers the val500 force error by 0.81 [0.16, 1.46] meV/Å but raises the energy error by +0.20 [0.03, "
+                  "0.36] meV/atom; with the lr annealed, EMA and raw agree within ±0.2 meV/Å; C0H against C0 also "
+                  "changes the schedule, so it is not an EMA test.</small>"),
+        ])
+    _o
+    return
+
+
+@app.cell
+def _(BLUE, FAINT, GREY, INK, LRP, MV_ON, MV_STATE, VERM, frame, maxq_ion, mo, np, pd, plt, svg):
+    def _md_grid(_runs, title, excl=False):
+        if not _runs:
+            return None
+        models = sorted({r["model"] for r in _runs})
+        Ts = sorted({r["T"] for r in _runs})
+        fig, ax = plt.subplots(figsize=(1.2 * len(Ts) + 2.8, 0.38 * len(models) + 1.3))
+        col = {"stable": "#ECE5E0", "flagged": "#DBAA8D", "unstable": "#912D06"}
+        for i, m in enumerate(models):
+            for j, T in enumerate(Ts):
+                rr = [r for r in _runs if r["model"] == m and r["T"] == T]
+                if not rr:
+                    ax.text(j, i, "·", ha="center", va="center", color=GREY)
+                    continue
+                _n = {k: sum(r["verdict"] == k for r in rr) for k in ("stable", "flagged", "unstable")}
+                worst = "unstable" if _n["unstable"] else "flagged" if _n["flagged"] else "stable"
+                ax.add_patch(plt.Rectangle((j - 0.48, i - 0.42), 0.96, 0.84, color=col[worst], lw=0))
+                ax.text(j, i, f"{_n['stable']}/{_n['flagged']}/{_n['unstable']}", ha="center", va="center", fontsize=8.5,
+                        color="white" if worst == "unstable" else INK)
+        ax.set_xlim(-0.5, len(Ts) - 0.5)
+        ax.set_ylim(len(models) - 0.5, -0.5)
+        ax.set_xticks(range(len(Ts)), [f"{T:g} K" for T in Ts])
+        ax.set_yticks(range(len(models)), models, fontsize=9)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        ax.tick_params(length=0)
+        ax.set_title(title, loc="left", fontsize=11, color=VERM if excl else INK)
+        fig.tight_layout()
+        return svg(fig)
+
+    def _nve_fig():
+        N = LRP.get("nve") or {}
+        Z = ((LRP.get("z2") or {}).get("values")) or {}
+        if not N:
+            return None
+        fig, axes = plt.subplots(1, 2, figsize=(8.4, 2.9))
+        ks = sorted(N)
+        y = np.arange(len(ks))[::-1]
+        for yi, k in zip(y, ks):
+            d = N[k]
+            c = BLUE if k.startswith("P") else VERM
+            if d.get("ci"):
+                axes[0].hlines(yi, d["ci"][0], d["ci"][1], color=c, lw=1.1)
+            axes[0].plot([d["drift"]], [yi], "o", color=c, ms=5)
+        for x in (-3, 3):
+            axes[0].axvline(x, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        axes[0].set_yticks(y, ks, fontsize=8.5)
+        axes[0].set_xlabel("NVE drift M1 (meV/atom/ns), 95 % bootstrap")
+        axes[0].set_title("49-atom Cl⁻(H₂O)₁₆-type cluster, 3 ps NVE", loc="left", fontsize=9.5)
+        zk = sorted(Z)
+        pairs = sorted({p for v in Z.values() for p in v})
+        mk = dict(zip(pairs, ["o", "s", "^", "D"]))
+        for yi, k in zip(np.arange(len(zk))[::-1], zk):
+            for p in pairs:
+                if p in Z[k]:
+                    axes[1].plot([abs(Z[k][p])], [yi], mk[p], ms=5.5, color=BLUE if k.startswith("P") else VERM,
+                                 mfc="white" if p != "NH4-Gdm" else None)
+        for p in pairs:
+            axes[1].plot([], [], mk[p], color=GREY, mfc="white" if p != "NH4-Gdm" else GREY, label=p)
+        axes[1].legend(fontsize=7.5, loc="lower right")
+        axes[1].axvline(0.01, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+        axes[1].set_yticks(np.arange(len(zk))[::-1], zk, fontsize=8.5)
+        axes[1].set_xscale("log")
+        axes[1].set_xlabel("|E(AB) − E(A) − E(B) − kQ_AQ_B/d| at 100 Å (eV); tol 0.01")
+        axes[1].set_title("Worst charged pair per file at 100 Å (Z2)", loc="left", fontsize=9.5)
+        for ax in axes:
+            frame(ax)
+        fig.tight_layout()
+        return svg(fig)
+
+    def _z2_ratio():
+        Z = ((LRP.get("z2") or {}).get("values")) or {}
+        w = {k: max(abs(x) for x in v.values()) for k, v in Z.items() if v}
+        r = [w[f"C0_s{sd}"] / w[f"P_s{sd}"] for sd in ("13r", "14", "15", "16") if f"C0_s{sd}" in w and f"P_s{sd}" in w]
+        return (f"{min(r):.0f}–{max(r):.0f} over {len(r)} paired seeds" if r else "not available")
+
+    def _permit_fig():
+        P = LRP.get("permit") or []
+        if not P:
+            return None
+        fig, ax = plt.subplots(figsize=(7.2, 0.42 * len(P) + 1.5))
+        P = sorted(P, key=lambda x: (x["box"], x["model"]))
+        y = np.arange(len(P))[::-1]
+        for yi, x in zip(y, P):
+            c = BLUE if x["model"] == "PET-OMol-S" else INK
+            if x.get("chi2"):
+                ax.hlines(yi + 0.12, *x["chi2"], color=c, lw=1.2)
+            if x.get("boot"):
+                ax.hlines(yi - 0.12, *x["boot"], color=GREY, lw=1.2)
+            ax.plot(x.get("per_seed") or [], [yi] * len(x.get("per_seed") or []), "|", color=c, ms=6)
+            ax.plot([x["eps"]], [yi], "o", color=c, ms=5.5)
+        ax.axvline(78, color=VERM, lw=0.9)
+        ax.annotate("experiment 78", xy=(78, len(P) - 0.5), fontsize=8.5, color=VERM, ha="right")
+        ax.set_yticks(y, [f"{x['model']} · {x['box']} · {x.get('n_seeds') or '?'} trajectory seeds" for x in P], fontsize=8.5)
+        ax.set_xlabel("static permittivity ε (tin-foil, D1 dipole proxy)")
+        ax.spines["left"].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+        frame(ax)
+        ax.set_title("Water permittivity, 300 K, 100 ps per seed", loc="left", fontsize=11.5, pad=16)
+        ax.annotate("upper bar: χ² 95 % (N_eff); lower grey bar: block bootstrap 95 %; ticks: per seed",
+                    xy=(0, 1), xycoords="axes fraction", xytext=(0, 5), textcoords="offset points", fontsize=8.5,
+                    color=GREY)
+        fig.tight_layout()
+        return svg(fig)
+
+    def _charges_fig(_ions):
+        C = (LRP.get("mdstab") or {}).get("charges_md") or {}
+        S = (LRP.get("mdstab") or {}).get("charges_static") or {}
+        if not C or not _ions:
+            return None
+        fig, axes = plt.subplots(1, len(_ions), figsize=(3.4 * len(_ions) + 1.0, 2.9), squeeze=False)
+        for ax, (ion, excl) in zip(axes[0], _ions):
+            ks = sorted(k for k in C if k.endswith("|" + ion))
+            y = np.arange(len(ks))[::-1]
+            for yi, k in zip(y, ks):
+                d = C[k]
+                ax.hlines(yi, *d["q_ion_ci"], color=INK, lw=1.0)
+                ax.plot([d["q_ion"]], [yi], "o", color=INK, ms=4.5)
+            for sch, c in (("Löwdin", BLUE), ("Hirshfeld", GREY)):
+                s = S.get(f"{ion}_48_{sch}")
+                if s:
+                    ax.axvline(s["q_ion"], color=c, lw=0.9, ls=(0, (3, 2)))
+                    ax.annotate(f"DFT {sch}", xy=(s["q_ion"], len(ks) - 0.4), fontsize=7.5, color=c, rotation=90,
+                                va="top")
+            ax.set_yticks(y, [k.split("|")[0] for k in ks], fontsize=8.3)
+            ax.set_xlabel("ion charge in MD (e), 95 % bootstrap")
+            ax.set_title(ion + ("  · excluded: |q| ≥ 2" if excl else ""), loc="left", fontsize=10,
+                         color=VERM if excl else INK)
+            frame(ax)
+        fig.suptitle("Charge on the ion along the MD, against DFT on the 48-water cluster", x=0.01, ha="left",
+                     fontsize=11.5)
+        fig.tight_layout(rect=(0, 0, 1, 0.9))
+        return svg(fig)
+
+    def _speed_fig():
+        sp = LRP.get("speed") or {}
+        if not sp:
+            return None
+        fig, ax = plt.subplots(figsize=(6.4, 1.9))
+        for i, x in enumerate(sp["inference"]):
+            ax.barh([i + 0.18], [x["N16"]], height=0.34, color=GREY)
+            ax.barh([i - 0.18], [x["N32"]], height=0.34, color=BLUE)
+            ax.annotate(f"N = 16: {x['N16']:.0f} ms   N = 32: {x['N32']:.0f} ms (×{x['N32'] / x['N16']:.2f})",
+                        xy=(x["N32"], i), xytext=(6, 0), textcoords="offset points", va="center", fontsize=8.5)
+        ax.set_yticks(range(len(sp["inference"])), [f"{x['atoms']:,} atoms" for x in sp["inference"]])
+        ax.set_xlabel("ms per energy + force evaluation (route-B MD graph)")
+        frame(ax)
+        ax.set_title("Neighbours N = 32 (A1) against N = 16 (A0)", loc="left", fontsize=11)
+        fig.tight_layout()
+        return svg(fig)
+
+    _o = mo.md("")
+    if LRP:
+        _runs = (LRP.get("mdstab") or {}).get("runs") or []
+        _mono = [r for r in _runs if r.get("maxq", maxq_ion(r["sys"])) < 2]
+        _multi = [r for r in _runs if r.get("maxq", maxq_ion(r["sys"])) >= 2]
+        _scored = _runs if MV_ON else _mono
+        _n = {k: sum(r["verdict"] == k for r in _scored) for k in ("stable", "flagged", "unstable")}
+        _nm = {k: sum(r["verdict"] == k for r in _multi) for k in ("stable", "flagged", "unstable")}
+        _ions = [("Na", False), ("Cl", False)] + ([("Mg", True)] if MV_ON else [])
+        _rdf = (LRP.get("mdstab") or {}).get("rdf", {}).get("n48_T300", {})
+        _rdf_t = pd.DataFrame([{"pair": k.rsplit("_", 1)[0] if False else "_".join(k.split("_")[:2]),
+                               "model": "_".join(k.split("_")[2:]), "first peak r (Å)": round(v["peak_r"], 2),
+                               "peak height": round(v["peak_h"], 2), "blocks": v["n_blocks"]}
+                              for k, v in _rdf.items()]) if _rdf else pd.DataFrame()
+        if not MV_ON and not _rdf_t.empty:
+            _rdf_t = _rdf_t[~_rdf_t["pair"].str.startswith("Mg")]
+        _o = mo.vstack([
+            mo.md(f"""### MD stability, permittivity and speed
+
+**MD stability ({MV_STATE}).** {len(_scored)} scored runs: {_n['stable']} stable, {_n['flagged']} flagged and
+{_n['unstable']} unstable. Open ion–water clusters (48, 200, 1,000 and 2,000 waters) and periodic water, 250–400 K,
+SVR NVT, 0.5 fs, 20 ps production. The models are route-B seed-13 finals in MD form, PET-OMol-S, RS and the
+frozen-charge arms. Each cell has 1 or 2 starting structures, so every cell is a screen. The multivalent runs are
+listed apart: {len(_multi)} Mg²⁺ runs, of which {_nm['stable']} are stable, {_nm['flagged']} flagged and
+{_nm['unstable']} unstable. All 8 unstable runs of the full set of 309 are Mg²⁺ at 350–400 K."""),
+            _md_grid(_scored, "Runs per model and temperature: stable / flagged / unstable"
+                     + ("" if MV_ON else " (|q| ≥ 2 excluded)")),
+            _md_grid(_multi, "Excluded from scoring: Mg²⁺ runs (|q| ≥ 2), shown apart", excl=True),
+            _charges_fig(_ions) or mo.md(""),
+            mo.accordion({"First-shell RDF peaks, 48 waters, 300 K": mo.ui.table(_rdf_t, selection=None,
+                                                                                    page_size=30)})
+            if not _rdf_t.empty else mo.md(""),
+            mo.md("**Conservation of the P and C0 EMA files.** In MD form the conservation suite "
+                  "gate passes in all 8 files on both the ragged and the padded path. The NVE drift passes the "
+                  "3 meV/atom/ns gate in 2 of 4 files per arm. The drift is seed-sensitive, from −3.6 to +7.8 within "
+                  "C0. There is one trajectory per file, so no interval within a file. The size-consistency "
+                  "check Z2 reports only the worst of its charged pairs at 100 Å in each file. That worst pair is "
+                  "NH₄⁺·Gdm⁺ in every C0 file and a smaller one in every P file, and the ratio of the worst values, "
+                  "C0 over P, is " + _z2_ratio() + ". This is reported, not gated."),
+            _nve_fig() or mo.md(""),
+            mo.md("**Permittivity.** PET-OMol-S has no long-range term, and 4 seeds of 100 ps each give ε = 55.4 "
+                  "at 512 waters and 59.6 at 64 waters. Both χ² intervals lie below or just reach the experimental "
+                  "78. No model is separated from PET-OMol-S at n = 4 (all six Welch p > 0.14). The dipole is a fixed "
+                  "2.9 D per water along the bisector, so ε here is an orientational proxy, not the model's own ε."),
+            _permit_fig() or mo.md(""),
+            mo.md("**Speed.** Training at N = 32 costs 1.5× per step: 20.1–20.4 structures/s for A1 against "
+                  "30.4–31.0 for A0 on GH200. Inference costs 1.49× at 600 atoms and 1.30× at 3,000 atoms. These "
+                  "were measured on same-graph reference files, not on the trained models. The MD ms/step of the "
+                  "NVE runs ran on a shared GPU, so the P against C0 ordering there is contention."),
+            _speed_fig() or mo.md(""),
+        ])
+    _o
+    return
+
+
+@app.cell
+def _(LRP, mo):
+    _oth = LRP.get("other") or [] if LRP else []
+    (mo.vstack([
+        mo.md("### Other arms and probes\n\nThese arms and probes have no row in the panels above: their results "
+              "exist only as text in the program notes, so they are transcribed here with their source and their "
+              "evidence level. None of them enters the best-case panel."),
+        mo.accordion({f"**{o['name']}** · {o['evidence']}": mo.md(o["text"] + f"\n\n<small>source: {o['source']}"
+                                                                   "</small>") for o in _oth}, multiple=True)
+        if _oth else mo.md(""),
+    ]) if _oth else mo.md(""))
+    return
+
+
+@app.cell
+def _(GREY, INK, LRP, MV_ON, MV_STATE, R, SCORES, VERM, BLUE, best_case_block, extra_rows, floor_slider, frame, mo,
+      mv_switch, np, pd, plt, row_label, svg):
+    def _program_metrics():
+        out = {}
+        for k, m in LRP["metrics"].items():
+            fam = m.get("family")
+            if m.get("excluded") == "Mg2+":
+                if not MV_ON:
+                    continue
+                fam = "ladders"
+            if fam:
+                out[k] = dict(m, family=fam)
+        return out
+
+    def _typeheld_metrics():
+        T = (LRP.get("typeheld") or {}).get("scores") or {}
+        files = {"C0 (5 EMA files)": ["C0_s13_ema", "C0_s13r_ema", "C0_s14_ema", "C0_s15_ema", "C0_s16_ema"],
+                 "P (5 EMA files)": ["P_s13_ema", "P_s13r_ema", "P_s14_ema", "P_s15_ema", "P_s16_ema"],
+                 "PET-OMol-S (base, 1 file)": ["PETOMOLS"]}
+        types = [("K+_Gdm+", "K⁺Gdm⁺"), ("Gdm+_I-", "Gdm⁺I⁻")] + ([("Gdm+_Mg2+", "Gdm⁺Mg²⁺ (|q| ≥ 2)")] if MV_ON else [])
+        M = {}
+        for t, lab in types:
+            M[f"F {t}"] = dict(label=f"{lab} F MAE ≥ 8 Å", family=lab, better="low",
+                               values={_r: [(T.get(f, {}).get(t) or {}).get("gate", {}).get("F") for f in fs]
+                                       for _r, fs in files.items()})
+            M[f"E {t}"] = dict(label=f"{lab} |ΔE_int| median", family=lab, better="low",
+                               values={_r: [(T.get(f, {}).get(t) or {}).get("gate", {}).get("dE") for f in fs]
+                                       for _r, fs in files.items()})
+        return list(files), M, [lab for _, lab in types]
+
+    def _md_metrics():
+        runs = (LRP.get("mdstab") or {}).get("runs") or []
+        runs = [_r for _r in runs if MV_ON or _r.get("maxq", 1) < 2]
+        models = sorted({_r["model"] for _r in runs})
+        Ts = sorted({_r["T"] for _r in runs})
+        M = {}
+        for T in Ts:
+            M[f"T{T}"] = dict(label=f"stable share at {T:g} K", family=f"{T:g} K", better="high",
+                              values={m: [1.0 if _r["verdict"] == "stable" else 0.0 for _r in runs
+                                          if _r["model"] == m and _r["T"] == T] for m in models})
+        return models, M, [f"{T:g} K" for T in Ts]
+
+    def _fig(_B, _title):
+        _rows = _B["rows"]
+        fig, ax = plt.subplots(figsize=(6.6, 0.36 * len(_rows) + 1.4))
+        y = np.arange(len(_rows))[::-1]
+        for yi, _r in zip(y, _rows):
+            ax.hlines(yi, _r["eq_lo"], _r["eq_hi"], color=GREY, lw=1.2)
+            ax.plot([_r["eq"]], [yi], "o", color=GREY, ms=6)
+            if _r["best"] < _r["eq"]:
+                ax.annotate("", xy=(_r["best"], yi), xytext=(_r["eq"], yi),
+                            arrowprops=dict(arrowstyle="->", color=BLUE, lw=1.1))
+            ax.plot([_r["best"]], [yi], "D", color=BLUE, ms=5.5)
+        n = _rows[0]["n"]
+        ax.set_xlim(n + 0.5, 0.5)
+        ax.set_xticks(range(1, n + 1))
+        ax.set_yticks(y, [_r["label"] for _r in _rows], fontsize=8.5)
+        ax.tick_params(axis="y", length=0)
+        ax.spines["left"].set_visible(False)
+        ax.set_xlabel("rank (1 = best of this block)")
+        frame(ax)
+        ax.set_title(_title, loc="left", fontsize=11, pad=16)
+        ax.annotate("grey: equal weights (bar 5–95 % under resampling of seeds, files or runs)\nblue ◆: best rank "
+                    "found under the weights most favourable to that row", xy=(0, 1), xycoords="axes fraction",
+                    xytext=(0, 5), textcoords="offset points", fontsize=8, color=GREY)
+        fig.tight_layout()
+        return svg(fig)
+
+    def _table(_B):
+        return mo.ui.table(pd.DataFrame([{
+            "row": _r["label"], "equal-weight rank": f"{_r['eq']} [{_r['eq_lo']:.0f}–{_r['eq_hi']:.0f}]",
+            "best rank found": _r["best"],
+            "weights that reach it": ", ".join(f"{f} {w:.2f}" for f, w in _r["weights"].items()),
+            "strengths (top 2)": "; ".join(_r["strong"]) or "–", "weaknesses (bottom 2)": "; ".join(_r["weak"]) or "–",
+            "conditionals": "; ".join(_r["cond"]) or "never first for a single family's weight alone"}
+            for _r in _B["rows"]]), selection=None, page_size=30)
+
+    _o = mo.md("")
+    if LRP:
+        _floor = float(floor_slider.value)
+        _base = ["C0 EMA", "P EMA", "C0H EMA", "A0 EMA", "A1 EMA", "ORIG", "CEIL-A EMA", "CEIL-B EMA", "CEIL-C EMA",
+                "AL EMA", "PAL EMA"]
+        _more = ["C0 raw", "P raw", "C0H raw", "A0 raw", "A1 raw", "C0 EMA, H100 s13", "P EMA, H100 s13",
+                "A0 EMA, H100 s13", "A1 EMA, H100 s13", "CEIL-A raw", "CEIL-B raw", "CEIL-C raw", "AL raw", "PAL raw"]
+        _rows = [_r for _r in _base + (_more if extra_rows.value else []) if _r in LRP["rows"]]
+        _fams = ["accuracy", "seam", "pairs", "ladders", "condensed", "charges"]
+        _blocks = []
+        _B1 = best_case_block(_rows, _program_metrics(), _fams, _floor)
+        if _B1:
+            for _r in _B1["rows"]:
+                _r["label"] = row_label(LRP, _r["row"])
+            _blocks.append(("Program arms over six test families", _B1))
+        _r2, _M2, _f2 = _typeheld_metrics()
+        _B2 = best_case_block(_r2, _M2, _f2, min(_floor, 0.49))
+        if _B2:
+            for _r in _B2["rows"]:
+                _r["label"] = _r["row"]
+            _blocks.append(("Type-held-out DFT gate, one family per pair type", _B2))
+        _r3, _M3, _f3 = _md_metrics()
+        _B3 = best_case_block(_r3, _M3, _f3, min(_floor, 0.24))
+        if _B3:
+            for _r in _B3["rows"]:
+                _r["label"] = _r["row"] + " · 1–2 starts per cell"
+            _blocks.append(("MD stability, one family per temperature", _B3))
+        # benchmark models: the long-range score's own components (decay, scale, response, accuracy; 0-1, 1 =
+        # correct) used as they are, not rescaled. Precomputed by the harness: multivalent records are inside them.
+        _comp = ["decay", "scale", "response", "accuracy"]
+        _bm = {n: SCORES.get(n, {}) for n in R}
+        _rows4 = [n for n in R if "oracle" not in n]
+        _M4 = {c: dict(label=c, family=c, better="high", raw=True,
+                       values={n: [(_bm.get(n) or {}).get(c)] for n in _rows4}) for c in _comp}
+        _B4 = best_case_block(_rows4, _M4, _comp, min(_floor, 0.24)) if _rows4 else None
+        if _B4:
+            for _r in _B4["rows"]:
+                _rr = R[_r["row"]]
+                _r["label"] = _rr["label"][:30] + (" ⚠ level" if _rr.get("mismatch") else "") + " · 1 seed"
+            _B4["missing"] = [R[m]["label"][:30] for m in _B4["missing"]]
+            _blocks.append(("Benchmark models over the four long-range score components", _B4))
+        _body = []
+        for _title, _B in _blocks:
+            _body += [mo.md(f"#### {_title}"), _fig(_B, _title), _table(_B)]
+            if _B["missing"]:
+                _body.append(mo.md("Not ranked in this block (a whole family has no value): " + ", ".join(_B["missing"])))
+        _fam_text = "; ".join(f"**{k}**: {v}" for k, v in LRP["families"].items())
+        _o = mo.vstack([
+            mo.md(f"""<a id="bestcase"></a>
+## Best case for each model: weighting the tests in its favour
+
+**This is a best-case view for each model, not a benchmark ranking.** The repository declines to collapse its
+diagnostics into one number, and this panel does not do so either. It asks, for each model in turn, how high it
+could rank if someone chose the weighting of the test families most favourable to it. A model that cannot reach
+first place under any weighting is behind on every family that counts. A model that is first only when one family
+carries most of the weight is a specialist, and the conditionals name that family.
+
+**Scoring ({MV_STATE}).** Each metric is min–max scaled over the rows of its block: 1 is the best row and 0 the
+worst. A family score is the mean of its metrics, and a model's score is the weighted sum over families. Weights
+are non-negative, sum to 1, and none falls below the floor, so no single family can carry the whole result. The best
+rank is searched over the vertices of the floored simplex, its centre and 40,000 Dirichlet samples (seeded), so it
+is the best rank *found*. The conditionals are exact: "first whenever w(f) ≥ t" holds for every weighting with that
+much weight on f. Rows that differ in setup are marked: "· 1 seed" is a one-seed screen. EMA and raw files are
+separate rows, and the H100 files are same-seed replicates of GH200 13r. Because the scaling is relative to the
+block, adding or removing a row changes every score.
+
+Families: {_fam_text}.
+
+**Four blocks, never mixed.** The program arms, the type-held-out gate (C0, P and the base PET-OMol-S), the MD
+stability models and the benchmark models are scored on different tests, so each block ranks only its own rows. The
+benchmark block uses the long-range score's four components as they stand (0 to 1, 1 = correct), without rescaling.
+Those components are precomputed and include multivalent records, so the switch does not reach that block; it does
+reach the other three."""),
+            mo.hstack([floor_slider, extra_rows, mv_switch], justify="start", gap=1.5, wrap=True),
+            *_body,
+        ])
+    _o
+    return
+
+
+@app.cell
+def _(LRP_VIEWS, mo):
+    # one viewer at a time, picked from a list: a cell re-run builds the iframe, which works the same in a live
+    # kernel, on molab and in the WebAssembly export (no lazy widgets)
+    _lr = {v["title"]: v["key"] for v in LRP_VIEWS if v["key"].startswith("lrp-")}
+    _lb = {v["title"]: v["key"] for v in LRP_VIEWS if v["key"].startswith("lrb-")}
+    lrp_pick = mo.ui.dropdown(options={"(none)": "", **_lr}, value="(none)", label="program sub-test", full_width=True)
+    lrb_pick = mo.ui.dropdown(options={"(none)": "", **_lb}, value="(none)", label="reference-only set", full_width=True)
+    return lrb_pick, lrp_pick
+
+
+@app.cell
+def _(LRP_CHEM, LRP_VIEWS, chemiscope_view, lrb_pick, lrp_pick, mo):
+    _by = {v["key"]: v for v in LRP_VIEWS}
+
+    def _show(pick):
+        v = _by.get(pick.value)
+        return mo.vstack([pick] + ([mo.md(v["prose"]), chemiscope_view(v, chem=LRP_CHEM)] if v else []))
+    mo.vstack([
+        mo.md('<a id="lrp-explore"></a>\n## Program sub-tests and unscored sets, structure by structure\n\n'
+              "Each sub-test of the program gates as a chemiscope dataset, with forces as arrows wherever the data "
+              "carry them (DFT for the pairs gate, the type-held-out gate, val500, the 1-D scans and the NaCl(aq) "
+              "cut-outs; model forces for the seam cells, whose reference is the Coulomb oracle). Pick one from the "
+              "list. The second list holds the benchmark sets that are not part of the long-range score, with their "
+              "DFT forces and Löwdin charges. Third-party sets (GSCDB, NCI Atlas, BFDB) are not embedded."),
+        _show(lrp_pick) if _by else mo.md("_no program structures in this copy_"),
+        mo.md("### Benchmark sets outside the score (reference only)"),
+        _show(lrb_pick),
+    ])
+    return
+
+
+
+@app.cell
+def _(LRP, mo):
+    _lim = (LRP or {}).get("evidence_limits") or []
+    (mo.md('<a id="evidence-limits"></a>\n## Evidence limits\n\n' + "\n".join(f"- {x}" for x in _lim))
+     if _lim else mo.md(""))
     return
 
 

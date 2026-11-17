@@ -112,6 +112,7 @@ def main(argv=None) -> int:
     ap.add_argument("--data", default=None, help="dataset dir for the chemiscope views and the multivalent / charge-transfer "
                     "panels (default: RUNS/../lr-sets)")
     ap.add_argument("--no-chemiscope", action="store_true", help="skip the embedded chemiscope datasets")
+    ap.add_argument("--no-lr-program", action="store_true", help="do not embed notebooks/data/lr_program/")
     a = ap.parse_args(argv)
 
     sys.path.insert(0, str(HERE / "src"))
@@ -144,6 +145,16 @@ def main(argv=None) -> int:
     except Exception as e:
         print(f"[site] no precomputed scores ({type(e).__name__}: {e})")
     data["source"] = f"{len(data['results'])} results, frozen at build time"   # not the local path
+
+    # the PET-OMol-LR program payload (tools/build_lr_program_data.py) travels in the same literal, so a frozen copy
+    # needs no data folder; the live notebook reads the same files from notebooks/data/lr_program/
+    lrp = HERE / "notebooks" / "data" / "lr_program"
+    if not a.no_lr_program and (lrp / "program.json").exists():
+        data["lr_program"] = {"program": json.loads((lrp / "program.json").read_text())}
+        if (lrp / "chemiscope.json").exists():
+            data["lr_program"].update(json.loads((lrp / "chemiscope.json").read_text()))
+        print(f"[site] program payload: {len(data['lr_program']['program']['rows'])} rows, "
+              f"{len(data['lr_program'].get('chemiscope', {}))} chemiscope datasets")
 
     size = len(json.dumps(data)) / 1024
     print(f"[site] {len(data['results'])} results, {len(data['priors'])} prior suites, {size:.0f} KB frozen")

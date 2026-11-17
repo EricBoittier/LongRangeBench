@@ -28,7 +28,7 @@ asserts tail fraction 1.000; truncate the calculator's cutoff and it must read 0
 There are two ways in:
 
 - **`lrbench eval`** — *how wrong* a model is, on fixed sets with fixed rules.
-- **`lrbench priors`** — *whether it violates something that cannot be true of any correct potential*: twenty
+- **`lrbench priors`** — *whether it violates something that cannot be true of any correct potential*: twenty-four
   pass/fail checks of physical priors (far-field exponent, separability, F = −dE/dR, energy conservation,
   charge-state convexity), of the implementation (locality, response to total charge, determinism, precision) and of
   the evaluation itself (contamination, level of theory, whether a metric can even tell the model from a flat line).
@@ -183,7 +183,7 @@ browser with no server, which is what the linked chemiscope views are built on.
 | command | what it does |
 |---|---|
 | `lrbench eval` | score a model or ensemble on one or more sets → `results.json` |
-| `lrbench priors` | twenty pass/fail checks of physical, model and data assumptions (`--list` prints them) |
+| `lrbench priors` | twenty-four pass/fail checks of physical, model and data assumptions (`--list` prints them) |
 | `lrbench compare` | markdown / HTML tables and publication-style figures from several results |
 | `lrbench suite` | one eval per model, each in its own environment, plus a combined table (local or Slurm) |
 | `lrbench perf` | timing and memory on standard and generated boxes |
@@ -206,6 +206,7 @@ browser with no server, which is what the linked chemiscope views are built on.
 - [docs/results.md](docs/results.md) — committed result rows: schema, validator, adding a row, a set or new curves
 - [docs/perf.md](docs/perf.md) — the timing protocol
 - [docs/props.md](docs/props.md) — dipoles, quadrupoles, polarisabilities, IP/EA
+- [docs/dielectric-breakdown.md](docs/dielectric-breakdown.md) — the notebooks' breakdown toggle (include / exclude / only; rules charge and physics)
 - [tools/README.md](tools/README.md) — the analysis and dataset-building scripts
 - [ROADMAP.md](ROADMAP.md) — where this is going, and what we would like help with
 

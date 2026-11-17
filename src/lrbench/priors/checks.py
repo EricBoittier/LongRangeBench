@@ -14,7 +14,7 @@ import numpy as np
 
 from ..data import Structure, base_id, combine_spins, record_level, term_structure
 from .core import FAIL, NA, NE, PASS, WARN, Ctx, check, outcome
-from .probes import FINE_GRID, boxed, r_com, templates
+from .probes import FINE_GRID, boxed, oriented_templates, r_com, templates
 from .synthetic import KE
 
 ABS_FLOOR = 1e-4  # eV: 0.1 meV
@@ -65,13 +65,13 @@ def _templates(ctx: Ctx):
     return ctx.opts["_tpl"]
 
 
-def scans(ctx: Ctx) -> List[dict]:
+def scans(ctx: Ctx, T=None, key: str = "_scans") -> List[dict]:
     """Fine closest-contact scans of every template (orientation 0): E_int(d), r, and the force on B along the axis."""
-    if "_scans" in ctx.opts:
-        return ctx.opts["_scans"]
+    if key in ctx.opts:
+        return ctx.opts[key]
     grid = ctx.opts.get("grid", FINE_GRID)
     out = []
-    T = _templates(ctx)
+    T = _templates(ctx) if T is None else T
     ab = [[t.ab(d) for d in grid] for t in T]
     mono = [[t.frag(0), t.frag(1)] for t in T]
     P = ctx.predict([s for row in ab for s in row] + [s for row in mono for s in row])
@@ -95,8 +95,19 @@ def scans(ctx: Ctx) -> List[dict]:
         o.update(d=np.asarray(grid, float), r=np.array([r_com(s, t.ia, t.ib) for s in row]), E=E, EA=ea, EB=eb,
                  Eint=E - ea - eb, fB=fB, noise=np.array([ctx.noise(e, ea, eb) for e in E]),
                  errors=[q.get("error") for q in p if q.get("error")] + [x.get("error") for x in (pa, pb) if x.get("error")])
-    ctx.opts["_scans"] = out
+    ctx.opts[key] = out
     return out
+
+
+def all_scans(ctx: Ctx) -> List[dict]:
+    """The orientation-0 scans plus, with ``scan_orients`` = K > 0 (``--scan-orientations``), the same scans in K
+    random rigid orientations of each pair (fragments turned about their own centroids). Used by the checks that
+    need no reference at the scanned geometry: seam, energy_force, conservativeness."""
+    k = int(ctx.opts.get("scan_orients", 0))
+    if k <= 0:
+        return scans(ctx)
+    return scans(ctx) + scans(ctx, oriented_templates(_templates(ctx), k, int(ctx.opts.get("orient_seed", 2026))),
+                              key="_scans_oriented")
 
 
 def canon(ctx: Ctx) -> Dict[str, np.ndarray]:
@@ -243,7 +254,7 @@ def conservativeness(ctx: Ctx):
     regions = {"near": (0.0, 8.0), "far": (8.0, np.inf)}
     acc = {k: [] for k in regions}
     rows = []
-    for o in scans(ctx):
+    for o in all_scans(ctx):
         k = np.argsort(o["r"])                      # one ordering, applied to every array together
         r, E, f, d = o["r"][k], o["Eint"][k], o["fB"][k], o["d"][k]
         good = np.isfinite(E) & np.isfinite(f)
@@ -267,7 +278,9 @@ def conservativeness(ctx: Ctx):
     for name in regions:
         v = np.array(acc[name], float)
         v = v[np.isfinite(v)]
-        out[name] = {"n_points": int(v.size), "median_rel_deviation": _r(np.median(v), 4) if v.size else None}
+        out[name] = {"n_points": int(v.size), "median_rel_deviation": _r(np.median(v), 4) if v.size else None,
+                     "q95_rel_deviation": _r(np.percentile(v, 95), 4) if v.size else None,
+                     "max_rel_deviation": _r(np.max(v), 4) if v.size else None}
         if v.size >= 4 and np.median(v) > 0.1:
             fails.append(f"{name} median |F + dE/dr|/|F| = {np.median(v):.3f}")
     if not any(out[n]["n_points"] for n in regions):
@@ -310,7 +323,9 @@ def virial_tail(ctx: Ctx):
                      "scored": bool(is_monopole_pair(cls) and not is_ct(cls)),
                      "expected_p": 1 if is_monopole_pair(cls) else None,
                      "median_p": _r(np.median(v), 3) if v.size else None,
-                     "iqr_p": [_r(np.percentile(v, 25), 3), _r(np.percentile(v, 75), 3)] if v.size >= 4 else None}
+                     "iqr_p": [_r(np.percentile(v, 25), 3), _r(np.percentile(v, 75), 3)] if v.size >= 4 else None,
+                     "q95_abs_p_minus_1": _r(np.percentile(np.abs(v - 1), 95), 3) if v.size else None,
+                     "max_abs_p_minus_1": _r(np.max(np.abs(v - 1)), 3) if v.size else None}
         if v.size >= 4 and is_monopole_pair(cls) and not is_ct(cls) and abs(np.median(v) - 1.0) > 0.5:
             fails.append(f"{cls} p = {np.median(v):.2f}")
     if not any(r["n_points"] for r in rows.values()):
@@ -394,7 +409,8 @@ def seam(ctx: Ctx):
     if (e := _need_dimers(ctx)):
         return e
     hits, rows, n_eval = [], [], 0
-    for o in scans(ctx):
+    ratios = collections.defaultdict(list)
+    for o in all_scans(ctx):
         t = o["t"]
         ok = np.isfinite(o["Eint"])
         if ok.sum() < 10:
@@ -417,6 +433,7 @@ def seam(ctx: Ctx):
                     res["plateaus"].append({"d": [_r(dm[a], 2), _r(dm[b], 2)], "level_eV": _r(np.mean(E[a:b + 2]), 3),
                                             "recovers_by_d": _r(dm[np.where(after)[0][0]], 2)})
         ratio = np.abs(s) / np.maximum(np.abs(sp), 0.05)
+        ratios[t.cls].extend(ratio[win & np.isfinite(ratio)].tolist())
         cl = (dm >= 6 - 1e-6) & (ratio > 5) & (np.abs(s) > 0.25)
         for a, b in _runs(cl, dm):
             res["cliffs"].append({"d": [_r(dm[a], 2), _r(dm[b], 2)], "max_slope_eV_A": _r(np.abs(s[a:b + 1]).max(), 3),
@@ -435,7 +452,12 @@ def seam(ctx: Ctx):
     windows = {k: v for k, v in win.items()}
     msg = (f"{len(hits)} scans with seams; windows (d, A) " +
            ", ".join(f"{k} {v[0]:.2f}-{v[1]:.2f}" for k, v in sorted(windows.items()))) if hits else "no seam"
-    return outcome(FAIL if hits else PASS, msg, windows_by_class=windows, scans=rows)
+    # reported, not ruled: |dE/dr| / max(|dE_Coul/dr|, 0.05 eV/A) in d = 6-12 A, so a narrow spike that no
+    # plateau/cliff rule names still shows in the tail of the distribution
+    ratio_by_class = {c: {"n": len(v), "median": _r(np.median(v), 3), "q95": _r(np.percentile(v, 95), 3),
+                          "max": _r(np.max(v), 3)} for c, v in sorted(ratios.items()) if v}
+    return outcome(FAIL if hits else PASS, msg, windows_by_class=windows, slope_ratio_by_class=ratio_by_class,
+                   n_scans=n_eval, scans=rows)
 
 
 @check("size_consistency", "physical", "separability: E(A...B at 100 A) = E(A, q_A) + E(B, q_B) + k q_A q_B / r",
@@ -517,7 +539,7 @@ def energy_force(ctx: Ctx):
     n_res = n_unres = n_refined_ok = 0
     bad_steps, worst, cand = [], 0.0, []
     have_f = False
-    for o in scans(ctx):
+    for o in all_scans(ctx):
         E, f, r = o["E"], o["fB"], o["r"]
         ok = np.isfinite(E) & np.isfinite(f)
         if ok.sum() < 2:
@@ -1321,7 +1343,9 @@ def distribution_shift(ctx: Ctx):
 
 
 ORDER = ["far_field_exponent", "virial_tail", "eps_far", "seam", "size_consistency", "energy_force",
-         "conservativeness", "nve_short", "invariance",
+         "conservativeness", "orientation_far", "orientation_adversarial", "nve_short", "invariance",
          "charge_state", "charge_offset_by_Q", "fragment_charges", "periodic_open", "locality",
          "charge_conditioning", "determinism", "precision", "contamination", "level_of_theory",
          "ct_unbound_labelled", "offset_free_degeneracy", "distribution_shift"]
+
+from . import orient  # noqa: E402,F401  (registers the orientation checks)

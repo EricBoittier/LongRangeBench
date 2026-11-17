@@ -30,3 +30,8 @@ perf.json
 
 # marimo session caches
 __marimo__/
+
+# WebAssembly exports written by tools/build_notebook_site.py (built in CI)
+site/notebook/
+site/scorecard/
+site/.frozen/
