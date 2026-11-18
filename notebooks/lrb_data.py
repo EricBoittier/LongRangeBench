@@ -261,6 +261,14 @@ def ladder_big_rows(LB, arm=None):
     rows = []
     if not LB:
         return rows
+    def rng(s, n):
+        v = [x for x in (s.get("abs_err") or {}).get(str(n), []) if x is not None]
+        return f"{min(v):+.1f} to {max(v):+.1f}" if v else "n/a"
+
+    def lim_txt(LB, ion):
+        L_ = (LB.get("abs_limit_ev") or {}).get(ion) or {}
+        return f"{L_.get('1000', '?')} / {L_.get('4000', '?')}"
+
     for a in ("AL", "PAL", "P", "C0"):
         if a not in LB["arms"] or (arm and a != arm):
             continue
@@ -273,16 +281,16 @@ def ladder_big_rows(LB, arm=None):
             fr = lambda r: "/".join(str(r["frames"].get(str(n), r["frames"].get(n, 0))) for n in r.get("n_used", []))
             frames_txt = "; ".join(f"s{r['seed']} n {r.get('n_used', ['?'])[0]}-{r.get('n_used', ['?'])[-1]}, frames {fr(r)}, "
                                    f"{r.get('records', '?')} records" for r in x["files"])
-            e4 = [r["err_mean"].get("4000", r["err_mean"].get(4000)) for r in x["files"]]
-            e4 = [v for v in e4 if v is not None]
             arm_txt = (f"{s['mean']:+.4f} [{s['lo']:+.4f}, {s['hi']:+.4f}] (95 % t, {s['n_seeds']} seeds)"
                        if s["n_seeds"] >= 3 else f"{s['mean']:+.4f} (mean of {s['n_seeds']} seed{'s' if s['n_seeds'] > 1 else ''}; no seed interval)")
             rows.append({"arm": a, "ion": {"Na": "Na⁺", "Cl": "Cl⁻"}[ion], "seeds": s["n_seeds"],
-                         "slope n = 1,000-4,000 (eV/water)": arm_txt,
+                         "error at n = 1,000 (eV, per-seed range)": rng(s, 1000),
+                         "error at n = 4,000 (eV, per-seed range)": rng(s, 4000),
+                         "draft limit (eV, n = 1,000 / 4,000; ladder v2, not frozen)": lim_txt(LB, ion),
+                         "seeds inside the limit at both n": f"{s['abs_pass_seeds']} of {s['n_seeds']}" if "abs_pass_seeds" in s else "n/a",
+                         "slope n = 1,000-4,000 (eV/water; diagnostic, no longer pass/fail)": arm_txt,
                          "per seed [frame bootstrap]": seed_txt,
-                         "inside ±0.01": "yes" if s["within_0.01"] else "no",
-                         "tail A per seed (DFT " + f"{LB['dft_A'][ion]:.2f}; pass 1.0-2.0)": ", ".join(f"{v:.1f}" for v in s["A"] if v is not None),
-                         "error at n = 4,000 (eV, per-seed range)": (f"{min(e4):+.1f} to {max(e4):+.1f}" if e4 else "n/a"),
+                         "tail A per seed (diagnostic; DFT " + f"{LB['dft_A'][ion]:.2f}, range 1.0-2.0)": ", ".join(f"{v:.1f}" for v in s["A"] if v is not None),
                          "n used, frames per n, records": frames_txt})
     return rows
 

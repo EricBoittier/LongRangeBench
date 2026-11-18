@@ -166,7 +166,7 @@ def _(DDIR, L, M, MID, MV, mo, pd, table):
         if LB and lb_arm and lb_arm in LB.get("arms", {}):
             out += [mo.md("### Ion–water ladders at large n (1,000–4,000 waters)\n\n" + "\n\n".join(LB.get("text") or [])
                           + "\n\n<small>" + LB["note"] + "</small>"),
-                    table(pd.DataFrame(L.ladder_big_rows(LB)), "large-n ladder slopes, every arm run (this model: " + lb_arm + ")")]
+                    table(pd.DataFrame(L.ladder_big_rows(LB)), "large-n ladders: absolute error (draft limit) and slope (diagnostic), every arm run (this model: " + lb_arm + ")")]
         elif LB and MID not in ("pet-omol-s",) and M.get("kind", "").startswith("program"):
             out.append(mo.md("### Ion–water ladders at large n\n\n**Not run** for this model (large-n ladders exist for "
                              "AL, PAL, P and C0)."))
@@ -309,6 +309,8 @@ def _(D, L, LABS, PROG, MV, mo, not_run, pd, table):
                f"centres with LES on, {npass} of {len(sc)} scored slopes over this model's {sc.file.nunique()} final EMA files "
                "(raw where the arm has no EMA; H100 seed 13 and GH200 13r are both listed, they are one seed) are "
                f"inside the gate. DFT tail amplitudes for reference: {D['prog']['ladder_dft_tail_A']}. "
+               "A slope cannot see a constant offset in dE: a constant-offset control passes the large-n slope rules for every "
+               "offset up to 30 eV, so read the slope with the error columns beside it (ladder v2 draft, E1). "
                "The reference is wB97M-V/def2-TZVPD energies only (no DFT forces exist for the ladder).")
         out = [mo.md("### Ladder slopes"), mo.md(txt), table(shown, "ladder slopes per file (scored)")]
         if len(apart):

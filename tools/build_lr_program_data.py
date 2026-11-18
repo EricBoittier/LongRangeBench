@@ -1132,6 +1132,11 @@ def build_scan_views():
 # ----------------------------------------------------------------------------------------- large-n ladders (rule 3)
 LADDER_FILES = re.compile(r"^(AL|PAL|P|C0)cl_s(13r|1[3-6])\.jsonl$")
 LADDER_Q = {"Na": 1, "Cl": -1}
+#: DRAFT absolute-error limits of the large-n ladder (ladder v2 spec A1 / E1, 18 Nov 2026; not frozen). Limit = 2 x the
+#: DFT law's fit uncertainty, in eV, at n = 1,000 and 4,000 waters. Resolution about 1 eV: the law's fit windows disagree by
+#: 0.4-0.7 eV. The slope rules (<= 0.01 and <= 0.02 eV/water) are no longer pass/fail: a constant-offset model passes both
+#: for every offset up to 30 eV.
+A1_LIMIT_EV = {"Na": {1000: 0.86, 4000: 1.14}, "Cl": {1000: 1.09, 4000: 1.36}}
 
 
 def _ladder_errors(path, ion, ref):
@@ -1179,7 +1184,8 @@ def _ladder_boot(e, B=10000, seed=0, nmin=1000):
 
 def build_ladder_big():
     """large-n ion-water ladders (n = 200-4,000 waters, 4 frames per n), error of dE(n) against the DFT reference law;
-    slope over n = 1,000-4,000 (limit 0.01 eV/water) and the own tail fit A over n >= 500 (DFT range [1.0, 2.0])"""
+    absolute error at n = 1,000 and 4,000 against the draft A1 limits (pass/fail); slope over n = 1,000-4,000 and the own
+    tail fit A over n >= 500 (DFT range [1.0, 2.0]) are kept as diagnostics"""
     ref = jload(DATA / "cluster-laws" / "ml_results" / "box_cutouts" / "reference.json")
     if not ref:
         return None
@@ -1219,40 +1225,67 @@ def build_ladder_big():
             summ["within_0.01"] = bool(k >= 1 and all(abs(x) <= 0.01 for x in s) and
                                        (k < 2 or max(abs(summ["lo"]), abs(summ["hi"])) <= 0.01))
             summ["A"] = [r["tail_A"] for r in rows]
+            summ.update(a1_summary(rows, ion))
             arms[arm][ion] = dict(summary=summ, files=rows)
+    return dict(arms=arms, text=large_n_text(arms, {i: ref["dft_tail"][i]["A"] for i in LADDER_Q}),
+                dft_A={i: ref["dft_tail"][i]["A"] for i in LADDER_Q}, abs_limit_ev=A1_LIMIT_EV_JSON(), limit_status="draft",
+                note=LARGE_N_NOTE)
+
+
+def A1_LIMIT_EV_JSON():
+    return {ion: {str(n): t for n, t in v.items()} for ion, v in A1_LIMIT_EV.items()}
+
+
+LARGE_N_NOTE = (
+    "Error of dE(n) = E[ion + n waters] - E[n waters] - E[ion] against the DFT reference law dE_inf + A q^2 k / 2R_n, "
+    "n = 200-4,000 waters (to 12,001 atoms), 4 frames per n. Pass rule (DRAFT, ladder v2 A1; not frozen): the absolute "
+    "error at n = 1,000 and at n = 4,000 is inside 2 x the law's fit uncertainty (Na⁺ 0.86 and 1.14 eV, Cl⁻ 1.09 and "
+    "1.36 eV); resolution about 1 eV. Slope = OLS over n = 1,000-4,000 (3 sizes x 4 frames) and the tail fit A over "
+    "n >= 500 (DFT range [1.0, 2.0]) are diagnostics: a constant-offset model passes the slope rules for every offset up "
+    "to 30 eV, and the DFT oracle itself passes the tail-A rule in only 57-65 % of draws. Per-file slope interval = 95 % "
+    "percentile bootstrap over the 4 frames within each n (10,000 resamples); per-arm interval = 95 % t over seeds "
+    "(4 seeds for AL and PAL; P and C0 have 2 seeds each, listed, no seed interval; those are screens). Na⁺ and Cl⁻ "
+    "only; Mg²⁺ was not run at large n. The files hold the as-trained model only, so there is no LES-off ladder. EMA "
+    "final files; same reference and analysis for every arm. The reference law is a fit to DFT clusters up to 192 waters, "
+    "extrapolated to 12,001 atoms. A slope is fitted to the matched (XW, W) frame pairs present: where a run ended "
+    "before its last frames (PAL seeds 13-15, Cl⁻ at n = 4,000, no failed evaluations) the slope uses fewer frames at "
+    "that n, and the table gives the frames per n used.")
+
+
+def a1_summary(rows, ion):
+    """per-seed absolute errors at n = 1,000 and 4,000 against the draft A1 limits (see A1_LIMIT_EV)"""
+    lim = A1_LIMIT_EV[ion]
+    g = lambda r, n: r["err_mean"].get(n, r["err_mean"].get(str(n)))   # int keys when built, str keys after a json round trip
+    e = {n: [g(r, n) for r in rows] for n in lim}
+    ok = [all(g(r, n) is not None and abs(g(r, n)) <= t for n, t in lim.items()) for r in rows]
+    return dict(abs_err={str(n): v for n, v in e.items()}, abs_pass_seeds=int(sum(ok)), abs_pass_all=bool(all(ok)))
+
+
+def large_n_text(arms, dft_A):
+    """one paragraph per arm for the notebooks; the absolute rule first, the slope as a diagnostic"""
     text = []
-    for arm in ("AL", "PAL"):
+    for arm in ("AL", "PAL", "C0", "P"):
         if arm not in arms or any(i not in arms[arm] for i in LADDER_Q):
             continue
         S = {i: arms[arm][i]["summary"] for i in LADDER_Q}
         k = min(S[i]["n_seeds"] for i in LADDER_Q)
-        iv = lambda s: (f"{s['mean']:+.4f} [{s['lo']:+.4f}, {s['hi']:+.4f}]" if "lo" in s else f"{s['mean']:+.4f}")
-        e4 = {i: [r["err_mean"].get(4000) for r in arms[arm][i]["files"] if r["err_mean"].get(4000) is not None] for i in LADDER_Q}
+        iv = lambda s: (f"{s['mean']:+.4f} [{s['lo']:+.4f}, {s['hi']:+.4f}]" if s["n_seeds"] >= 3 else f"{s['mean']:+.4f}")
+        rng = lambda i, n: (lambda v: f"{min(v):+.1f} to {max(v):+.1f}")([x for x in S[i]["abs_err"][str(n)] if x is not None])
         A = {i: [a_ for a_ in S[i]["A"] if a_ is not None] for i in LADDER_Q}
-        ok = all(S[i]["within_0.01"] for i in LADDER_Q)
         text.append(
-            f"{arm}, {k} seeds: slope over n = 1,000-4,000 Na⁺ {iv(S['Na'])}, Cl⁻ {iv(S['Cl'])} eV/water "
-            f"(95 % t over seeds; per-seed intervals are a frame bootstrap over the frames at each n), "
-            + ("inside the ±0.01 limit for both ions, so " + arm + " passes the slope rule (rule 3). " if ok else
-               "not inside the ±0.01 limit for both ions. ")
-            + "This does not show extrapolation: the error curve is concave and still grows, so the slope is smaller "
-            "than over n ≥ 200 and "
-            f"n beyond 4,000 is not tested; the error at n = 4,000 is {min(e4['Na']):+.1f} to {max(e4['Na']):+.1f} eV (Na⁺) and "
-            f"{min(e4['Cl']):+.1f} to {max(e4['Cl']):+.1f} eV (Cl⁻) across seeds; the tail-fit criterion fails (A {min(A['Na']):.0f} "
-            f"to {max(A['Na']):.0f} for Na⁺ and {min(A['Cl']):.0f} to {max(A['Cl']):.0f} for Cl⁻, against DFT "
-            f"{ref['dft_tail']['Na']['A']:.2f} and {ref['dft_tail']['Cl']['A']:.2f}, pass range 1.0-2.0: the tail "
-            "amplitude has the wrong sign); an arm with constant offsets (SB_K1) also passes the slope rule; Na⁺ and Cl⁻ "
-            "only, Mg²⁺ not run; as-trained model only, no LES on/off comparison.")
-    return dict(arms=arms, text=text, dft_A={i: ref["dft_tail"][i]["A"] for i in LADDER_Q}, limit=0.01, note=(
-        "Error of dE(n) = E[ion + n waters] - E[n waters] - E[ion] against the DFT reference law dE_inf + A q^2 k / 2R_n, "
-        "n = 200-4,000 waters (to 12,001 atoms), 4 frames per n. Slope = OLS over n = 1,000-4,000 (3 sizes x 4 frames, "
-        "limit ±0.01 eV/water); per-file interval = 95 % percentile bootstrap over the 4 frames within each n (10,000 "
-        "resamples); per-arm interval = 95 % t over seeds (4 seeds for AL and PAL; P and C0 have 2 seeds each, listed, no "
-        "seed interval). Tail criterion (A of the model's own fit over n >= 500 inside [1.0, 2.0]) is reported beside it. "
-        "Na⁺ and Cl⁻ only; Mg²⁺ was not run at large n. The files hold the as-trained model only, so there is no LES-off "
-        "ladder. EMA final files; same reference and analysis for every arm. A slope is fitted to the matched "
-        "(XW, W) frame pairs present: where a run ended before its last frames (PAL seeds 13-15, Cl⁻ at n = 4,000, "
-        "no failed evaluations) the slope uses fewer frames at that n, and the table gives the frames per n used."))
+            f"{arm}, {k} seeds{' (a screen)' if k < 4 else ''}: error against the DFT law at n = 4,000 Na⁺ {rng('Na', 4000)} eV, "
+            f"Cl⁻ {rng('Cl', 4000)} eV; at n = 1,000 Na⁺ {rng('Na', 1000)} eV, Cl⁻ {rng('Cl', 1000)} eV (range over seeds). "
+            f"Draft absolute limits (ladder v2, not frozen): Na⁺ {A1_LIMIT_EV['Na'][1000]} eV at n = 1,000 and "
+            f"{A1_LIMIT_EV['Na'][4000]} eV at 4,000; Cl⁻ {A1_LIMIT_EV['Cl'][1000]} and {A1_LIMIT_EV['Cl'][4000]} eV. Seeds inside "
+            f"the limit at both n: Na⁺ {S['Na']['abs_pass_seeds']} of {S['Na']['n_seeds']}, Cl⁻ {S['Cl']['abs_pass_seeds']} of "
+            f"{S['Cl']['n_seeds']}. Diagnostics, not pass/fail: slope over n = 1,000-4,000 Na⁺ {iv(S['Na'])}, Cl⁻ {iv(S['Cl'])} "
+            f"eV/water (mean over seeds; 95 % t interval from 3 seeds up; per-seed intervals are a frame bootstrap); a "
+            f"constant-offset model passes the slope rules for every offset up to 30 eV, so a small slope does not show "
+            f"extrapolation (the error curve is concave and n beyond 4,000 is not tested). Tail-fit A {min(A['Na']):.0f} "
+            f"to {max(A['Na']):.0f} for Na⁺ and {min(A['Cl']):.0f} to {max(A['Cl']):.0f} for Cl⁻ against DFT "
+            f"{dft_A['Na']:.2f} and {dft_A['Cl']:.2f} (range 1.0-2.0); Na⁺ and Cl⁻ only, Mg²⁺ not run; as-trained model "
+            "only, no LES on/off comparison.")
+    return text
 
 
 # ------------------------------------------------------------------------------------- claims-audit numbers + limits
@@ -1289,8 +1322,10 @@ def evidence_limits(td):
         "Seeds and structures are different intervals. A claim needs 4 seeds and uses a 95 % t interval over seeds; "
         "bootstrap intervals over frames or scans describe one file and are narrower. The H100 seed-13 files are "
         "replicates of GH200 seed 13r and are never counted as a fifth seed.",
-        "Thresholds are conventions of the program, not physical bounds: the ±0.02 eV/water small-n ladder slope, the "
-        "±0.01 large-n slope and the 0.2 e ion-shell limit.",
+        "Thresholds are conventions of the program, not physical bounds: the ±0.02 eV/water small-n ladder slope and the "
+        "0.2 e ion-shell limit. The large-n ladder no longer uses a slope rule: its draft limit (ladder v2, not frozen) is "
+        "an absolute error of 0.86 / 1.14 eV (Na⁺) and 1.09 / 1.36 eV (Cl⁻) at n = 1,000 / 4,000 waters, 2 x the DFT "
+        "law's fit uncertainty, with a resolution of about 1 eV.",
         "Multivalent systems (|q| ≥ 2, Mg²⁺) are excluded from every score by default and shown apart; the switch "
         "includes them. " + typeheld_sentence(td),
         "Every arm is a fine-tune of the same pretrained PET-OMol-S; a 'seed' is a different data order and "
@@ -1302,9 +1337,10 @@ def evidence_limits(td):
         "1e-6 Å), and 1,042 of its 1,254 frames are pair types in P's training rows (456 are set-B train types of every "
         "route-B arm). On it P also loses the partial ion + polar tail (ε −0.241 [−0.275, −0.206]), and AL/PAL show a "
         "like-charge overshoot (ε +0.234 to +0.258, 4 of 4 seeds) and a spurious ion + nonpolar tail.",
-        "The large-n slope rule is passed by AL and PAL, but it does not show extrapolation: the error at 4,000 waters "
-        "is still 17–31 eV, the tail amplitude has the wrong sign (the tail-fit A fails), and an arm with constant "
-        "offsets (SB_K1) also passes the slope rule.",
+        "AL and PAL fail the draft absolute-error limit of the large-n ladder in all 4 of 4 seeds, for both ions: the "
+        "error is +12 to +17 eV (Na⁺) and -10 to -15 eV (Cl⁻) at n = 1,000 and 17–31 eV in size at 4,000 waters, "
+        "against limits of 0.9–1.4 eV. Their small slopes (inside ±0.01 eV/water) are not a pass: a constant-offset "
+        "model passes the slope rules for every offset up to 30 eV (an arm with constant offsets, SB_K1, did).",
         "EMA: in the C0H run EMA lowers the val500 force error by 0.81 [0.16, 1.46] meV/Å but raises the energy error "
         "by +0.20 [0.03, 0.36] meV/atom; with the lr annealed, EMA and raw weights agree within ±0.2 meV/Å. C0H against "
         "C0 changes the schedule as well, so it is not an EMA test.",

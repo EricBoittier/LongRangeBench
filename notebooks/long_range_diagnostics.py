@@ -1576,10 +1576,11 @@ def _(BLUE, FAINT, GREY, INK, VERM, frame, np, plt, svg):
                 ns = sorted(int(n) for n in d[ion]["err"])
                 ax.plot(ns, [d[ion]["err"][str(n)] for n in ns], "o-", ms=3, lw=1.1,
                         color=BLUE if lab.startswith("P") else VERM, alpha=0.9 if lab.endswith("14") else 0.6,
-                        label=f"{lab}: slope {d[ion]['slope']:+.3f}")
-            nn = np.array([0, 4000])
-            for s_ in (0.01, -0.01):
-                ax.plot(nn, s_ * nn, color=GREY, lw=0.8, ls=(0, (1, 2.5)))
+                        label=f"{lab}: {d[ion]['err'][str(ns[-1])]:+.0f} eV at n = {ns[-1]:,}")
+            _lim = ((LRP.get("ladder_large_n") or {}).get("abs_limit_ev") or {}).get(ion)
+            if _lim:   # draft absolute limit of the large-n ladder (ladder v2 A1), at n = 1,000 and 4,000
+                for s_ in (1, -1):
+                    ax.plot([1000, 4000], [s_ * _lim["1000"], s_ * _lim["4000"]], color=GREY, lw=1.2, ls=(0, (1, 2.5)))
             ax.axhline(0, color=INK, lw=0.7)
             ax.set_xlabel("waters n")
             ax.set_title(ion + ("  · excluded: |q| ≥ 2" if excl else ""), loc="left", fontsize=10,
@@ -1587,7 +1588,7 @@ def _(BLUE, FAINT, GREY, INK, VERM, frame, np, plt, svg):
             ax.legend(fontsize=7, loc="upper left" if ion != "Cl" else "lower left")
             frame(ax)
         axes[0, 0].set_ylabel("dE(n) error (eV)")
-        fig.suptitle("Ladders to 4,000 waters (rule 3): P (blue) and C0 (red), EMA, seeds 13r and 14",
+        fig.suptitle("Ladders to 4,000 waters: P (blue) and C0 (red), EMA, seeds 13r and 14; dotted: draft absolute limit",
                      x=0.01, ha="left", fontsize=11.5, color=INK)
         fig.tight_layout(rect=(0, 0, 1, 0.9))
         return svg(fig)
@@ -1915,6 +1916,14 @@ def _(LRP, mo, pd, plt):
         rows = []
         if not LB:
             return rows
+        def rng(s, n):
+            v = [x for x in (s.get("abs_err") or {}).get(str(n), []) if x is not None]
+            return f"{min(v):+.1f} to {max(v):+.1f}" if v else "n/a"
+
+        def lim_txt(LB, ion):
+            L_ = (LB.get("abs_limit_ev") or {}).get(ion) or {}
+            return f"{L_.get('1000', '?')} / {L_.get('4000', '?')}"
+
         for a in ("AL", "PAL", "P", "C0"):
             if a not in LB["arms"] or (arm and a != arm):
                 continue
@@ -1927,16 +1936,16 @@ def _(LRP, mo, pd, plt):
                 fr = lambda r: "/".join(str(r["frames"].get(str(n), r["frames"].get(n, 0))) for n in r.get("n_used", []))
                 frames_txt = "; ".join(f"s{r['seed']} n {r.get('n_used', ['?'])[0]}-{r.get('n_used', ['?'])[-1]}, frames {fr(r)}, "
                                        f"{r.get('records', '?')} records" for r in x["files"])
-                e4 = [r["err_mean"].get("4000", r["err_mean"].get(4000)) for r in x["files"]]
-                e4 = [v for v in e4 if v is not None]
                 arm_txt = (f"{s['mean']:+.4f} [{s['lo']:+.4f}, {s['hi']:+.4f}] (95 % t, {s['n_seeds']} seeds)"
                            if s["n_seeds"] >= 3 else f"{s['mean']:+.4f} (mean of {s['n_seeds']} seed{'s' if s['n_seeds'] > 1 else ''}; no seed interval)")
                 rows.append({"arm": a, "ion": {"Na": "Na⁺", "Cl": "Cl⁻"}[ion], "seeds": s["n_seeds"],
-                             "slope n = 1,000-4,000 (eV/water)": arm_txt,
+                             "error at n = 1,000 (eV, per-seed range)": rng(s, 1000),
+                             "error at n = 4,000 (eV, per-seed range)": rng(s, 4000),
+                             "draft limit (eV, n = 1,000 / 4,000; ladder v2, not frozen)": lim_txt(LB, ion),
+                             "seeds inside the limit at both n": f"{s['abs_pass_seeds']} of {s['n_seeds']}" if "abs_pass_seeds" in s else "n/a",
+                             "slope n = 1,000-4,000 (eV/water; diagnostic, no longer pass/fail)": arm_txt,
                              "per seed [frame bootstrap]": seed_txt,
-                             "inside ±0.01": "yes" if s["within_0.01"] else "no",
-                             "tail A per seed (DFT " + f"{LB['dft_A'][ion]:.2f}; pass 1.0-2.0)": ", ".join(f"{v:.1f}" for v in s["A"] if v is not None),
-                             "error at n = 4,000 (eV, per-seed range)": (f"{min(e4):+.1f} to {max(e4):+.1f}" if e4 else "n/a"),
+                             "tail A per seed (diagnostic; DFT " + f"{LB['dft_A'][ion]:.2f}, range 1.0-2.0)": ", ".join(f"{v:.1f}" for v in s["A"] if v is not None),
                              "n used, frames per n, records": frames_txt})
         return rows
 
@@ -1976,7 +1985,9 @@ def _(LRP, mo, pd, plt):
             mo.as_html(_fig),
             mo.md("<small>Mean error per n (thick: seed mean; thin: each seed). An error curve that bends over (concave) "
                   "gives a smaller slope over 1,000–4,000 waters than over n ≥ 200; it still grows, and n beyond 4,000 "
-                  "is not tested. The tail criterion (A inside [1.0, 2.0]) fails for every arm.</small>"),
+                  "is not tested. The tail criterion (A inside [1.0, 2.0]) fails for every arm; it is a diagnostic, since the DFT "
+                  "oracle itself passes it in only 57-65 % of draws. The pass/fail rule is the absolute error at n = 1,000 "
+                  "and 4,000 against the draft limit in the table (ladder v2, not frozen).</small>"),
         ])
         plt.close(_fig)
     else:
@@ -2045,7 +2056,9 @@ def _(LRP, MV_ON, bignladder_figure, dotpanels, ladder_figure, metric_spec, mo):
                   "a mean over the 4 GH200 seeds unless a row says one seed."),
             _acc, _seam, _pairs, _lad, _ladc or mo.md(""), _big or mo.md(""),
             mo.md("<small>Ladders to 4,000 waters: P and C0 EMA files, seeds 13r and 14 only (n = 2 per arm, no "
-                  "interval); dotted lines are ±0.01 eV/water, the large-n limit.</small>"),
+                  "interval); dotted lines are the draft absolute-error limit of the large-n ladder (ladder v2, not frozen: "
+                  "about ±1 eV at n = 1,000 and 4,000, too small to see on this axis). The slope over 1,000-4,000 waters "
+                  "is a diagnostic only, since a constant offset of any size has zero slope.</small>"),
             _cond,
         ])
     _o
