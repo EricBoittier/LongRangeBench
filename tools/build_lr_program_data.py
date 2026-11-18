@@ -1348,7 +1348,7 @@ def evidence_limits(td):
         "builds); every comparison here pairs files scored by the same chain unless a row says otherwise.",
         "The adversarial sets (seam search set, sign-set cells) were designed after earlier failures were seen, so they "
         "are not blind tests, and a pass of rule 4 (the sign set) does not show that orientation behaviour holds on other "
-        "cells; ladder v2 (draft, A2) adds an orientation development set from non-sealed data and an orientation-"
+        "cells; ladder v2 (draft, A2) adds an orientation development set built from data kept out of the held-out scoring, and an orientation-"
         "consistency rung (B9). The type-held-out gate is the only pair set no arm had seen by type in its fine-tune and "
         "charge-model rows; it was not checked against the OMol25 pretraining.",
     ]
