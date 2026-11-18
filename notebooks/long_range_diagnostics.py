@@ -2380,7 +2380,11 @@ listed apart: {len(_multi)} Mg²⁺ runs, of which {_nm['stable']} are stable, {
             mo.md("**Permittivity.** PET-OMol-S has no long-range term, and 4 seeds of 100 ps each give ε = 55.4 "
                   "at 512 waters and 59.6 at 64 waters. Both χ² intervals lie below or just reach the experimental "
                   "78. No model is separated from PET-OMol-S at n = 4 (all six Welch p > 0.14). The dipole is a fixed "
-                  "2.9 D per water along the bisector, so ε here is an orientational proxy, not the model's own ε."),
+                  "2.9 D per water along the bisector, so ε here is an orientational proxy, not the model's own ε. Because the "
+                  "dipole is fixed, the proxy scores a short-range-only model the same as the long-range arms: it is not a "
+                  "known-bad, so this is not a pass/fail rung (ladder v2 draft, E4: blocked). Four seeds resolve only "
+                  "differences near 37 in ε − 1; separating two arms 15 apart would need 17-20 seeds per arm. The 64-water "
+                  "boxes carry the blend self-image caveat, so the 512-water boxes are the clean comparison."),
             _permit_fig() or mo.md(""),
             mo.md("**Speed.** Training at N = 32 costs 1.5× per step: 20.1–20.4 structures/s for A1 against "
                   "30.4–31.0 for A0 on GH200. Inference costs 1.49× at 600 atoms and 1.30× at 3,000 atoms. These "

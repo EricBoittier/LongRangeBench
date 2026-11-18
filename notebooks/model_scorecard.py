@@ -615,7 +615,8 @@ def _(D, INK, M, MDNAME, MID, REF, mo, not_run, pd, plt, table):
             ax.tick_params(labelsize=7, direction="in"); fig.tight_layout()
             out += [mo.md("Protocol A (permit lane): periodic NVT at 1.032 g/cm3, 4 seeds of 100 ps, 10 ps discarded, "
                           "tin-foil boundary, fixed 2.9 D bisector dipole per water (an orientational proxy that leaves out "
-                          "the model's own polarisation). Solid line: chi-square 95 % interval (N_eff = T / 2 tau_M); "
+                          "the model's own polarisation; short-range-only PET-OMol-S therefore scores the same as the long-range arms, so "
+                          "this is a reading and not a pass/fail rung, ladder v2 draft E4). Solid line: chi-square 95 % interval (N_eff = T / 2 tau_M); "
                           "dotted: moving-block bootstrap 95 %. Both are asymmetric."), mo.as_html(fig),
                     table(pd.DataFrame(rows), "permittivity, protocol A")]
         if em:
