@@ -305,6 +305,12 @@ def probe_trace(run_dir: Path):
     while j > 0 and pats[j - 1] == pats[-1]:
         j -= 1
     out["choice_step"] = int(st[j])
+    # thin for size: every logged step up to step 1,000, every fifth after; the per-species means are not plotted
+    keep = [i for i, k in enumerate(st) if k <= 1000 or i % 5 == 0 or i == len(st) - 1]
+    out.pop("mean")
+    for key in ("step", "n_mixed", "rmse_sign", "loss_f", "loss_q", "n_wrong"):
+        out[key] = [out[key][i] for i in keep]
+    out["agree"] = {z: [v[i] for i in keep] for z, v in out["agree"].items()}
     return out
 
 
@@ -348,6 +354,7 @@ def build_results():
             continue
         tier, sch, seed = d.name.split("_")
         s = score(d, tier, keep.get(tier) if tier == "T1" else None)
+        s.pop("F_struct", None)                     # model forces are kept for the first set only (size)
         runs.append(dict(set="anchors", tier=tier, arm="A1 mid", scheme=sch, seed=int(seed[1:]), **s, curve=val_curve(d)))
         traces[f"anchors/{d.name}"] = probe_trace(d)
     # noise ladder and smoothing arms (empty until the runs are copied back)

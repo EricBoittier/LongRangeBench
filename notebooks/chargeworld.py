@@ -424,7 +424,8 @@ def _(mo):
     A second set of runs (the **replicate set**) repeats T1 A1 with a per-step probe of the charges on 32 fixed
     training structures, and tests three changes against plain LES (S0): a charge-correlation anchor (S1) and a
     charge-MSE anchor (S2), both training-only losses on the exact charges, and an EMA of the weights (S4, decay 0.999)
-    as a negative control. Seeds 13-16 have the same initial weights as the first set.
+    as a negative control. Seeds 13-16 have the same initial weights as the first set; seeds 17-20 are new. A few
+    T2 runs (plain LES and the correlation anchor, four seeds each) check the tier where no first-set seed failed.
     """)
     return
 
@@ -544,14 +545,24 @@ def _(C, D, Fg, mo, plt):
             + ". Missing seeds appear after their runs finish and the rebuild button at the top is pressed."),
             kind="info") if any(missing.values()) else mo.md("")
         anch_ok = all(k_by[s_] == 0 for s_ in ("S1", "S2")) and k_by["S0"] > 0
+        ema_f = [x["F_mae"] for x in A if x["scheme"] == "S4"] or [0]
+        T2 = [x for x in R if x["set"] == "anchors" and x["tier"] == "T2"]
+        t2 = {s_: (sum(x["fail"] for x in T2 if x["scheme"] == s_), sum(1 for x in T2 if x["scheme"] == s_)) for s_ in sch}
+        t2_line = ("On T2 (charges respond to the environment): " + "; ".join(
+            f"{D['runs']['scheme_names'][s_]} {k}/{n} failed" for s_, (k, n) in t2.items() if n)
+            + "; the T2 MSE-anchor and EMA arms were not run.") if T2 else ""
         head = ("Both charge anchors remove the sign failures in the finished seeds; EMA does not." if anch_ok and k_by["S4"] > 0
                 else "Failure rates per scheme in the finished seeds.")
         return mo.vstack([msg, f, mo.md(
             f"**Figure 7. {head}** "
-            "Failure rate per scheme on T1 (replicate set) with 95 % Clopper-Pearson intervals; n is the number of "
-            "finished seeds. Plain LES repeats the first set's outcome seed for seed (15 and 16 fail). EMA fails the "
-            "same two seeds, and its force MAE is 89-183 meV/Å because the average still carries about 2 % of the "
-            "random initial weights after 4,000 steps; a fair EMA arm needs a warm-up.")])
+            "Failure rate per scheme on T1 (replicate set, seeds 13-20) with 95 % Clopper-Pearson intervals; n is the "
+            "number of finished seeds. Plain LES repeats the first set's outcome seed for seed (15 and 16 fail) and "
+            "passes with the new seeds 17-20. EMA fails the same two seeds; its force MAE of "
+            f"{min(ema_f):.0f}-{max(ema_f):.0f} meV/Å comes from averaging that starts at the random initial weights "
+            "(about 2 % of them remain after 4,000 steps), so a fair EMA arm needs an EMA warm-up. "
+            f"One-sided Fisher p = {C.fisher_greater(k_by['S0'], len(seeds['S0']), k_by['S1'], len(seeds['S1'])):.2f} for each "
+            "anchor against plain LES: with eight seeds per arm this is a screen, not a test. The result does not reject "
+            "the sign-trap reading; it does not yet confirm it either. " + t2_line)])
     _anch()
     return
 
@@ -574,12 +585,15 @@ def _(D, Fg, mo, plt, trace_pick):
             return mo.md("traces.json is missing.")
         f = Fg.traces(plt, D["traces"], trace_pick.value, label=lambda k: k.split("/")[-1].replace("T1_", "").replace("_s", " seed "))
         plt.close(f)
-        cs = {k.split("/")[-1].replace("T1_", "").replace("_s", " seed "): v["choice_step"] for k, v in D["traces"].items() if v}
-        early = [v for v in cs.values() if v <= 100]; late = {k: v for k, v in cs.items() if v > 100}
-        lt = (" The exceptions fix their pattern later: " + ", ".join(f"{k} at step {v}" for k, v in sorted(late.items())) + ".") if late else ""
+        cs = {k.split("/")[-1].replace("_s", " seed ").replace("_", " "): v["choice_step"] for k, v in D["traces"].items() if v}
+        anch = [v for k, v in cs.items() if " S1 " in k or " S2 " in k]
+        noan = [v for k, v in cs.items() if not (" S1 " in k or " S2 " in k)]
+        late = {k: v for k, v in cs.items() if v > 100}
+        lt = (" Runs that settle after step 100: " + ", ".join(f"{k} ({v})" for k, v in sorted(late.items())) + ".") if late else ""
         return mo.vstack([f, mo.md(
-            f"**Figure 8. {len(early)} of {len(cs)} finished runs fix the relative signs of their species by step "
-            f"{max(early) if early else 0}, close to the end of the 80-step warm-up (dotted line).{lt}** Probe of 32 fixed "
+            f"**Figure 8. With a charge anchor, every run fixes the relative signs of its species by step "
+            f"{max(anch) if anch else 0}; without one, the last relative-sign change falls between steps "
+            f"{min(noan) if noan else 0} and {max(noan) if noan else 0}.** The 80-step warm-up is the dotted line.{lt} Probe of 32 fixed "
             f"training structures, every 10 steps (one epoch = 200 steps; log step axis). (a) Probe structures whose "
             f"charges mix signs. (b) Charged species (|q| > 0.25 e) at the wrong sign relative to the others, under the "
             f"probe's global sign; the tick marks the sign-choice step, the step after which this pattern no longer "
@@ -917,8 +931,8 @@ def _(C, D, mo, pd):
             f"{100 * lo:.0f}-{100 * hi:.0f} %. T1 against T2 ({k2} of {n2}) gives a two-sided Fisher exact p = "
             f"{C.fisher_two_sided(k1, n1, k2, n2):.2f}. In the replicate set, plain LES fails {ks} of {ns}, the correlation "
             f"anchor {k_1} of {n_1} and the MSE anchor {k_2} of {n_2}; one-sided Fisher p = {C.fisher_greater(ks, ns, k_1, n_1):.2f} "
-            f"and {C.fisher_greater(ks, ns, k_2, n_2):.2f} for plain LES failing more often. The anchor claim waits for eight "
-            f"seeds per arm.")
+            f"and {C.fisher_greater(ks, ns, k_2, n_2):.2f} for plain LES failing more often. With eight "
+            f"seeds per arm these comparisons are screens.")
         rows = []
         for x in sorted([x for x in R if x["set"] == "phase1" and x["tier"] == "T1" and x.get("splits")], key=lambda r: (r["arm"], r["seed"])):
             sp = x["splits"]
@@ -962,7 +976,7 @@ def _(C, D, mo, pd):
     **Not shown.** Tiers T3-T5 have no trained models yet. The explorer shows 6-8 test structures per tier, not the
     full splits. The DFT-noise numbers come from separate recomputations, summarised here without their raw data.
 
-    **Next.** Finish the eight-seed anchor comparison and the noise-ladder runs (they fill Figures 7 and 16).
+    **Next.** Finish the noise-ladder runs (they fill Figure 16) and confirm the anchor screen with more seeds.
     Measure the loss barrier between a failed network and its sign-repaired copy directly (the network analogue of
     Figure 11). Train on T2-T5, where charges respond to the environment and the fixed-charge oracle fails.
     """)
