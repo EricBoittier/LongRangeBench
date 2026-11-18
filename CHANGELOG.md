@@ -53,6 +53,14 @@ Notable changes to LongRangeBench. Newest first.
 - `mlipcpp-eval` frames with a non-finite energy or force count as failed predictions. Before, they were scored as
   numbers.
 
+### Changed
+
+- Program notebooks, ladder v2 (draft, not frozen): the large-n water ladder is scored by absolute error at n = 1,000 and
+  4,000 (limits 0.86 / 1.14 eV Na⁺ and 1.09 / 1.36 eV Cl⁻) and the slope and tail-A rules are diagnostics, because a
+  constant-offset model passes the slope rules up to 30 eV. The type-held-out gate prints the without-Mg²⁺ and
+  with-Mg²⁺ readings together. The permittivity proxy is marked as not a known-bad test. The ChargeWorld notebook
+  gains the noise-ladder results (J1, J2, J12c) and the route-B sign-audit note.
+
 ## 0.1.0 — 2026-11-11
 
 First public release of the harness. The metrics, adapters and CLI were developed and used privately before this
