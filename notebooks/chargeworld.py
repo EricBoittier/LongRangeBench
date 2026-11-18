@@ -776,7 +776,11 @@ def _(mo):
     descent direction has a positive component along $u$. Figure 13 splits the structures by whether they contain
     species from both sign blocks and shows how their pulls cancel. Section 5 showed what changes the outcome: noise in
     the gradient lowers the trap rate (minibatches of 4 structures: 7 of 64 trapped, of 16: 11 of 64, against 20), and
-    data that tie the blocks together remove it (with the combo structures, none of 64 starts is trapped).
+    data that tie the blocks together remove it (with the combo structures, none of 64 starts is trapped). These are toy
+    results. In the network runs of Section 7 the same changes do not carry over at the tested strengths: batch 4 in the
+    first epoch fails 1 of 8 seeds (the control fails 2 of 8), batch 4 throughout fails 0 of 4 in a screen that also
+    takes 4× more optimiser updates, and adding the held-out pairs (3 % of the training structures, against 25 % in
+    the toy) still fails 2 of 8, with different seeds.
 
     The same picture appears with real loss terms. In a separate bond-flow model trained on Born effective charges,
     the gradients of the force loss and of the Born-charge loss on the charge parameters point in opposite directions
@@ -784,8 +788,10 @@ def _(mo):
 
     1. **Ill-conditioning.** Energies and forces fix the charges only up to a sign per structure and a weak scale, so
        the loss has several basins separated by a barrier at q = 0 (Figures 11-12).
-    2. **Gradient smoothing.** Deterministic smoothing (learning rate, warm-up, momentum, clipping, EMA) does not move a
-       run between basins; the basin is decided by the start. Only stochastic gradient noise does (Figure 10).
+    2. **Gradient smoothing.** In the toy, deterministic smoothing (learning rate, warm-up, momentum, clipping, EMA) does
+       not move a run between basins; the basin is decided by the start, and only stochastic gradient noise does
+       (Figure 10). In the network runs, any change to the early optimisation (batch size, warm-up, data order)
+       changes which seeds fall into a basin and does not remove the basins (Section 7).
     3. **Conflict.** Structures and loss terms pull the charges in different directions. Physically, "the charge"
        means different things to different labels: formal, partial, ESP-fitted, Löwdin, screened.
 
@@ -913,6 +919,56 @@ def _(D, Fg, mo, plt):
 
 
 @app.cell
+def _(C, D, mo):
+    def _ladder_results():
+        R = (D["runs"] or {}).get("runs", [])
+        L = [x for x in R if x["set"] == "ladder"]
+        if not L:
+            return mo.md("")
+        ctrl = {x["seed"]: x for x in R if x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S0"}
+        names = D["runs"]["ladder_names"]
+        order = [a for a in ("EF0.5", "EF1", "EF2", "W25", "P5", "B4E1", "B4", "B64", "WU10", "COMBO") if any(x["arm"] == a for x in L)]
+        med = lambda v: sorted(v)[len(v) // 2] if len(v) % 2 else 0.5 * (sorted(v)[len(v) // 2 - 1] + sorted(v)[len(v) // 2])
+        k0 = sum(bool(x["fail"]) for x in ctrl.values())
+        bullets, same_noise = [], True
+        for a in order:
+            v = sorted([x for x in L if x["arm"] == a], key=lambda x: x["seed"])
+            n, k = len(v), sum(bool(x["fail"]) for x in v)
+            lo, hi = C.cp_interval(k, n)
+            fs = [x["seed"] for x in v if x["fail"]]
+            agree = sum(bool(x["fail"]) == bool(ctrl[x["seed"]]["fail"]) for x in v if x["seed"] in ctrl)
+            good = [x["F_mae"] for x in v if not x["fail"] and x.get("F_mae") is not None]
+            if a in ("EF0.5", "EF1", "EF2", "W25", "P5") and agree != n:
+                same_noise = False
+            bullets.append(f"- **{names.get(a, a)}:** {k} of {n} fail ({'seeds ' + ', '.join(map(str, fs)) if len(fs) > 1 else 'seed ' + str(fs[0]) if fs else 'no seed'}; 95 % "
+                           f"Clopper-Pearson {100 * lo:.0f}-{100 * hi:.0f} %); same outcome as the paired control in {agree} of "
+                           f"{n} seeds; median clean-test force MAE of the runs with the right signs "
+                           f"{med(good):.1f} meV/Å." if good else f"- **{names.get(a, a)}:** {k} of {n} fail.")
+        b4 = [x for x in L if x["arm"] == "B4"]
+        b4txt = ""
+        if b4:
+            kb = sum(bool(x["fail"]) for x in b4)
+            kc = sum(bool(ctrl[x["seed"]]["fail"]) for x in b4 if x["seed"] in ctrl)
+            b4txt = (f" Batch 4 throughout fails {kb} of {len(b4)} where its paired control fails {kc} of {len(b4)}: both "
+                     f"control-failing seeds are rescued. This is a screen (one-sided Fisher p = "
+                     f"{C.fisher_greater(kc, len(b4), kb, len(b4)):.2f}), and it takes 4 times more optimiser updates than the "
+                     f"reference at the same epochs and learning rate, so the rescue and the lower force error are not "
+                     f"separated from training length.")
+        return mo.vstack([mo.md(
+            f"**Results (replicate-set control: plain LES fails {k0} of {len(ctrl)}, seeds "
+            f"{', '.join(str(s_) for s_, x in sorted(ctrl.items()) if x['fail'])}).**\n\n" + "\n".join(bullets)
+            + "\n\n" + ("Noise at every tested level (E/F 0.5× to 2×, white 25×, pathology tail 5×) fails the same seeds as the "
+                        "control, so label noise at these levels does not change which basin a seed falls into; it costs force "
+                        "accuracy, through the systematic part only (the white and tail positive controls leave the force error "
+                        "unchanged). " if same_noise else "")
+            + "Warm-up changes which seeds fail, not how many; batch 4 in epoch 1 and the held-out pairs rescue some seeds "
+              "and let others fail. Batch 64 is not readable: at the same epochs and learning rate its runs are far from converged." + b4txt
+            + " No contrast reaches significance: with 2 of 8 control failures no rate comparison can reach p < 0.05.")])
+    _ladder_results()
+    return
+
+
+@app.cell
 def _(C, D, mo, pd):
     def _caveats():
         R = (D["runs"] or {}).get("runs", [])
@@ -976,8 +1032,18 @@ def _(C, D, mo, pd):
     **Not shown.** Tiers T3-T5 have no trained models yet. The explorer shows 6-8 test structures per tier, not the
     full splits. The DFT-noise numbers come from separate recomputations, summarised here without their raw data.
 
-    **Next.** Finish the noise-ladder runs (they fill Figure 16) and confirm the anchor screen with more seeds.
-    Measure the loss barrier between a failed network and its sign-repaired copy directly (the network analogue of
+    **Route-B models have no sign trap.** The sign audit of the six route-B arms (A1, P, C0 with one frozen charge
+    chain; AL, PAL, B with another) finds no wrong-sign species against DFT Löwdin charges (per-atom RMSE 0.018-0.035 e),
+    and none of the sign trap seen here: their charges come from two frozen chains, so there are 2 charge functions, not
+    24, and no charge head is trained inside those runs. Against the fixed-ESP oracle, C and N of Gdm⁺ carry the opposite sign
+    in every model (the ESP charges are +1.0 and −0.9 e, Löwdin −0.4 and +0.2 e); that is a disagreement between two
+    oracles, and the models follow the DFT Löwdin one. It does not explain force or interaction-energy errors in that
+    data. The audit covers Gdm⁺ and NH₄⁺ pair sets, not organic molecules in general.
+
+    **Next.** Charge-label noise on the anchors (J3 and J4, paired on seeds 15 and 16: do noisy anchors still rescue
+    them?), a combo arm with 25 % co-occurring structures (the toy's fraction), a batch-64 arm at 4 times the epochs
+    (so batch size is separated from training length), and batch 4 at equal numbers of updates. Confirm the anchor screen
+    with more seeds. Measure the loss barrier between a failed network and its sign-repaired copy directly (the network analogue of
     Figure 11). Train on T2-T5, where charges respond to the environment and the fixed-charge oracle fails.
     """)
         return mo.vstack([mo.md("## 8. Caveats, what is not shown, and next steps"), seeds, lim, rest])
