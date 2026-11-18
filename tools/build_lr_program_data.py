@@ -1347,7 +1347,10 @@ def evidence_limits(td):
         "Builds and hardware differ between some compared files (training on H100 or GH200, scoring on different "
         "builds); every comparison here pairs files scored by the same chain unless a row says otherwise.",
         "The adversarial sets (seam search set, sign-set cells) were designed after earlier failures were seen, so they "
-        "are not blind tests; the type-held-out gate is the only pair set no arm had seen by type.",
+        "are not blind tests, and a pass of rule 4 (the sign set) does not show that orientation behaviour holds on other "
+        "cells; ladder v2 (draft, A2) adds an orientation development set from non-sealed data and an orientation-"
+        "consistency rung (B9). The type-held-out gate is the only pair set no arm had seen by type in its fine-tune and "
+        "charge-model rows; it was not checked against the OMol25 pretraining.",
     ]
 
 # ------------------------------------------------------------------------------------------------ 4-seed verdicts

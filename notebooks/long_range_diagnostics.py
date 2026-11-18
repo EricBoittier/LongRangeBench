@@ -2021,7 +2021,8 @@ def _(LRP, MV_ON, bignladder_figure, dotpanels, ladder_figure, metric_spec, mo):
                           "Seam sign set (rule 4)",
                           "2,000 orientations per cell; a cell passes with ≥ 90 % repulsive, median ≤ 1.5× k/d² and "
                           "≤ 10 % above 1.5×; rule 4 counts the 4 scorable cells, K⁺Gdm⁺ apart, NH₄⁺NH₄⁺ 9 Å absent "
-                          "from the search set. Reference: the Coulomb oracle, not DFT.", ncol=4)
+                          "from the search set. Reference: the Coulomb oracle, not DFT. The cells were designed after earlier failures, so a "
+                          "pass is not evidence for other orientations (ladder v2 draft, A2).", ncol=4)
         _pairs = dotpanels(LRP, _main, [metric_spec(LRP, "setB held-out r>=8A F MAE meV/A"),
                                         metric_spec(LRP, "setB held-out r>=8A F MAE meV/A, pair types not in P rows"),
                                         metric_spec(LRP, "setB held-out r>=8A F MAE meV/A, LES off"),
@@ -2143,20 +2144,30 @@ def _(FAINT, GREY, INK, LRP, MV_ON, MV_STATE, VERM, forest, frame, mo, np, plt, 
         _c0 = _pm(["C0_s13r_ema", "C0_s14_ema", "C0_s15_ema", "C0_s16_ema"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
         _p = _pm(["P_s13r_ema", "P_s14_ema", "P_s15_ema", "P_s16_ema"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
         _pet = _pm(["PETOMOLS"], "K+Gdm+ and Gdm+I- (Mg2+ excluded)")
+        _c0w = _pm(["C0_s13r_ema", "C0_s14_ema", "C0_s15_ema", "C0_s16_ema"], "all three (incl. Gdm+Mg2+)")
+        _pw = _pm(["P_s13r_ema", "P_s14_ema", "P_s15_ema", "P_s16_ema"], "all three (incl. Gdm+Mg2+)")
+        _zw = _PO["P_s13r_ema"]["all three (incl. Gdm+Mg2+)"]["zero"]
         _o = mo.vstack([
             mo.md(f"""### Type-held-out charged pairs (DFT gate)
 
-Three pair types that no training row contains: K⁺·Gdm⁺, Gdm⁺·I⁻ and Gdm⁺·Mg²⁺. Each type has 6 orientation scans
+Three pair types that no fine-tune or charge-model training row contains: K⁺·Gdm⁺, Gdm⁺·I⁻ and Gdm⁺·Mg²⁺ (not checked
+against the OMol25 pretraining of PET-OMol-S, where Gdm⁺ occurs as a monomer; halide analogues of Gdm⁺·I⁻ are in P's
+training rows). Each type has 6 orientation scans
 at 13 separations from 6 to 14 Å, labelled at ωB97M-V/def2-TZVPD with forces (234 pair frames and 4 monomers).
 Gdm⁺ is the common partner of all three types, and the other partner is a single atom, so the variety is the Gdm⁺
 rotation only. Each arm has 4 independent seeds (GH200 13r, 14, 15, 16). The H100 seed-13 file is a same-seed
 replicate of 13r: it is drawn, but never counted as a fifth seed.
 
-**{LRP.get("typeheld_pdiff_text", "")}** Pooled over K⁺Gdm⁺ and Gdm⁺I⁻ ({MV_STATE}), seed means: C0 {_c0[0]:.1f}
+**{LRP.get("typeheld_pdiff_text", "")}** Pooled over K⁺Gdm⁺ and Gdm⁺I⁻ (Mg²⁺ excluded), seed means: C0 {_c0[0]:.1f}
 meV/Å (seeds {_c0[1]:.1f}–{_c0[2]:.1f}), P {_p[0]:.1f} ({_p[1]:.1f}–{_p[2]:.1f}), PET-OMol-S {_pet[0]:.1f}, one file. The
 zero-force floor is 39.2 meV/Å. The C0 − P gap of {_c0[0] - _p[0]:.1f} meV/Å is {(_c0[0] - _p[0]) / 9.2:.0%} of the
 9.2 meV/Å gap on the in-distribution set-B gate. Gdm⁺·Mg²⁺ is drawn apart
-(|q| ≥ 2, excluded from scoring). No arm learns that pair: every file is at or above its zero-force floor of 77.5 meV/Å.
+(|q| ≥ 2, excluded from scoring). None of the files drawn here learns that pair: every point estimate is above the
+zero-force floor of 77.5 meV/Å (the lower bound of several intervals reaches it). Including it moves the pooled seed
+means to C0 {_c0w[0]:.1f}, P {_pw[0]:.1f} meV/Å (floor {_zw:.1f}), so both readings are given because the verdict of
+a comparison can flip with Mg²⁺ (P − C0: see the line above). Gdm⁺·I⁻ cannot serve as a known-bad check, because the
+short-range-only PET-OMol-S scores below the zero-force floor there, and a constant energy offset leaves forces
+unchanged, so this gate cannot see one.
 This is one gate with 6 scans per type, so it is a screen and not a claim."""),
             _typeheld_fig() or mo.md(""),
             mo.md("### Paired statistics (pre-registered, 4 seeds)"),

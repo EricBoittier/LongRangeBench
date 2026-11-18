@@ -275,7 +275,8 @@ def _(LABS, PROG, mo, not_run, pd, table):
                "A cell passes with <= 10 % attractive orientations, median <= 1.5x Coulomb and <= 10 % above 1.5x. The "
                "denominator is 4 scorable cells; NH4+NH4+ 9 A is not in the search set and cannot be scored; K+Gdm+ 8 A "
                "is held out of P's training rows and is reported apart, never counted. All cells are monovalent "
-               "(max |q| = 1), so the multivalent switch does not change this count.")
+               "(max |q| = 1), so the multivalent switch does not change this count. The cells were designed after earlier "
+               "failures were seen, so a pass does not show that orientation behaviour holds on other cells (ladder v2 draft, A2).")
         return mo.vstack([mo.md("### Seam sign set"), mo.md(txt), table(cnt, "cells passing per file"),
                           table(df, "cells per file")])
     _sec()
@@ -399,17 +400,30 @@ def _(D, L, LABS, MID, MV, PROG, mo, not_run, pd, table):
         df = pd.DataFrame(rows)
         head = df[(df.role == "score aggregate") & (df.LES == "on")]
         agg_txt = "; ".join(f"{r['file']} {r['F MAE meV/A']} [{r['95% lo']}, {r['95% hi']}]" for _, r in head.iterrows())
-        txt = ("Type-held-out gate: charged pair types absent from every training row (K+Gdm+, Gdm+I-, Gdm+Mg2+), 6 "
+        # both readings on one line whatever the switch says: the verdict of a comparison can flip with Mg2+ (ladder v2, E2)
+        two = {}
+        for _, r in df[(df.LES == "on") & df.pair_types.isin([AGG_IN, AGG_EX])].iterrows():
+            two.setdefault(r["file"], {})["with" if r["pair_types"] == AGG_IN else "without"] = (
+                f"{r['F MAE meV/A']} [{r['95% lo']}, {r['95% hi']}], zero-force {r['zero-force MAE']}")
+        both_txt = "; ".join(f"{f}: without Mg2+ {v.get('without', 'n/a')} | with Mg2+ (apart) {v.get('with', 'n/a')}"
+                             for f, v in two.items())
+        txt = ("Type-held-out gate: charged pair types absent from every fine-tune and charge-model training row (K+Gdm+, Gdm+I-, Gdm+Mg2+; "
+               "not checked against the OMol25 pretraining of PET-OMol-S, where Gdm+ occurs as a monomer, and halide analogues of "
+               "Gdm+I- are in P's training rows), 6 "
                "orientations x 9 COM distances 8-14 A, wB97M-V/def2-TZVPD forces. "
                f"Score aggregate ({L.mv_state(MV)}; over {'all three types' if MV else 'K+Gdm+ and Gdm+I- only'}), "
-               f"force MAE at r >= 8 A, LES on, meV/A: {agg_txt}. Intervals are frame bootstraps and are narrower than a "
-               "bootstrap over the 6 orientation scans would be; the zero-force MAE is the score of a model with no force.")
+               f"force MAE at r >= 8 A, LES on, meV/A: {agg_txt}. Both readings, whatever the switch says (the verdict of a "
+               f"comparison can flip with Mg2+; Gdm+Mg2+ is shown apart, never scored): {both_txt}. "
+               "Intervals are frame bootstraps and are narrower than a "
+               "bootstrap over the 6 orientation scans would be; the zero-force MAE is the score of a model with no force. "
+               "Gdm+I- cannot serve as a known-bad check: the short-range-only PET-OMol-S scores below the zero-force "
+               "floor there (ladder v2 controls). A constant energy offset leaves forces unchanged, so this gate cannot see it.")
         main = df[df["counts in score"]]
         apart = df[~df["counts in score"]]
         out = [mo.md("### Type-held-out charged-pair gate"), mo.md(txt), table(main, "type-held-out gate per file (scored)")]
         if len(apart):
-            out += [mo.md("**Excluded: multivalent (Gdm+Mg2+, max |q| = 2).** No arm learns this pair: its force MAE is at "
-                          "or above the zero-force floor."), table(apart, "type-held-out gate, excluded: multivalent")]
+            out += [mo.md("**Excluded: multivalent (Gdm+Mg2+, max |q| = 2).** None of the files scored here learns this pair: every point "
+                          "estimate is above the zero-force floor (the lower bound of an interval can reach it)."), table(apart, "type-held-out gate, excluded: multivalent")]
         return mo.vstack(out)
     _sec()
     return
