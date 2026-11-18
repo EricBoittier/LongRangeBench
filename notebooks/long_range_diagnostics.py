@@ -2150,8 +2150,9 @@ def _(FAINT, GREY, INK, LRP, MV_ON, MV_STATE, VERM, forest, frame, mo, np, plt, 
         _o = mo.vstack([
             mo.md(f"""### Type-held-out charged pairs (DFT gate)
 
-Three pair types that no fine-tune or charge-model training row contains: K⁺·Gdm⁺, Gdm⁺·I⁻ and Gdm⁺·Mg²⁺ (not checked
-against the OMol25 pretraining of PET-OMol-S, where Gdm⁺ occurs as a monomer; halide analogues of Gdm⁺·I⁻ are in P's
+Three pair types with no whole-structure composition match in any arm's fine-tune rows or the esp-q charge-model rows:
+K⁺·Gdm⁺, Gdm⁺·I⁻ and Gdm⁺·Mg²⁺ (each fragment occurs inside larger rows; the OMol25 pretraining of PET-OMol-S, where Gdm⁺
+occurs as a monomer, and the frozen charge pass's own fit data were not checked; halide analogues of Gdm⁺·I⁻ are in P's
 training rows). Each type has 6 orientation scans
 at 13 separations from 6 to 14 Å, labelled at ωB97M-V/def2-TZVPD with forces (234 pair frames and 4 monomers).
 Gdm⁺ is the common partner of all three types, and the other partner is a single atom, so the variety is the Gdm⁺

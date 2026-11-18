@@ -751,7 +751,9 @@ def build_chemiscope(verbose=True):
     ds = cs_input(TX, props, "Type-held-out charged pairs", "234 pair frames + 4 monomers, wB97M-V/def2-TZVPD forces",
                   shapes=shapes)
     add("lrp-typeheld", ds, "Type-held-out charged-pair gate (DFT)",
-        "K⁺Gdm⁺, Gdm⁺I⁻ and Gdm⁺Mg²⁺: pair types absent from every training row, 6 orientation scans per type × 13 "
+        "K⁺Gdm⁺, Gdm⁺I⁻ and Gdm⁺Mg²⁺: pair types with no whole-structure composition match in any arm's fine-tune rows or "
+        "the esp-q charge-model rows (each fragment occurs inside larger rows; the OMol25 pretraining and the frozen "
+        "charge pass's own fit data were not checked), 6 orientation scans per type × 13 "
         "distances (6–14 Å), plus the 4 monomers. Gdm⁺ is the common partner, and the other partner is an atom, so "
         "orientation variety is the Gdm⁺ rotation only. C0 and P are means of 5 EMA files (H100 s13 + GH200 "
         "13r–16; 13 and 13r are same-seed replicates). Arrows: DFT force (×2), P seed-14 and PET-OMol-S errors (×10).",
@@ -1349,8 +1351,9 @@ def evidence_limits(td):
         "The adversarial sets (seam search set, sign-set cells) were designed after earlier failures were seen, so they "
         "are not blind tests, and a pass of rule 4 (the sign set) does not show that orientation behaviour holds on other "
         "cells; ladder v2 (draft, A2) adds an orientation development set built from data kept out of the held-out scoring, and an orientation-"
-        "consistency rung (B9). The type-held-out gate is the only pair set no arm had seen by type in its fine-tune and "
-        "charge-model rows; it was not checked against the OMol25 pretraining.",
+        "consistency rung (B9). The type-held-out gate is the only pair set with no whole-structure composition match in any "
+        "arm's fine-tune rows or the esp-q charge-model rows; the OMol25 pretraining and the frozen charge pass's own fit "
+        "data were not checked.",
     ]
 
 # ------------------------------------------------------------------------------------------------ 4-seed verdicts

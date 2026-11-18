@@ -407,13 +407,13 @@ def _(D, L, LABS, MID, MV, PROG, mo, not_run, pd, table):
                 f"{r['F MAE meV/A']} [{r['95% lo']}, {r['95% hi']}], zero-force {r['zero-force MAE']}")
         both_txt = "; ".join(f"{f}: without Mg2+ {v.get('without', 'n/a')} | with Mg2+ (apart) {v.get('with', 'n/a')}"
                              for f, v in two.items())
-        txt = ("Type-held-out gate: charged pair types absent from every fine-tune and charge-model training row (K+Gdm+, Gdm+I-, Gdm+Mg2+; "
-               "not checked against the OMol25 pretraining of PET-OMol-S, where Gdm+ occurs as a monomer, and halide analogues of "
-               "Gdm+I- are in P's training rows), 6 "
+        txt = ("Type-held-out gate: charged pair types with no whole-structure composition match in any arm's fine-tune rows or the esp-q charge-model rows (K+Gdm+, Gdm+I-, Gdm+Mg2+; "
+               "each fragment occurs inside larger rows; the OMol25 pretraining, where Gdm+ occurs as a monomer, and the frozen charge pass's own "
+               "fit data were not checked; halide analogues of Gdm+I- are in P's training rows), 6 "
                "orientations x 9 COM distances 8-14 A, wB97M-V/def2-TZVPD forces. "
                f"Score aggregate ({L.mv_state(MV)}; over {'all three types' if MV else 'K+Gdm+ and Gdm+I- only'}), "
                f"force MAE at r >= 8 A, LES on, meV/A: {agg_txt}. Both readings, whatever the switch says (the verdict of a "
-               f"comparison can flip with Mg2+; Gdm+Mg2+ is shown apart, never scored): {both_txt}. "
+               f"comparison can flip with Mg2+; Gdm+Mg2+, |q| = 2, counts only when the multivalent switch is on): {both_txt}. "
                "Intervals are frame bootstraps and are narrower than a "
                "bootstrap over the 6 orientation scans would be; the zero-force MAE is the score of a model with no force. "
                "Gdm+I- cannot serve as a known-bad check: the short-range-only PET-OMol-S scores below the zero-force "
@@ -422,8 +422,13 @@ def _(D, L, LABS, MID, MV, PROG, mo, not_run, pd, table):
         apart = df[~df["counts in score"]]
         out = [mo.md("### Type-held-out charged-pair gate"), mo.md(txt), table(main, "type-held-out gate per file (scored)")]
         if len(apart):
-            out += [mo.md("**Excluded: multivalent (Gdm+Mg2+, max |q| = 2).** None of the files scored here learns this pair: every point "
-                          "estimate is above the zero-force floor (the lower bound of an interval can reach it)."), table(apart, "type-held-out gate, excluded: multivalent")]
+            mg = apart[(apart.pair_types == "Gdm+_Mg2+") & (apart.LES == "on")]
+            above = int((mg["F MAE meV/A"] > mg["zero-force MAE"]).sum())
+            reach = int((mg["95% lo"] <= mg["zero-force MAE"]).sum())
+            out += [mo.md("**Excluded: multivalent (Gdm+Mg2+, max |q| = 2).** "
+                          f"Of the {len(mg)} files scored here (LES on), {above} have a point estimate above the zero-force "
+                          f"floor ({reach} have a lower interval bound at or below it); a file at or below the floor "
+                          "would have learned something about this pair."), table(apart, "type-held-out gate, excluded: multivalent")]
         return mo.vstack(out)
     _sec()
     return
