@@ -1,0 +1,4 @@
+three.js r170 (npm package three@0.170.0), file build/three.module.min.js, unmodified.
+Fetched from https://registry.npmjs.org/three/-/three-0.170.0.tgz
+sha256 08fd7545d13d2c7fb65ab691530a802dafefd638596501854f267d0fb13c39e7
+License: MIT (LICENSE in this folder). Used by notebooks/cw_widgets.py so the 3D scenes need no network at run time.

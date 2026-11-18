@@ -175,6 +175,16 @@ The committed results, an explorer of every scored structure (`site/explorer/`, 
 <https://ericboittier.github.io/LongRangeBench/> by `.github/workflows/pages.yml` on every push to `main`
 (`tools/build_pages.py` renders `results/SUMMARY.md`; no raw result JSON is read).
 
+`notebooks/chargeworld.py` explains the ChargeWorld synthetic benchmark (exact charges, tiers T0-T5), shows its
+structures in 3D (three.js r170, vendored in `notebooks/vendor/`), analyses the first charge-head runs on it and the
+species-charge toy behind their sign failures. It reads `notebooks/data/chargeworld/` (3.6 MB), written by
+`tools/build_chargeworld_data.py`:
+
+```sh
+uvx marimo edit --sandbox notebooks/chargeworld.py
+marimo export html --no-include-code notebooks/chargeworld.py -o chargeworld.html   # static page, 3D still rotates
+```
+
 The WASM export ([docs](https://docs.marimo.io/guides/wasm/)) is a single HTML file that runs the notebook in the
 browser with no server, which is what the linked chemiscope views are built on.
 
