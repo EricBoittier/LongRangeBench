@@ -292,15 +292,17 @@ def probe_trace(run_dir: Path):
     for s in sp:
         out["agree"][str(s)] = [round(recs[k]["probe"]["species"].get(str(s), {}).get("agree_g", np.nan), 3) for k in st]
         out["mean"][str(s)] = [round(recs[k]["probe"]["species"].get(str(s), {}).get("mean", np.nan), 4) for k in st]
-    truth = {}
+    # relative-sign pattern per charged species under the probe's own global sign, and the sign-choice step (the step
+    # after which the pattern equals the final one), as in the replicate set's analysis script
+    pats = []
     for k in st:
-        for z, v in recs[k]["probe"]["species"].items():
-            truth.setdefault(int(z), v.get("truth", 0.0))
-    out["charged"] = [z for z in sp if abs(truth.get(z, 0.0)) > 0.25]
-    # sign-choice step: the step after which no charged species changes its sign relative to the probe's gauge
-    pat = np.array([[np.sign(out["agree"][str(z)][i] - 0.5) for z in out["charged"]] for i in range(len(st))])
-    j = len(st) - 1
-    while j > 0 and np.array_equal(pat[j - 1], pat[-1]):
+        sp_ = {z: v for z, v in recs[k]["probe"]["species"].items() if abs(v["truth"]) > 0.25}
+        G = 1 if sum(v["n"] * v["mean"] * v["truth"] for v in sp_.values()) >= 0 else -1
+        pats.append({z: (1 if (v["agree"] > 0.5) == (G > 0) else -1) for z, v in sp_.items()})
+    out["charged"] = sorted(int(z) for z in pats[-1])
+    out["n_wrong"] = [sum(v < 0 for v in p.values()) for p in pats]
+    j = len(pats) - 1
+    while j > 0 and pats[j - 1] == pats[-1]:
         j -= 1
     out["choice_step"] = int(st[j])
     return out
@@ -332,7 +334,14 @@ def build_results():
         if not (d / "pred_N16.json").exists():
             continue
         s = score(d, tier, keep.get(tier) if arch == "A1" else None)
-        runs.append(dict(set="phase1", tier=tier, arm=f"{arch} {cap}", scheme="-", seed=int(seed[1:]), **s, curve=val_curve(d)))
+        splits = {}   # the ChargeWorld scorer's per-split numbers (test, combo, Qood), for the pre-registered limits
+        for sp_, f in (("test", "score_N16.json"), ("combo", "score_combo_N16.json"), ("Qood", "score_Qood_N16.json")):
+            if (d / f).exists():
+                j = json.loads((d / f).read_text())
+                splits[sp_] = dict(F_mae=round(j["F_mae_meV_A_given"], 2),
+                                   q_err_by_Z={k: round(v, 4) for k, v in j.get("q_err_by_Z", {}).items()})
+        runs.append(dict(set="phase1", tier=tier, arm=f"{arch} {cap}", scheme="-", seed=int(seed[1:]), **s, curve=val_curve(d),
+                         splits=splits))
     # replicate set with probe traces: plain LES, two anchors, EMA (seeds 13-20 as they finish)
     for d in sorted((CW_RUN / "collapse" / "runs").glob("T*_S*_s*")):
         if not ((d / "DONE").exists() and (d / "pred_N16.json").exists()):
@@ -350,6 +359,13 @@ def build_results():
         s = score(d, tier)
         runs.append(dict(set="ladder", tier=tier, arm=arm, scheme=LADDER.get(arm, arm), seed=int(seed[1:]), **s, curve=val_curve(d)))
         traces[f"ladder/{d.name}"] = probe_trace(d)
+    ref_sum = CW_RUN / "collapse" / "a46_summary.json"
+    if ref_sum.exists():
+        cs = {r["run"]: r.get("choice_step") for r in json.loads(ref_sum.read_text())["runs"]}
+        for k, t in traces.items():
+            name = k.split("/")[-1]
+            if k.startswith("anchors/") and t and cs.get(name) is not None:
+                assert t["choice_step"] == cs[name], (name, t["choice_step"], cs[name])
     # consistency with the hand-made Phase-1 analysis (PLAN_DELIVERABLES section 1)
     ref = {15: (262, 49), 16: (236, 66)}
     for x in runs:

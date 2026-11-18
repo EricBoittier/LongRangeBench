@@ -6,6 +6,7 @@
 #     "numpy",
 #     "pandas",
 #     "matplotlib",
+#     "scipy",
 # ]
 # ///
 """ChargeWorld: a synthetic benchmark with exact charges, what charge heads learn on it, and why some runs fail.
@@ -161,8 +162,8 @@ def _(D, Fg, mo, pd, plt):
             "drawn at 10⁻³) for three reference models per tier. Blue: per-species mean charges with the tier's own "
             "kernel and everything else exact (what a fixed-charge long-range head can reach; not computed for T1s). "
             "Orange: the true charges used as point charges with everything else exact, the part a charge head with "
-            "perfect charges leaves to its short-range network (smearing, on-site and induction terms; 770-1,000 "
-            "meV/Å from T1s on). Grey: a local two-body ridge model with a 6 Å cutoff. Red bars: the analytic "
+            "perfect charges leaves to its short-range network (smearing, on-site and induction terms; 770-970 "
+            "meV/Å on the periodic tiers from T1s on, 235 meV/Å on the open T3a). Grey: a local two-body ridge model with a 6 Å cutoff. Red bars: the analytic "
             "label-noise floor of the noisy tiers. n = 100 (T0) or 200 test structures per tier."),
             mo.ui.table(pd.DataFrame(_rows), selection=None, page_size=20, label="Tiers (sortable, filterable)")])
     _tiers()
@@ -272,9 +273,10 @@ def _(mo):
     mo.md(r"""
     ## 3. The data, the splits and the sign freedom
 
-    The noise-free tiers T1 to T3 share one set of geometries: periodic cubic boxes of 128-224 atoms at
-    0.016-0.026 Å⁻³ with box sides of at least 20 Å, sampled by Monte Carlo. Each tier has 1,600 training, 200
-    validation and 200 test structures. Test-only splits probe transfer: `combo` holds the species pairs that never
+    T1, T1s, T2, T3b, T3c, T4a-g, TS and T5 share one set of geometries: periodic cubic boxes of 128-224 atoms at
+    0.016-0.026 Å⁻³ with box sides of at least 20 Å, sampled by Monte Carlo. T3d cuts open droplets and slabs from
+    the same boxes, and T3a uses open pairs of clusters. Each tier has 1,600 training, 200 validation and 200 test
+    structures. Test-only splits probe transfer: `combo` holds the species pairs that never
     share a box in training (+3 with −3, and +2 with −2), `Qood` has total charges |Q| = 3 and 4, outside the
     training range of −2 to 2, and `big`, `dense` and `dilute` change size and density.
     """)
@@ -348,9 +350,17 @@ def _(C, D, FLIP_S, NAME_Z, SPEC_Z, W, flip_species, flip_struct, mo, np):
             note += "<b>All species in the structure are flipped: energy and forces are unchanged to rounding.</b>"
         else:
             note += "Only part of the structure is flipped: energy and forces change."
-        return mo.ui.anywidget(W.Scene("explorer", data=dict(R=R.tolist(), q=q, centre=(cell.sum(0) / 2).tolist(),
+        rows = []
+        charged = [z for z in present if abs(q0[zi[z]]) > 0.1]
+        for lab, zs in (("no flip", []), (f"flip one species ({NAME_Z.get(charged[0], '')})" if charged else "flip one species", charged[:1]),
+                        ("flip every species in the structure", present)):
+            sg = np.array([-1.0 if z in zs else 1.0 for z in Zs]); Ex, Fx_ = C.coulomb_point(s["quad"], q0 * sg)
+            rows.append(f"| {lab} | {Ex - E0:+.6f} | {np.abs(Fx_ - F0).max():.6f} |")
+        table = mo.md("| change of the exact charges | ΔE (eV) | largest force change (eV/Å) |\n|---|---|---|\n" + "\n".join(rows))
+        view = mo.ui.anywidget(W.Scene("explorer", data=dict(R=R.tolist(), q=q, centre=(cell.sum(0) / 2).tolist(),
             cell=s["cell"], arrows=big, arrow_colour="#E69F00", qmax=3.0, distance=2.6 * np.linalg.norm(cell, axis=1).max() + 8,
             note=note)))
+        return mo.vstack([view, table])
     _flip()
     return
 
@@ -425,9 +435,14 @@ def _(D, Fg, mo, plt):
         if not D["runs"]:
             return mo.callout(mo.md("runs.json is missing."), kind="warn")
         f = Fg.overview(plt, D["runs"]["runs"]); plt.close(f)
+        bad = [x for x in D["runs"]["runs"] if x["set"] == "phase1" and x["tier"] == "T1" and x["arm"] == "A1 mid" and x["fail"]]
+        share = [x["n_mixed"] * x["F_mae_mixed"] / (x["n_mixed"] * x["F_mae_mixed"] + (200 - x["n_mixed"]) * x["F_mae_coherent"]) for x in bad]
+        ratio = [x["F_mae_mixed"] / x["F_mae_coherent"] for x in bad]
         return mo.vstack([f, mo.md(
-            "**Figure 3. A charge head cuts the T1 force error ten-fold when its signs are consistent; the two T1 seeds "
-            "that fail keep a 4-5× higher error, and almost all of it sits in sign-mixed structures.** (a) Test force "
+            "**Figure 3. A charge head cuts the T1 force error ten-fold when its signs are consistent. In the two T1 "
+            f"seeds that fail, a sign-mixed structure has {min(ratio):.0f}-{max(ratio):.0f}× the force error of a "
+            f"sign-coherent one, and the mixed structures ({min(x['n_mixed'] for x in bad)}-{max(x['n_mixed'] for x in bad)} of 200) "
+            f"carry {100 * min(share):.0f}-{100 * max(share):.0f} % of the total error.** (a) Test force "
             "MAE (meV/Å, inference with 16 neighbours) per seed, first set; open circles: A1 seeds that fail the sign "
             "rule (2 of 4 on T1, 0 of 4 on T2, 0 of 16 on T0). (b) T1, A1: the same force MAE split into test structures "
             "whose charges mix signs under the structure's own best sign (more than 1 % of the charged atoms at the "
@@ -474,14 +489,17 @@ def _(D, Fg, NAME_Z, mo, plt, sign_scheme, sign_set):
         if f is None:
             return mo.md("No runs with charges for this choice.")
         plt.close(f)
+        sel = [x for x in R if x["set"] == st and x["tier"] == tier and x.get("fail") and (st != "anchors" or x["scheme"] in sign_scheme.value)]
+        fl = "; ".join(f"seed {x['seed']}{' ' + x['scheme'] if x['scheme'] != '-' else ''}: "
+                       + ", ".join(NAME_Z.get(int(z), str(z)) for z in x["flipped"]) for x in sel) or "none"
         return mo.vstack([f, mo.md(
             "**Figure 5. Failed runs keep the right charge size per species and flip the sign of whole species.** "
-            "Mean latent charge per species over the test split (e), after the run's global sign; one bar per run in "
-            "the order of the title (✗ = failed). Black lines: exact charges. Orange outline: more than half of the "
-            "species' atoms at the wrong sign under the run's global sign. In the first set, seed 15 flips the +3 "
-            "species against the rest, and seed 16 flips the −3 and −2 species against the rest; all are members of "
-            "the held-out pairs. Seed 16's global sign follows the majority of the charge, so in this plot the other "
-            "species of seed 16 carry the orange outline instead.")])
+            "Bars: mean latent charge per species over the test split (e), after the run's global sign; one bar per "
+            "run in the order of the title (✗ = failed). Short black ticks: mean |q| per species, drawn on the side of "
+            "the exact sign; they sit at the exact size even where the bar points the wrong way. Long black lines: exact "
+            "charges. Orange outline: more than half of the species' atoms at the wrong sign under the run's global "
+            f"sign. Species flipped under the global sign: {fl}. The global sign follows the majority of the charge, so "
+            "a run that flips a small block of species can show the complementary block outlined.")])
     _signs()
     return
 
@@ -490,7 +508,7 @@ def _(D, Fg, NAME_Z, mo, plt, sign_scheme, sign_set):
 def _(D, Fg, mo):
     _R = (D["runs"] or {}).get("runs", [])
     _keys = [Fg.run_key(x) for x in _R if x.get("curve")]
-    curve_pick = mo.ui.multiselect(options=_keys, value=[k for k in _keys if k.startswith("phase1 | T1 A1")], label="validation curves")
+    curve_pick = mo.ui.multiselect(options=_keys, value=[k for k in _keys if k.startswith("first set · T1 A1")], label="validation curves")
     curve_pick
     return (curve_pick,)
 
@@ -515,15 +533,21 @@ def _(C, D, Fg, mo, plt):
         if not D["runs"]:
             return mo.md("")
         R = D["runs"]["runs"]
-        A = [x for x in R if x["set"] == "anchors"]
-        n_by = {s: sum(1 for x in A if x["scheme"] == s) for s in ("S0", "S1", "S2", "S4")}
-        f = Fg.rates(plt, R, "anchors", "scheme", ["S0", "S1", "S2", "S4"], D["runs"]["scheme_names"]); plt.close(f)
-        partial = any(v < 8 for v in n_by.values())
+        A = [x for x in R if x["set"] == "anchors" and x["tier"] == "T1"]
+        sch = ("S0", "S1", "S2", "S4")
+        seeds = {s_: sorted(x["seed"] for x in A if x["scheme"] == s_) for s_ in sch}
+        k_by = {s_: sum(x["fail"] for x in A if x["scheme"] == s_) for s_ in sch}
+        f = Fg.rates(plt, R, "anchors", "scheme", list(sch), D["runs"]["scheme_names"]); plt.close(f)
+        missing = {s_: [sd for sd in range(13, 21) if sd not in seeds[s_]] for s_ in sch}
         msg = mo.callout(mo.md(
-            f"Partial: {', '.join(f'{k} {v}/8' for k, v in n_by.items())} seeds finished. Seeds 17-20 are running; "
-            "use the rebuild button at the top when their folders appear."), kind="info") if partial else mo.md("")
+            "Partial: " + "; ".join(f"{s_} {len(seeds[s_])}/8 (missing {', '.join(map(str, missing[s_]))})" for s_ in sch if missing[s_])
+            + ". Missing seeds appear after their runs finish and the rebuild button at the top is pressed."),
+            kind="info") if any(missing.values()) else mo.md("")
+        anch_ok = all(k_by[s_] == 0 for s_ in ("S1", "S2")) and k_by["S0"] > 0
+        head = ("Both charge anchors remove the sign failures in the finished seeds; EMA does not." if anch_ok and k_by["S4"] > 0
+                else "Failure rates per scheme in the finished seeds.")
         return mo.vstack([msg, f, mo.md(
-            "**Figure 7. Both charge anchors remove the sign failures in the seeds finished so far; EMA does not.** "
+            f"**Figure 7. {head}** "
             "Failure rate per scheme on T1 (replicate set) with 95 % Clopper-Pearson intervals; n is the number of "
             "finished seeds. Plain LES repeats the first set's outcome seed for seed (15 and 16 fail). EMA fails the "
             "same two seeds, and its force MAE is 89-183 meV/Å because the average still carries about 2 % of the "
@@ -535,7 +559,9 @@ def _(C, D, Fg, mo, plt):
 @app.cell
 def _(D, mo):
     _keys = sorted((D["traces"] or {}).keys())
-    trace_pick = mo.ui.multiselect(options=_keys, value=[k for k in _keys if k.startswith("anchors/T1_S0")][:4],
+    _lab = lambda k: {"anchors": "replicate", "ladder": "noise ladder"}.get(k.split("/")[0], "") + " · " + k.split("/")[-1].replace("T1_", "T1 ").replace("_s", " seed ")  # noqa: E731
+    trace_pick = mo.ui.multiselect(options={_lab(k): k for k in _keys},
+                                   value=[_lab(k) for k in _keys if k.startswith("anchors/T1_S0")][:4],
                                    label="probe traces")
     trace_pick
     return (trace_pick,)
@@ -546,19 +572,18 @@ def _(D, Fg, mo, plt, trace_pick):
     def _tr():
         if not D["traces"]:
             return mo.md("traces.json is missing.")
-        Zs = sorted({int(z) for t in D["traces"].values() if t for z in t.get("charged", [])})
-        f = Fg.traces(plt, D["traces"], trace_pick.value, Zs); plt.close(f)
-        cs = {k.split("/")[-1].replace("T1_", ""): v["choice_step"] for k, v in D["traces"].items() if v}
-        lo, hi = min(cs.values()), max(cs.values())
+        f = Fg.traces(plt, D["traces"], trace_pick.value, label=lambda k: k.split("/")[-1].replace("T1_", "").replace("_s", " seed "))
+        plt.close(f)
+        cs = {k.split("/")[-1].replace("T1_", "").replace("_s", " seed "): v["choice_step"] for k, v in D["traces"].items() if v}
+        early = [v for v in cs.values() if v <= 100]; late = {k: v for k, v in cs.items() if v > 100}
+        lt = (" The exceptions fix their pattern later: " + ", ".join(f"{k} at step {v}" for k, v in sorted(late.items())) + ".") if late else ""
         return mo.vstack([f, mo.md(
-            f"**Figure 8. Every finished run fixes the relative signs of its species within the first {lo}-{hi} steps, "
-            f"inside the 80-step warm-up; the failed runs fix a mixed pattern and keep it.** Probe of 32 fixed training "
-            f"structures, every 10 steps (one epoch = 200 steps; symmetric-log step axis). (a) Probe structures whose "
-            f"charges mix signs; in the failed seeds this count keeps moving for about 1,000 steps while the network "
-            f"learns composition-dependent sign patches, without changing which species are flipped. (b) For the worst "
-            f"charged species (|q| > 0.25 e), the fraction of its probe atoms at the right sign under the probe's global "
-            f"sign; below 0.5 the species is flipped. Sign-choice step per run (the step after which no charged species "
-            f"changes sign): " + ", ".join(f"{k} {v}" for k, v in sorted(cs.items())) + ".")])
+            f"**Figure 8. {len(early)} of {len(cs)} finished runs fix the relative signs of their species by step "
+            f"{max(early) if early else 0}, close to the end of the 80-step warm-up (dotted line).{lt}** Probe of 32 fixed "
+            f"training structures, every 10 steps (one epoch = 200 steps; log step axis). (a) Probe structures whose "
+            f"charges mix signs. (b) Charged species (|q| > 0.25 e) at the wrong sign relative to the others, under the "
+            f"probe's global sign; the tick marks the sign-choice step, the step after which this pattern no longer "
+            f"changes.")])
     _tr()
     return
 
@@ -586,7 +611,7 @@ def _(D, NAME_Z, mo, pd):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 5. A 12-parameter toy that has the same trap
+    ## 5. The species-charge toy
 
     The networks are too large to probe directly. The toy keeps only what matters for the sign: 12 per-species
     charges $c$, fitted to the exact point-charge Coulomb energies and forces of the 200 T1 validation structures, with
@@ -595,8 +620,8 @@ def _(mo):
     starts in every arm, so arms are paired.
 
     In the reference arm, 20 of the 64 starts end in one mixed-sign minimum. It flips one block of species
-    (−2, −1 hard, −1 soft, −0.5 and +3) against the rest, and the boundary between the blocks cuts both held-out pairs:
-    exactly the pattern of the failed networks. The toy has no short-range network and no environment-dependent charges,
+    (−2, −1 hard, −1 soft, −0.5 and +3) against the rest. The boundary between the blocks cuts both held-out pairs, and
+    the flipped species of the failed networks are also held-out-pair members. The toy has no short-range network and no environment-dependent charges,
     so it shows that the data allow such a trap, not that the networks fall into the same one.
     """)
     return
@@ -604,17 +629,18 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    toy_lr = mo.ui.dropdown(options={"0.01": 0.01, "0.05 (reference)": 0.05, "0.2": 0.2}, value="0.05 (reference)", label="learning rate")
-    toy_warm = mo.ui.dropdown(options={"0": 0.0, "5 % (reference)": 0.05, "30 %": 0.3}, value="5 % (reference)", label="warm-up")
-    toy_b1 = mo.ui.dropdown(options={"0": 0.0, "0.9 (reference)": 0.9, "0.99": 0.99}, value="0.9 (reference)", label="β1")
-    toy_batch = mo.ui.dropdown(options={"full (200)": 0, "16": 16, "4": 4}, value="full (200)", label="minibatch")
-    toy_ema = mo.ui.dropdown(options={"off": 0.0, "0.999": 0.999}, value="off", label="EMA")
-    toy_init = mo.ui.dropdown(options={"0.05 e (reference)": 0.05, "0.5 e": 0.5}, value="0.05 e (reference)", label="initial scale")
+    toy_lr = mo.ui.slider(steps=[0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4], value=0.05, label="learning rate", show_value=True)
+    toy_warm = mo.ui.slider(steps=[0.0, 0.02, 0.05, 0.1, 0.2, 0.3], value=0.05, label="warm-up fraction", show_value=True)
+    toy_b1 = mo.ui.slider(steps=[0.0, 0.5, 0.9, 0.95, 0.99], value=0.9, label="β1", show_value=True)
+    toy_batch = mo.ui.slider(steps=[2, 4, 8, 16, 32, 64, 200], value=200, label="minibatch (200 = full)", show_value=True)
+    toy_ema = mo.ui.slider(steps=[0.0, 0.9, 0.99, 0.999], value=0.0, label="EMA (0 = off)", show_value=True)
+    toy_init = mo.ui.slider(steps=[0.01, 0.05, 0.1, 0.2, 0.5, 1.0], value=0.05, label="initial scale (e)", show_value=True)
     toy_anchor = mo.ui.dropdown(options={"none": "none", "MSE, exact": "mse", "correlation, exact": "corr"}, value="none", label="charge anchor")
     toy_wa = mo.ui.slider(start=0.0, stop=1.0, step=0.05, value=0.1, label="anchor weight", show_value=True)
     toy_combo = mo.ui.switch(value=False, label="+ combo structures")
     toy_go = mo.ui.run_button(label="Train 64 starts")
-    mo.vstack([mo.md("### Live toy trainer (runs in 1-7 s on a laptop CPU)"),
+    mo.vstack([mo.md("### Live toy trainer\nReference settings: lr 0.05, warm-up 0.05, β1 0.9, full batch, no EMA, initial scale 0.05 e. "
+                     "Full-batch runs take about 1 s; minibatches of 16-64 take 5-20 s."),
                mo.hstack([toy_lr, toy_warm, toy_b1, toy_batch, toy_ema], justify="start", wrap=True, gap=1),
                mo.hstack([toy_init, toy_anchor, toy_wa, toy_combo, toy_go], justify="start", wrap=True, gap=1)])
     return toy_anchor, toy_b1, toy_batch, toy_combo, toy_ema, toy_go, toy_init, toy_lr, toy_wa, toy_warm
@@ -628,7 +654,7 @@ def _(C, D, toy_anchor, toy_b1, toy_batch, toy_combo, toy_ema, toy_go, toy_init,
     if TOY is not None:
         _D = C.Toy(D["toy"], combo=True) if toy_combo.value else TOY
         _t = _time.time()
-        _c, _trace = C.train(_D, lr=toy_lr.value, warm=toy_warm.value, b1=toy_b1.value, batch=toy_batch.value or None,
+        _c, _trace = C.train(_D, lr=toy_lr.value, warm=toy_warm.value, b1=toy_b1.value, batch=None if toy_batch.value >= 200 else int(toy_batch.value),
                              ema=toy_ema.value or None, init_scale=toy_init.value,
                              anchor=None if toy_anchor.value == "none" else toy_anchor.value, w_anchor=toy_wa.value)
         toy_result = dict(c=_c, trace=_trace, seconds=_time.time() - _t, clicked=toy_go.value)
@@ -733,10 +759,10 @@ def _(mo):
 
     Why does the trap hold? At the trap the summed gradient is zero, but the per-structure gradients are not. Let $u$
     be the direction that scales the flipped species back through zero. A structure pulls towards repair if its
-    descent direction has a positive component along $u$. The structures that contain species from both sign blocks
-    pull one way, and others pull the other way; the pulls cancel. Section 5 showed what breaks the stalemate: noise in
-    the gradient (small minibatches move 13 of the 20 trapped starts out) and data that tie the blocks together (with
-    the combo structures, none of 64 starts is trapped).
+    descent direction has a positive component along $u$. Figure 13 splits the structures by whether they contain
+    species from both sign blocks and shows how their pulls cancel. Section 5 showed what changes the outcome: noise in
+    the gradient lowers the trap rate (minibatches of 4 structures: 7 of 64 trapped, of 16: 11 of 64, against 20), and
+    data that tie the blocks together remove it (with the combo structures, none of 64 starts is trapped).
 
     The same picture appears with real loss terms. In a separate bond-flow model trained on Born effective charges,
     the gradients of the force loss and of the Born-charge loss on the charge parameters point in opposite directions
@@ -768,11 +794,15 @@ def _(C, D, Fg, TOY, TRAP_C, mo, np, plt):
         ratio = np.linalg.norm(G, axis=1).sum() / (np.linalg.norm(G.sum(0)) + 1e-30)
         Gn = G / (np.linalg.norm(G, axis=1, keepdims=True) + 1e-30); cos = Gn @ Gn.T; iu = np.triu_indices(len(G), 1)
         f = Fg.conflict(plt, proj, both, G); plt.close(f)
+        nb, no = int(both.sum()), int((~both).sum())
         return mo.vstack([f, mo.md(
-            f"**Figure 13. At the trap, 200 non-zero per-structure gradients add up to almost nothing.** The sum of "
-            f"the per-structure gradient norms is {ratio:,.0f} times the norm of their sum. {100 * (proj > 0).mean():.0f} % of "
-            f"structures pull towards repair; {100 * (cos[iu] < 0).mean():.0f} % of structure pairs have a negative gradient "
-            f"cosine. (a) Pull towards repair per structure, split by whether the structure contains species from both "
+            f"**Figure 13. At the trap, {len(G)} non-zero per-structure gradients add up to almost nothing: the "
+            f"{nb} structures that contain both sign blocks pull away from repair in sum ({proj[both].sum():+.1f}), and the "
+            f"{no} structures with one block pull towards it ({proj[~both].sum():+.1f}).** The sum of the per-structure "
+            f"gradient norms is {ratio:,.0f} times the norm of their sum. Individually, {100 * (proj[both] > 0).mean():.0f} % of "
+            f"the both-block structures and {100 * (proj[~both] > 0).mean():.0f} % of the one-block structures pull towards "
+            f"repair; {100 * (cos[iu] < 0).mean():.0f} % of structure pairs have a negative gradient cosine. The plan for this "
+            f"analysis expected the reverse grouping (both-block structures pulling towards repair). (a) Pull towards repair per structure, split by whether the structure contains species from both "
             f"sign blocks (blue) or from one block only (orange); clipped at the 98th percentile of |pull|. "
             f"(b) Cosine between the gradients of every pair of structures, ordered by pull (purple negative, green "
             f"positive). Toy, T1 validation structures, computed live.")])
@@ -787,15 +817,17 @@ def _(D, Fg, mo, plt):
             return mo.md("conflict.json is missing.")
         f = Fg.bf_cos(plt, D["conflict"]["bf"]); plt.close(f)
         return mo.vstack([f, mo.md(
-            "**Figure 14. With the Coulomb term on, the force-loss and Born-charge-loss gradients on the charge "
-            "parameters are anti-aligned late in training.** Bond-flow charge model (fp64) on SiO2, BaTiO3 and water, "
+            "**Figure 14. On SiO2 with the Coulomb term on, the median late cosine between the force-loss and "
+            "Born-charge-loss gradients on the charge parameters is negative in every arm (two arms near zero); the few "
+            "water and BaTiO3 seeds scatter on both sides.** Bond-flow charge model (fp64) on SiO2, BaTiO3 and water, "
             "trained on forces and Born effective charges; cosine of the two loss gradients restricted to the charge "
             "parameters, median over steps after 300 (filled) and up to 300 (open), one dot per seed (n = 1-8 per arm; "
             "arms with 2 seeds are screens). Arm names: iris = reference recipe, splr30 = charge learning rate ×30, "
             "coul0 / coul_detach = Coulomb term off or detached, wZ10 = Born-charge weight 10, sig05 = charge width "
             "0.5 Å, clip10 = gradient clip 10, spinit_elem / gate1 = charges started at the element mean or gate 1. Arms "
-            "with the Coulomb term off or detached have no force-loss gradient on the charges and are not drawn; they "
-            "reach the lowest Born-charge errors (0.13-0.16 e against 0.22-0.31 e for the reference, 2 seeds each).")])
+            "without a logged cosine (Coulomb term off or detached, and class E) are not drawn; the Coulomb-off and "
+            "detached arms reach the lowest Born-charge errors (0.13-0.16 e against 0.22-0.31 e for the reference, "
+            "2 seeds each).")])
     _bf()
     return
 
@@ -855,7 +887,7 @@ def _(D, Fg, mo, plt):
                 "under the ChargeWorld run folder and the rebuild button at the top is pressed. Charge-label noise arms "
                 "follow once the anchor results are complete."), kind="neutral")
         names = dict(D["runs"]["ladder_names"]); names["S0"] = "plain LES (reference, replicate set)"
-        Rall = [dict(x, set="ladder", scheme="S0") for x in D["runs"]["runs"] if x["set"] == "anchors" and x["scheme"] == "S0"] + \
+        Rall = [dict(x, set="ladder", scheme="S0") for x in D["runs"]["runs"] if x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S0"] + \
                [dict(x, scheme=x["arm"]) for x in R]
         f = Fg.rates(plt, Rall, "ladder", "scheme", ["S0"] + [a for a in arms if any(x["arm"] == a for x in R)], names); plt.close(f)
         return mo.vstack([f, mo.md(
@@ -867,33 +899,75 @@ def _(D, Fg, mo, plt):
 
 
 @app.cell
-def _(D, mo):
-    mo.md(r"""
-    ## 8. Caveats, what is not shown, and next steps
-
-    **Seeds.** Every network claim rests on four seeds per arm (first set) or on the finished part of eight (replicate
-    set). T1 A1 fails in 2 of 4 seeds: the 95 % Clopper-Pearson interval is 7-93 %. T1 against T2 (0 of 4) is not
-    significant (Fisher exact p = 0.43). The anchors' 0 of 4 against plain LES's 2 of 4 gives p = 0.21; the claim
-    waits for 8 seeds.
-
-    **Transfer.** All T1 seeds miss the test-only splits (Figure 4). Even the two A1 seeds that pass the sign rule
-    rise from 20-24 meV/Å on the test split to 238-282 meV/Å on `combo` and 59-108 meV/Å on `Qood`; their charges
-    stay close (sign-corrected charge RMSE 0.07-0.10 e on combo), so the error is not a sign problem there.
+def _(C, D, mo, pd):
+    def _caveats():
+        R = (D["runs"] or {}).get("runs", [])
+        def kn(sel):
+            v = [x["fail"] for x in R if sel(x) and x.get("fail") is not None]
+            return sum(v), len(v)
+        k1, n1 = kn(lambda x: x["set"] == "phase1" and x["tier"] == "T1" and x["arm"] == "A1 mid")
+        k2, n2 = kn(lambda x: x["set"] == "phase1" and x["tier"] == "T2" and x["arm"] == "A1 mid")
+        ks, ns = kn(lambda x: x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S0")
+        k_1, n_1 = kn(lambda x: x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S1")
+        k_2, n_2 = kn(lambda x: x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S2")
+        lo, hi = C.cp_interval(k1, n1) if n1 else (0, 0)
+        seeds = mo.md(
+            f"**Seeds.** Every network claim rests on four seeds per arm (first set) or on the finished part of eight "
+            f"(replicate set). T1 A1 fails in {k1} of {n1} seeds: the 95 % Clopper-Pearson interval is "
+            f"{100 * lo:.0f}-{100 * hi:.0f} %. T1 against T2 ({k2} of {n2}) gives a two-sided Fisher exact p = "
+            f"{C.fisher_two_sided(k1, n1, k2, n2):.2f}. In the replicate set, plain LES fails {ks} of {ns}, the correlation "
+            f"anchor {k_1} of {n_1} and the MSE anchor {k_2} of {n_2}; one-sided Fisher p = {C.fisher_greater(ks, ns, k_1, n_1):.2f} "
+            f"and {C.fisher_greater(ks, ns, k_2, n_2):.2f} for plain LES failing more often. The anchor claim waits for eight "
+            f"seeds per arm.")
+        rows = []
+        for x in sorted([x for x in R if x["set"] == "phase1" and x["tier"] == "T1" and x.get("splits")], key=lambda r: (r["arm"], r["seed"])):
+            sp = x["splits"]
+            if not {"test", "Qood"} <= set(sp):
+                continue
+            ratio = sp["Qood"]["F_mae"] / sp["test"]["F_mae"]
+            row = {"model": x["arm"], "seed": x["seed"], "Qood / test force MAE": round(ratio, 2)}
+            if x["arm"].startswith("A1"):
+                qt = max(sp["test"]["q_err_by_Z"].values()) if sp["test"]["q_err_by_Z"] else None
+                qc = max(v for z, v in sp.get("combo", {}).get("q_err_by_Z", {}).items() if int(z) in (7, 8, 12, 13)) if sp.get("combo") else None
+                row.update({"largest species charge error, test (e) [≤ 0.05]": qt,
+                            "largest held-out-pair charge error, combo (e) [≤ 0.1]": qc})
+                ok = (qt is not None and qt <= 0.05) and (qc is not None and qc <= 0.1) and ratio <= 1.5
+            else:
+                ok = ratio >= 2
+            row["limit"] = "A1: Qood ratio ≤ 1.5" if x["arm"].startswith("A1") else "A0: Qood ratio ≥ 2"
+            row["all limits met"] = ok
+            rows.append(row)
+        nmiss = sum(not r["all limits met"] for r in rows)
+        lim = mo.vstack([mo.md(
+            f"**Pre-registered T1 limits.** Before training, the test plan set limits for T1: A1 charge error at most "
+            f"0.05 e on every species and at most 0.1 e on the held-out pairs, and a Qood-to-test force MAE ratio of at most "
+            f"1.5 for A1 and at least 2 for A0 (A0 has no charges and should fail to transfer). {nmiss} of {len(rows)} "
+            f"first-set T1 runs miss at least one limit. The two A1 seeds that pass the sign rule miss on the held-out pairs "
+            f"(largest per-species charge error on combo above 0.1 e) or on the species limit, and their Qood ratio is 3.0-4.5; "
+            f"A0 transfers better than predicted (ratio 1.3)."),
+            mo.ui.table(pd.DataFrame(rows), selection=None, page_size=10)]) if rows else mo.md("")
+        rest = mo.md(r"""
+    **Transfer.** All T1 A1 seeds lose accuracy on the test-only splits (Figure 4). The two A1 seeds that pass the sign
+    rule rise from 20-24 meV/Å on the test split to 238-282 meV/Å on `combo` and 59-108 meV/Å on `Qood`; their charges
+    stay close on combo (sign-corrected charge RMSE 0.07-0.10 e), so the combo error is not a sign problem. On T2, the
+    A1 Qood error (114-126 meV/Å) is close to its test error (100-104 meV/Å).
 
     **Noise calibration.** The 1× white level is uncertain by a factor of about 3, the tail fraction by about 3, and
     the systematic part by 2-5. The toy's 3 % and 6 % ionicity arms are strong-bias arms, not 1× and 2×.
 
     **The toy is not the network.** It has fixed per-species charges and no short-range part. It shows that the data
-    permit a trap with the networks' block pattern; it does not show that the networks' trap is the same minimum.
+    permit a trap whose block boundary cuts the held-out pairs; it does not show that the networks' trap is the same
+    minimum.
 
     **Not shown.** Tiers T3-T5 have no trained models yet. The explorer shows 6-8 test structures per tier, not the
     full splits. The DFT-noise numbers come from separate recomputations, summarised here without their raw data.
-    Results from held-out confirmation sets are not used anywhere in this notebook.
 
     **Next.** Finish the eight-seed anchor comparison and the noise-ladder runs (they fill Figures 7 and 16).
     Measure the loss barrier between a failed network and its sign-repaired copy directly (the network analogue of
     Figure 11). Train on T2-T5, where charges respond to the environment and the fixed-charge oracle fails.
     """)
+        return mo.vstack([mo.md("## 8. Caveats, what is not shown, and next steps"), seeds, lim, rest])
+    _caveats()
     return
 
 

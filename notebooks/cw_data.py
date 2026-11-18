@@ -205,3 +205,18 @@ def coulomb_point(quad, c):
     """point-charge Coulomb energy (eV) and forces (eV/A) of one T1 structure for per-species charges c (12,)."""
     A = np.asarray(quad["A"]); sp = np.asarray(quad["sp"]); H = np.asarray(quad["H"]).reshape(len(sp), 3, 12)
     return 0.5 * c @ A @ c, c[sp][:, None] * np.einsum("iaj,j->ia", H, c)
+
+
+def fisher_greater(k1: int, n1: int, k2: int, n2: int) -> float:
+    """one-sided Fisher exact p that group 1 (k1 of n1) fails more often than group 2 (k2 of n2)."""
+    from math import comb
+    K, N = k1 + k2, n1 + n2
+    return sum(comb(K, i) * comb(N - K, n1 - i) for i in range(k1, min(K, n1) + 1)) / comb(N, n1)
+
+
+def fisher_two_sided(k1: int, n1: int, k2: int, n2: int) -> float:
+    from math import comb
+    K, N = k1 + k2, n1 + n2
+    pr = [comb(K, i) * comb(N - K, n1 - i) / comb(N, n1) for i in range(max(0, K - n2), min(K, n1) + 1)]
+    p0 = comb(K, k1) * comb(N - K, n1 - k1) / comb(N, n1)
+    return min(1.0, sum(p for p in pr if p <= p0 * (1 + 1e-9)))

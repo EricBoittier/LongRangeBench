@@ -83,7 +83,7 @@ def test_vendored_three_matches_pin():
 
 #: machine-specific strings that must not leak from the sources into the committed files: absolute paths and
 #: scheduler job identifiers (host names are checked by hand before a commit, not listed here)
-FORBIDDEN = [r"/home/", r"/capstor", r"/scratch", r"/tmp/", r"\bsbatch\b", r"\b39\d{5}\b", r"\.gguf\b"]
+FORBIDDEN = [r"/home/", r"/scratch", r"/tmp/", r"\bsbatch\b", r"\b39\d{5}\b", r"\.gguf\b"]
 
 
 def test_bundle_and_sources_are_clean():

@@ -180,6 +180,7 @@ def species_signs(plt, runs, set_, tier, names_by_Z, schemes=None):
             s = x["species"][str(z)]; xx = i - 0.4 + (k + 0.5) * w
             wrong = s["wrong"] > 0.5
             ax.bar(xx, s["mean"], width=w * 0.85, color=qcol(s["mean"]), edgecolor="#E69F00" if wrong else "none", lw=1.0)
+            ax.plot([xx], [np.sign(s["truth"]) * s["absmean"]], "_", color="#1A1A1A", ms=4, mew=1.0)
     for i, z in enumerate(Zs):
         ax.plot([i - 0.45, i + 0.45], [R[0]["species"][str(z)]["truth"]] * 2, color="#1A1A1A", lw=1.0)
     ax.axhline(0, color="#8C8C8C", lw=0.5)
@@ -199,7 +200,7 @@ def curves(plt, runs, keys):
         c = x["curve"]; e = np.asarray(c["epoch"]); f = np.asarray(c["F_rmse"], float)
         col = TRAP if x.get("fail") else (OK if x.get("fail") is False else "#8C8C8C")
         ax.plot(e[e >= 0], f[e >= 0], lw=1.0, color=col)
-        ax.annotate(k.split(" | ")[-1], (e[-1], f[-1]), xytext=(3, 0), textcoords="offset points", fontsize=5.8, va="center", color=col)
+        ax.annotate(k.split(" · ")[-1].replace("seed ", "s"), (e[-1], f[-1]), xytext=(3, 0), textcoords="offset points", fontsize=5.8, va="center", color=col)
     ax.set_yscale("log"); ax.set_xlabel("epoch"); ax.set_ylabel("validation force RMSE (meV/Å)")
     ax.set_title("validation curves (purple = failed by the sign rule)")
     return fig
@@ -207,13 +208,14 @@ def curves(plt, runs, keys):
 
 def run_key(x):
     s = "" if x["scheme"] == "-" else f" {x['scheme']}"
-    return f"{x['set']} | {x['tier']} {x['arm']}{s} | s{x['seed']}"
+    st = {"phase1": "first set", "anchors": "replicate set", "ladder": "noise ladder"}.get(x["set"], x["set"])
+    return f"{st} · {x['tier']} {x['arm']}{s} · seed {x['seed']}"
 
 
-def rates(plt, runs, set_, key, order, names):
+def rates(plt, runs, set_, key, order, names, tier="T1"):
     fig, ax = plt.subplots(figsize=(W1 * 1.2, 0.5 + 0.32 * len(order)))
     for i, s in enumerate(order):
-        R = [x for x in runs if x["set"] == set_ and x[key] == s and x.get("fail") is not None]
+        R = [x for x in runs if x["set"] == set_ and x["tier"] == tier and x[key] == s and x.get("fail") is not None]
         if not R:
             ax.text(0.02, i, f"{names.get(s, s)}: no finished runs", va="center", fontsize=6.5, color="#8C8C8C"); continue
         k, n = sum(x["fail"] for x in R), len(R); lo, hi = C.cp_interval(k, n)
@@ -225,21 +227,20 @@ def rates(plt, runs, set_, key, order, names):
     return fig
 
 
-def traces(plt, tr, keys, Zs):
+def traces(plt, tr, keys, label=lambda k: k):
     fig, axs = plt.subplots(1, 2, figsize=(W2, 2.1))
     for k in keys:
         t = tr.get(k)
         if not t:
             continue
-        st = np.asarray(t["step"])
-        axs[0].plot(st, t["n_mixed"], lw=0.9, label=k.split("/")[-1])
-        A = np.asarray([t["agree"][str(z)] for z in Zs if str(z) in t["agree"]], float)
-        axs[1].plot(st, np.nanmin(A, 0), lw=0.9, label=k.split("/")[-1])
-    axs[0].set_xscale("symlog", linthresh=50); axs[1].set_xscale("symlog", linthresh=50)
-    axs[0].set_xlabel("training step"); axs[0].set_ylabel("probe structures with mixed signs (of 32)")
-    axs[0].set_title("a  sign-mixed structures on the fixed probe")
-    axs[1].set_xlabel("training step"); axs[1].set_ylabel("worst species: fraction at the right sign")
-    axs[1].set_title("b  the worst species' sign agreement"); axs[1].axhline(0.5, color="#BDBDBD", lw=0.6)
+        st = np.maximum(np.asarray(t["step"]), 1)
+        axs[0].plot(st, t["n_mixed"], lw=0.9, label=label(k))
+        axs[1].plot(st, t["n_wrong"], lw=0.9, label=label(k))
+        axs[1].plot([t["choice_step"]], [t["n_wrong"][-1]], "|", ms=9, color="#1A1A1A")
+    for ax in axs:
+        ax.set_xscale("log"); ax.set_xlabel("training step"); ax.axvline(80, color="#BDBDBD", lw=0.6, ls=":")
+    axs[0].set_ylabel("probe structures with mixed signs (of 32)"); axs[0].set_title("a  sign-mixed structures on the fixed probe")
+    axs[1].set_ylabel("charged species at the wrong relative sign"); axs[1].set_title("b  flipped species (tick: sign-choice step)")
     axs[0].legend(fontsize=5.8, ncol=2)
     fig.tight_layout()
     return fig
