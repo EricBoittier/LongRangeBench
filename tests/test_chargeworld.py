@@ -103,7 +103,7 @@ def test_bundle_size():
 
 
 def test_noise_ladder_counts_quoted_in_the_notebook_text(bundle):
-    """Section 6-8 of notebooks/chargeworld.py quote the J1, J2 and J12c failure counts; the committed runs must agree."""
+    """Section 6-8 of notebooks/chargeworld.py quote the noise-ladder failure counts; the committed runs must agree."""
     R = bundle["runs"]["runs"]
     ctrl = {x["seed"]: bool(x["fail"]) for x in R if x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S0"}
     assert sum(ctrl.values()) == 2 and len(ctrl) == 8 and {s for s, f in ctrl.items() if f} == {15, 16}
@@ -115,7 +115,7 @@ def test_noise_ladder_counts_quoted_in_the_notebook_text(bundle):
     for arm in ("EF1", "EF2", "W25", "P5"):                     # noise does not change which seeds fail
         assert fails(arm) == (2, 8, {15, 16}), arm
     assert fails("EF0.5") == (2, 4, {15, 16})
-    assert fails("B4E1")[:2] == (1, 8) and fails("B4")[:2] == (0, 4)     # batch 4: screen, 4x updates
-    assert fails("WU10") == (2, 8, {16, 17}) and fails("COMBO")[:2] == (2, 8) and fails("B64")[:2] == (1, 8)
+    assert fails("B4E1") == (1, 8, {15}) and fails("B4")[:2] == (0, 4)     # batch 4: screen, 4x updates
+    assert fails("WU10") == (2, 8, {16, 17}) and fails("COMBO") == (2, 8, {19, 20}) and fails("B64")[:2] == (1, 8)
     b4 = {x["seed"] for x in R if x["set"] == "ladder" and x["arm"] == "B4"}
     assert b4 == {13, 14, 15, 16}

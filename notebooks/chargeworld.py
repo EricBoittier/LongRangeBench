@@ -961,8 +961,8 @@ def _(C, D, mo):
                         "control, so label noise at these levels does not change which basin a seed falls into; it costs force "
                         "accuracy, through the systematic part only (the white and tail positive controls leave the force error "
                         "unchanged). " if same_noise else "")
-            + "Warm-up changes which seeds fail, not how many; batch 4 in epoch 1 and the held-out pairs rescue some seeds "
-              "and let others fail. Batch 64 is not readable: at the same epochs and learning rate its runs are far from converged." + b4txt
+            + "Warm-up changes which seeds fail, not how many. Batch 4 in the first epoch rescues seed 16 and adds no new "
+              "failure; adding the held-out pairs rescues seeds 15 and 16 and lets seeds 19 and 20 fail. Batch 64 is not readable: at the same epochs and learning rate its runs are far from converged." + b4txt
             + " No contrast reaches significance: with 2 of 8 control failures no rate comparison can reach p < 0.05.")])
     _ladder_results()
     return
@@ -1040,7 +1040,7 @@ def _(C, D, mo, pd):
     oracles, and the models follow the DFT Löwdin one. It does not explain force or interaction-energy errors in that
     data. The audit covers Gdm⁺ and NH₄⁺ pair sets, not organic molecules in general.
 
-    **Next.** Charge-label noise on the anchors (J3 and J4, paired on seeds 15 and 16: do noisy anchors still rescue
+    **Next.** Charge-label noise on the anchors (paired on seeds 15 and 16: do noisy anchors still rescue
     them?), a combo arm with 25 % co-occurring structures (the toy's fraction), a batch-64 arm at 4 times the epochs
     (so batch size is separated from training length), and batch 4 at equal numbers of updates. Confirm the anchor screen
     with more seeds. Measure the loss barrier between a failed network and its sign-repaired copy directly (the network analogue of
