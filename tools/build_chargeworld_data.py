@@ -324,10 +324,14 @@ def clean_nan(o):
     return o
 
 
-SCHEME = {"S0": "plain LES", "S1": "charge-correlation anchor", "S2": "charge-MSE anchor", "S4": "EMA 0.999"}
+SCHEME = {"S0": "plain LES", "S1": "charge-correlation anchor", "S2": "charge-MSE anchor", "S4": "EMA 0.999", "S5": "EMA 0.999 with warm-up"}
 LADDER = {"EF0.5": "E/F noise 0.5×", "EF1": "E/F noise 1×", "EF2": "E/F noise 2×", "W25": "white noise 25×",
           "P5": "pathology tail 5×", "B4E1": "batch 4 in epoch 1", "B64": "batch 64", "WU10": "warm-up 10 %",
-          "COMBO": "held-out pairs co-occur", "B4": "batch 4 throughout"}
+          "COMBO": "held-out pairs co-occur", "B4": "batch 4 throughout",
+          "S2QB1": "charge-MSE anchor, noisy labels (B)", "S2QR1": "charge-MSE anchor, noisy labels (R)",
+          "S2QX": "charge-MSE anchor, noisy labels (B+R+T, 2x)", "S1QX": "correlation anchor, noisy labels (B+R+T, 2x)",
+          "S1Q1": "correlation anchor, noisy labels (B+R+T, 1x)", "S1EF1Q1": "correlation anchor, E/F and charge noise 1x",
+          "S0W1": "plain LES, white E/F noise 1x", "S0P1": "plain LES, pathology tail 1x", "S0S1": "plain LES, systematic E/F noise 1x"}
 
 
 def build_results():
@@ -349,7 +353,7 @@ def build_results():
         runs.append(dict(set="phase1", tier=tier, arm=f"{arch} {cap}", scheme="-", seed=int(seed[1:]), **s, curve=val_curve(d),
                          splits=splits))
     # replicate set with probe traces: plain LES, two anchors, EMA (seeds 13-20 as they finish)
-    for d in sorted((CW_RUN / "collapse" / "runs").glob("T*_S*_s*")):
+    for d in sorted(list((CW_RUN / "collapse" / "runs").glob("T*_S*_s*")) + list((CW_RUN / "collapse_a48" / "runs").glob("T*_S*_s*"))):
         if not ((d / "DONE").exists() and (d / "pred_N16.json").exists()):
             continue
         tier, sch, seed = d.name.split("_")

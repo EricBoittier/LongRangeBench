@@ -897,7 +897,7 @@ def _(D, Fg, mo, pd, plt):
 def _(D, Fg, mo, plt):
     def _ladder_runs():
         R = [x for x in ((D["runs"] or {}).get("runs", [])) if x["set"] == "ladder"]
-        arms = ["EF0.5", "EF1", "EF2", "W25", "P5", "B4E1", "B4", "B64", "WU10", "COMBO"]
+        arms = ["EF0.5", "EF1", "EF2", "W25", "P5", "B4E1", "B4", "B64", "WU10", "COMBO", "S0W1", "S0P1", "S0S1", "S2QB1", "S2QR1", "S2QX", "S1QX", "S1Q1", "S1EF1Q1"]
         if not R:
             return mo.callout(mo.md(
                 "**Running.** Network runs of the noise ladder on T1 (plain LES, seeds 13-20, paired with the replicate "
@@ -927,7 +927,7 @@ def _(C, D, mo):
             return mo.md("")
         ctrl = {x["seed"]: x for x in R if x["set"] == "anchors" and x["tier"] == "T1" and x["scheme"] == "S0"}
         names = D["runs"]["ladder_names"]
-        order = [a for a in ("EF0.5", "EF1", "EF2", "W25", "P5", "B4E1", "B4", "B64", "WU10", "COMBO") if any(x["arm"] == a for x in L)]
+        order = [a for a in ("EF0.5", "EF1", "EF2", "W25", "P5", "B4E1", "B4", "B64", "WU10", "COMBO", "S0W1", "S0P1", "S0S1", "S2QB1", "S2QR1", "S2QX", "S1QX", "S1Q1", "S1EF1Q1") if any(x["arm"] == a for x in L)]
         med = lambda v: sorted(v)[len(v) // 2] if len(v) % 2 else 0.5 * (sorted(v)[len(v) // 2 - 1] + sorted(v)[len(v) // 2])
         k0 = sum(bool(x["fail"]) for x in ctrl.values())
         bullets, same_noise = [], True
@@ -963,6 +963,10 @@ def _(C, D, mo):
                         "unchanged). " if same_noise else "")
             + "Warm-up changes which seeds fail, not how many. Batch 4 in the first epoch rescues seed 16 and adds no new "
               "failure; adding the held-out pairs rescues seeds 15 and 16 and lets seeds 19 and 20 fail. Batch 64 is not readable: at the same epochs and learning rate its runs are far from converged." + b4txt
+            + (" Charge-label noise on the anchors (labels with the systematic, random and tail parts of the DFT charge error, at 1x "
+               "or 2x) does not bring back the failures: all five anchor arms fail 0 of 8, seeds 15 and 16 stay rescued, and the "
+               "force error rises by up to 43 % (the systematic part sets the cost). Plain LES with E/F noise alone (white, tail "
+               "or systematic, 1x) fails the same two seeds as the control." if any(x["arm"] in ("S2QB1", "S1EF1Q1") for x in L) else "")
             + " No contrast reaches significance: with 2 of 8 control failures no rate comparison can reach p < 0.05.")])
     _ladder_results()
     return
